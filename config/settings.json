@@ -1,0 +1,9 @@
+{
+  "level": "L1",
+  "version": "1.0",
+  "kb_dir": "data/kb",
+  "mistakes_dir": "data/mistakes",
+  "progress_dir": "data/progress",
+  "flashcards_dir": "data/flashcards",
+  "templates_dir": "data/templates"
+}

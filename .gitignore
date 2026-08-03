@@ -1,0 +1,43 @@
+# CFA Prep Tool - Git 忽略规则
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+*.egg
+
+# 虚拟环境
+venv/
+.env/
+.venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 操作系统
+.DS_Store
+Thumbs.db
+
+# 用户数据（知识库文件由用户自行管理，不纳入版本控制）
+data/kb/*.txt
+data/mistakes/*.md
+data/progress/progress.md
+data/flashcards/*.md
+data/flashcards/*.csv
+
+# 保留目录结构
+!data/kb/.gitkeep
+!data/mistakes/.gitkeep
+!data/progress/.gitkeep
+!data/flashcards/.gitkeep
+
+# 日志
+*.log
