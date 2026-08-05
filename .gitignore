@@ -36,12 +36,16 @@ data/flashcards/*.csv
 # Generated IPS templates (contain an auto-generated date; regenerate via `python main.py ips`)
 data/templates/*.md
 
+# Generated config (regenerate via `python main.py init` or the setup scripts)
+config/settings.json
+
 # Keep directory structure
 !data/kb/.gitkeep
 !data/mistakes/.gitkeep
 !data/progress/.gitkeep
 !data/flashcards/.gitkeep
 !data/templates/.gitkeep
+!config/.gitkeep
 
 # Logs
 *.log
