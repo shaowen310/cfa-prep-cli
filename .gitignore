@@ -27,6 +27,7 @@ venv/
 Thumbs.db
 
 # User data (knowledge base files are managed by the user and not version-controlled)
+.cfa-prep
 data/kb/*.txt
 data/mistakes/*.md
 data/progress/progress.md
