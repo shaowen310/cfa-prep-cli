@@ -25,7 +25,7 @@ from .utils import (
 )
 
 
-def cmd_init(args) -> None:
+def cmd_init(_args) -> None:
     """
     Initialize the project: create all necessary directories and default config files
     under the resolved data root (~/.cfa-prep by default, or CFA_PREP_HOME / --home).

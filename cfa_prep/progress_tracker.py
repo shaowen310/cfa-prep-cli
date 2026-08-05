@@ -6,8 +6,7 @@ Purpose: Maintain and update the data/progress/progress.md progress file,
          track mastered/still-fuzzy knowledge points, summarize mistake distribution, and generate next-day task suggestions.
 """
 
-from datetime import datetime
-from typing import Dict, List
+from pathlib import Path
 
 from .utils import (
     get_data_dir,
@@ -24,9 +23,9 @@ class ProgressTracker:
     as well as daily review tasks.
     """
 
-    def __init__(self):
-        self.progress_dir = get_data_dir("progress")
-        self.progress_file = self.progress_dir / "progress.md"
+    def __init__(self) -> None:
+        self.progress_dir: Path = get_data_dir("progress")
+        self.progress_file: Path = self.progress_dir / "progress.md"
 
     def _get_default_content(self) -> str:
         """Generate the default progress file content"""
@@ -61,9 +60,9 @@ class ProgressTracker:
 
     def update(
         self,
-        mastered: List[str] = None,
-        fuzzy: List[str] = None,
-        mistake_stats: Dict[str, any] = None,
+        mastered: list[str] | None = None,
+        fuzzy: list[str] | None = None,
+        mistake_stats: dict[str, object] | None = None,
         tomorrow_task: str = "",
     ) -> None:
         """
@@ -86,10 +85,11 @@ class ProgressTracker:
         fuzzy_str = "\n".join(f"- {item}" for item in fuzzy) if fuzzy else "(No records yet)"
 
         # Format mistake distribution
-        cats = mistake_stats.get("categories", {})
+        cats_value = mistake_stats.get("categories", {}) or {}
+        cats: dict[str, float] = cats_value if isinstance(cats_value, dict) else {}
         if cats:
             cat_lines = []
-            for cat, pct in sorted(cats.items(), key=lambda x: x[1], reverse=True):
+            for cat, pct in sorted(cats.items(), key=lambda item: float(item[1]), reverse=True):
                 cat_lines.append(f"- {cat}: {pct}%")
             cat_str = "\n".join(cat_lines)
         else:
@@ -125,7 +125,7 @@ class ProgressTracker:
         content = self.load()
         print(content)
 
-    def interactive_update(self, mistake_stats: Dict[str, any] = None) -> None:
+    def interactive_update(self, mistake_stats: dict[str, object] | None = None) -> None:
         """
         Interactively update the progress.
         Guides the user to enter mastered and fuzzy knowledge points.
@@ -160,7 +160,7 @@ class ProgressTracker:
         )
         print(f"\n✅ Progress updated to: {self.progress_file}")
 
-    def get_key_points_to_review(self) -> List[str]:
+    def get_key_points_to_review(self) -> list[str]:
         """
         Extract the knowledge points that need review from the progress file.
         Returns the still-fuzzy knowledge points first.
