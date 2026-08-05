@@ -119,16 +119,30 @@ class MistakeAnalyzer:
 
         return str(filepath)
 
+    @staticmethod
+    def _prompt(prompt: str = "") -> str:
+        """
+        Safely read a line of input.
+        Returns "" on Ctrl+C / EOF (Ctrl+D) so the caller can exit gracefully
+        instead of raising a traceback.
+        """
+        try:
+            return input(prompt)
+        except (KeyboardInterrupt, EOFError):
+            print("\n⚠️  Input cancelled.")
+            return ""
+
     def add_mistake_interactive(self) -> None:
         """
         Interactively log a mistake.
         Guides the user through entering mistake details step by step.
+        Exits gracefully if the user stops inputting (Ctrl+C / Ctrl+D).
         """
         print("\n" + "=" * 50)
         print("  📝 Log a Mistake")
         print("=" * 50)
 
-        subject = input("Subject (e.g., FRA, Equity, Ethics): ").strip()
+        subject = self._prompt("Subject (e.g., FRA, Equity, Ethics): ").strip()
         if not subject:
             print("❌ Subject cannot be empty")
             return
@@ -136,8 +150,8 @@ class MistakeAnalyzer:
         print("\nEnter the question description (enter a blank line to finish):")
         question_lines = []
         while True:
-            line = input()
-            if line == "":
+            line = self._prompt()
+            if line == "":  # blank line, or the user cancelled input (Ctrl+C / Ctrl+D)
                 break
             question_lines.append(line)
         question = "\n".join(question_lines)
@@ -145,18 +159,18 @@ class MistakeAnalyzer:
             print("❌ Question cannot be empty")
             return
 
-        user_answer = input("\nYour answer: ").strip()
-        correct_answer = input("Correct answer: ").strip()
+        user_answer = self._prompt("\nYour answer: ").strip()
+        correct_answer = self._prompt("Correct answer: ").strip()
 
         print("\nMistake category:")
         for key, value in MISTAKE_CATEGORIES.items():
             print(f"  [{key}] {value}")
-        cat_choice = input("Choose a mistake category (1/2/3): ").strip()
+        cat_choice = self._prompt("Choose a mistake category (1/2/3): ").strip()
         category = MISTAKE_CATEGORIES.get(cat_choice, "Concept confusion")
 
-        key_point = input("\nKey point (one-sentence summary): ").strip()
-        correct_conclusion = input("Correct conclusion (one-sentence summary): ").strip()
-        source = input("Source (e.g., @data/kb/l2_vol3_p120-180.txt (P145)): ").strip()
+        key_point = self._prompt("\nKey point (one-sentence summary): ").strip()
+        correct_conclusion = self._prompt("Correct conclusion (one-sentence summary): ").strip()
+        source = self._prompt("Source (e.g., @data/kb/l2_vol3_p120-180.txt (P145)): ").strip()
 
         filepath = self.add_mistake(
             subject=subject,
