@@ -26,27 +26,8 @@ venv/
 .DS_Store
 Thumbs.db
 
-# User data (knowledge base files are managed by the user and not version-controlled)
-.cfa-prep
-data/kb/*.txt
-data/mistakes/*.md
-data/progress/progress.md
-data/flashcards/*.md
-data/flashcards/*.csv
-
-# Generated IPS templates (contain an auto-generated date; regenerate via `python main.py ips`)
-data/templates/*.md
-
-# Generated config (regenerate via `python main.py init` or the setup scripts)
-config/settings.json
-
-# Keep directory structure
-!data/kb/.gitkeep
-!data/mistakes/.gitkeep
-!data/progress/.gitkeep
-!data/flashcards/.gitkeep
-!data/templates/.gitkeep
-!config/.gitkeep
+# User data (stored under the configured data root, ~/.cfa-prep by default)
+.cfa-prep/
 
 # Logs
 *.log
