@@ -12,14 +12,15 @@ from pathlib import Path
 # Add the project root to the path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from src.knowledge_base import KnowledgeBase
-from src.mistake_analyzer import MistakeAnalyzer
-from src.progress_tracker import ProgressTracker
-from src.flashcard_generator import FlashcardGenerator
-from src.ips_builder import IPSBuilder
-from src.quiz_engine import QuizEngine
-from src.utils import (
+from cfa_prep.knowledge_base import KnowledgeBase
+from cfa_prep.mistake_analyzer import MistakeAnalyzer
+from cfa_prep.progress_tracker import ProgressTracker
+from cfa_prep.flashcard_generator import FlashcardGenerator
+from cfa_prep.ips_builder import IPSBuilder
+from cfa_prep.quiz_engine import QuizEngine
+from cfa_prep.utils import (
     get_project_root,
+    get_data_root,
     get_data_dir,
     fuzzy_match,
     extract_context,
@@ -34,7 +35,7 @@ def test_project_root():
     """Test whether the project root directory is correct"""
     root = get_project_root()
     assert root.exists(), "Project root directory does not exist"
-    assert (root / "src").exists(), "src directory does not exist"
+    assert (root / "cfa_prep").exists(), "cfa_prep directory does not exist"
     print(f"  ✅ Project root: {root}")
 
 
@@ -131,10 +132,27 @@ def test_flashcard_generator():
 
 def test_settings():
     """Test config read/write"""
+    test_settings_data = {"level": "L1", "version": "1.0", "data_root": str(get_data_root())}
+    save_settings(test_settings_data)
     settings = load_settings()
-    assert "level" in settings
-    assert "version" in settings
-    print(f"  ✅ Config read/write is fine (level: {settings['level']})")
+    assert settings.get("level") == "L1"
+    assert settings.get("version") == "1.0"
+    print(f"  ✅ Config read/write is fine (level: {settings.get('level')})")
+
+
+def test_data_root_env_override():
+    """Test that get_data_root() honors the CFA_PREP_HOME env var"""
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as tmp:
+        os.environ["CFA_PREP_HOME"] = tmp
+        try:
+            root = get_data_root()
+            assert root == Path(tmp), f"Expected {tmp}, got {root}"
+            assert root.exists(), "data root directory was not created"
+            print(f"  ✅ Data root honors CFA_PREP_HOME: {root}")
+        finally:
+            os.environ.pop("CFA_PREP_HOME", None)
 
 
 def run_all_tests():
@@ -155,6 +173,7 @@ def run_all_tests():
         ("Quiz engine", test_quiz_engine),
         ("Flashcard generator", test_flashcard_generator),
         ("Config read/write", test_settings),
+        ("Data root env override", test_data_root_env_override),
     ]
 
     passed = 0

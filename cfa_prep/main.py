@@ -6,21 +6,18 @@ Purpose: Provide a command-line interface that orchestrates all submodule functi
          Supports the search / quiz / add-mistake / recap / flashcard / ips / init commands.
 """
 
-import sys
+import os
 import argparse
-from pathlib import Path
 
-# Add the project root to the path for direct execution
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-
-from src.knowledge_base import KnowledgeBase
-from src.quiz_engine import QuizEngine
-from src.mistake_analyzer import MistakeAnalyzer
-from src.progress_tracker import ProgressTracker
-from src.flashcard_generator import FlashcardGenerator
-from src.ips_builder import IPSBuilder
-from src.utils import (
-    get_project_root,
+from .knowledge_base import KnowledgeBase
+from .quiz_engine import QuizEngine
+from .mistake_analyzer import MistakeAnalyzer
+from .progress_tracker import ProgressTracker
+from .flashcard_generator import FlashcardGenerator
+from .ips_builder import IPSBuilder
+from .utils import (
+    get_data_root,
+    get_data_dir,
     save_settings,
     print_header,
     print_section,
@@ -28,38 +25,40 @@ from src.utils import (
 )
 
 
-def cmd_init(_args) -> None:
+def cmd_init(args) -> None:
     """
-    Initialize the project: create all necessary directories and default config files.
+    Initialize the project: create all necessary directories and default config files
+    under the resolved data root (~/.cfa-prep by default, or CFA_PREP_HOME / --home).
     """
     print_header("🚀 CFA Prep CLI - Project Initialization")
 
-    root = get_project_root()
+    root = get_data_root()
+    print(f"  📁 Data root: {root}")
 
-    # Create the directory structure
+    # Create the directory structure under the data root
     dirs = [
-        "data/kb",
-        "data/mistakes",
-        "data/progress",
-        "data/flashcards",
-        "data/templates",
+        "kb",
+        "mistakes",
+        "progress",
+        "flashcards",
+        "templates",
         "config",
-        "tests",
     ]
     for d in dirs:
-        p = root / d
+        p = get_data_dir(d)
         p.mkdir(parents=True, exist_ok=True)
         print(f"  ✅ Created directory: {d}")
 
-    # Create the default settings.json
+    # Create the default settings.json (remember the data_root so future runs resolve the same folder)
     settings = {
         "level": "L1",
         "version": "1.0",
-        "kb_dir": "data/kb",
-        "mistakes_dir": "data/mistakes",
-        "progress_dir": "data/progress",
-        "flashcards_dir": "data/flashcards",
-        "templates_dir": "data/templates",
+        "data_root": str(root),
+        "kb_dir": "kb",
+        "mistakes_dir": "mistakes",
+        "progress_dir": "progress",
+        "flashcards_dir": "flashcards",
+        "templates_dir": "templates",
     }
     save_settings(settings)
     print(f"  ✅ Created config: config/settings.json")
@@ -67,27 +66,27 @@ def cmd_init(_args) -> None:
     # Create the initial progress file
     tracker = ProgressTracker()
     _ = tracker.load()
-    print(f"  ✅ Created progress file: data/progress/progress.md")
+    print(f"  ✅ Created progress file: progress/progress.md")
 
     # Generate IPS templates
     builder = IPSBuilder()
     today = today_iso()
     _ = builder.generate("personal", today)
     _ = builder.generate("institutional", today)
-    print(f"  ✅ Generated IPS templates: data/templates/")
+    print(f"  ✅ Generated IPS templates: templates/")
 
     print("\n" + "=" * 60)
     print("  🎉 Initialization complete!")
     print("=" * 60)
     print("\n📋 Next steps:")
-    print("  1. Place knowledge files (.txt) into the data/kb/ directory")
+    print("  1. Place knowledge files (.txt) into the kb/ directory under the data root")
     print("     File name format: l1_vol1_p1-60.txt")
     print("     Mark pages inside files with ===== PAGE N =====")
     print()
     print("  2. Start using:")
-    print("     python main.py search \"FCFE\"        # Search the knowledge base")
-    print("     python main.py quiz --level L1       # Start quizzing")
-    print("     python main.py recap                 # View progress")
+    print("     cfa-prep search \"FCFE\"        # Search the knowledge base")
+    print("     cfa-prep quiz --level L1       # Start quizzing")
+    print("     cfa-prep recap                 # View progress")
     print()
 
 
@@ -248,22 +247,32 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python main.py init                    Initialize the project
-  python main.py search "FCFE"           Search the knowledge base
-  python main.py search "FCFE" --regex   Use regex search
-  python main.py quiz --level L1         Start L1 quizzing
-  python main.py quiz --level L2         Start L2 quizzing
-  python main.py add-mistake             Log a mistake
-  python main.py recap                   View progress
-  python main.py recap --update          Update progress
-  python main.py flashcard --subject FRA Generate FRA flashcards
-  python main.py flashcard --anki        Export Anki CSV
-  python main.py ips personal            Generate a personal IPS template
-  python main.py ips inst                Generate an institutional IPS template
+  cfa-prep init                          Initialize the project
+  cfa-prep search "FCFE"                 Search the knowledge base
+  cfa-prep search "FCFE" --regex         Use regex search
+  cfa-prep quiz --level L1               Start L1 quizzing
+  cfa-prep quiz --level L2               Start L2 quizzing
+  cfa-prep add-mistake                   Log a mistake
+  cfa-prep recap                         View progress
+  cfa-prep recap --update                Update progress
+  cfa-prep flashcard --subject FRA       Generate FRA flashcards
+  cfa-prep flashcard --anki              Export Anki CSV
+  cfa-prep ips personal                  Generate a personal IPS template
+  cfa-prep ips inst                      Generate an institutional IPS template
+
+Data root (default ~/.cfa-prep) can be set via:
+  --home /path/to/data, or the CFA_PREP_HOME environment variable.
         """,
     )
+    _ = parser.add_argument("--home", metavar="PATH", help="override the data root directory (also honored via CFA_PREP_HOME env var)")
 
     subparsers = parser.add_subparsers(dest="command", help="available commands")
+
+    # init command
+    _ = subparsers.add_parser("init", help="Initialize the data root directories and config")
+
+    # add-mistake command
+    _ = subparsers.add_parser("add-mistake", help="Interactively log a mistake")
 
     # search command
     p_search = subparsers.add_parser("search", help="Search the knowledge base")
@@ -298,6 +307,10 @@ Examples:
     if not args.command:
         parser.print_help()
         return
+
+    # Apply --home override before dispatching so all modules resolve the data root consistently
+    if getattr(args, "home", None):
+        os.environ["CFA_PREP_HOME"] = args.home
 
     # Dispatch commands
     commands = {

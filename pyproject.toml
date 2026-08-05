@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cfa-prep"
+version = "1.0.0"
+description = "CFA exam prep CLI: knowledge search, quizzing, mistake analysis, progress tracking, flashcards, IPS templates."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "CodeBuddy AI Assistant" }]
+keywords = ["cfa", "exam", "study", "cli", "quiz"]
+classifiers = [
+    "Environment :: Console",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Operating System :: OS Independent",
+]
+dependencies = []
+
+[project.scripts]
+cfa-prep = "cfa_prep.main:main"
+
+[tool.setuptools]
+packages = ["cfa_prep"]

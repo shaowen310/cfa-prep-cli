@@ -5,6 +5,7 @@ Author: CodeBuddy AI Assistant
 Purpose: Provide project-level utility functions, including path management, file I/O, and formatted output.
 """
 
+import os
 import json
 from pathlib import Path
 from datetime import datetime
@@ -16,16 +17,41 @@ def get_project_root() -> Path:
     return Path(__file__).resolve().parent.parent
 
 
+def _candidate_data_root() -> Path:
+    """
+    Determine the data root path WITHOUT creating anything, with this priority:
+      1. CFA_PREP_HOME environment variable
+      2. `data_root` in <default_root>/config/settings.json
+      3. ~/.cfa-prep (user home default)
+    """
+    env = os.environ.get("CFA_PREP_HOME")
+    if env:
+        return Path(env).expanduser()
+    default_root = Path.home() / ".cfa-prep"
+    settings = load_json(default_root / "config" / "settings.json")
+    configured = settings.get("data_root")
+    if configured:
+        return Path(configured).expanduser()
+    return default_root
+
+
+def get_data_root() -> Path:
+    """Return (and create) the data root directory."""
+    root = _candidate_data_root()
+    root.mkdir(parents=True, exist_ok=True)
+    return root
+
+
 def get_data_dir(subdir: str = "") -> Path:
-    """Return the path of a specified subdirectory under data/"""
-    p = get_project_root() / "data" / subdir
+    """Return the path of a specified subdirectory under the data root"""
+    p = get_data_root() / subdir
     p.mkdir(parents=True, exist_ok=True)
     return p
 
 
 def get_config_dir() -> Path:
-    """Return the config/ directory path"""
-    p = get_project_root() / "config"
+    """Return the config/ directory path under the data root"""
+    p = get_data_root() / "config"
     p.mkdir(parents=True, exist_ok=True)
     return p
 
