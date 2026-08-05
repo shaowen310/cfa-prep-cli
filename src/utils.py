@@ -5,12 +5,10 @@ CFA 备考工具 - 通用工具函数
 用途：提供项目级的通用工具函数，包括路径管理、文件读写、格式化输出等。
 """
 
-import os
 import json
-import re
 from pathlib import Path
 from datetime import datetime
-from typing import Optional, List, Dict, Any
+from typing import Any
 
 
 def get_project_root() -> Path:
@@ -32,7 +30,7 @@ def get_config_dir() -> Path:
     return p
 
 
-def load_json(filepath: Path) -> Dict[str, Any]:
+def load_json(filepath: Path) -> dict[str, Any]:
     """安全加载 JSON 文件，文件不存在时返回空字典"""
     if filepath.exists():
         with open(filepath, "r", encoding="utf-8") as f:
@@ -40,19 +38,19 @@ def load_json(filepath: Path) -> Dict[str, Any]:
     return {}
 
 
-def save_json(filepath: Path, data: Dict[str, Any]) -> None:
+def save_json(filepath: Path, data: dict[str, Any]) -> None:
     """保存数据为 JSON 文件（UTF-8，缩进 2 空格）"""
     filepath.parent.mkdir(parents=True, exist_ok=True)
     with open(filepath, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
 
-def load_settings() -> Dict[str, Any]:
+def load_settings() -> dict[str, Any]:
     """加载 config/settings.json 配置"""
     return load_json(get_config_dir() / "settings.json")
 
 
-def save_settings(settings: Dict[str, Any]) -> None:
+def save_settings(settings: dict[str, Any]) -> None:
     """保存配置到 config/settings.json"""
     save_json(get_config_dir() / "settings.json", settings)
 
@@ -107,7 +105,7 @@ def extract_context(text: str, keyword: str, window: int = 80) -> str:
     return snippet
 
 
-def read_file_lines(filepath: Path) -> List[str]:
+def read_file_lines(filepath: Path) -> list[str]:
     """读取文件所有行（UTF-8），文件不存在返回空列表"""
     if not filepath.exists():
         return []
@@ -115,7 +113,7 @@ def read_file_lines(filepath: Path) -> List[str]:
         return f.readlines()
 
 
-def write_file_lines(filepath: Path, lines: List[str]) -> None:
+def write_file_lines(filepath: Path, lines: list[str]) -> None:
     """将字符串列表写入文件（UTF-8）"""
     filepath.parent.mkdir(parents=True, exist_ok=True)
     with open(filepath, "w", encoding="utf-8") as f:
@@ -134,7 +132,7 @@ def write_file_text(filepath: Path, text: str) -> None:
     """将文本写入文件（UTF-8）"""
     filepath.parent.mkdir(parents=True, exist_ok=True)
     with open(filepath, "w", encoding="utf-8") as f:
-        f.write(text)
+        _ = f.write(text)
 
 
 def print_header(title: str) -> None:

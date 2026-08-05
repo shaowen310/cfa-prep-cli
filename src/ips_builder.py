@@ -131,7 +131,7 @@ IPS_PERSONAL_TEMPLATE = """# 个人投资政策声明 (Individual IPS)
 
 ---
 
-*此模板由 CFA Prep Tool 自动生成*
+*此模板由 CFA Prep CLI 自动生成*
 """
 
 # 机构 IPS 模板内容
@@ -276,7 +276,7 @@ IPS_INSTITUTIONAL_TEMPLATE = """# 机构投资政策声明 (Institutional IPS)
 
 ---
 
-*此模板由 CFA Prep Tool 自动生成*
+*此模板由 CFA Prep CLI 自动生成*
 """
 
 

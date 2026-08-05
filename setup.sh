@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # -*- coding: utf-8 -*-
 #
-# CFA Prep Tool - 一键初始化脚本
+# CFA Prep CLI - 一键初始化脚本
 # 作者：CodeBuddy AI Assistant
 # 用途：创建所有必要目录、生成默认配置文件、打印使用指引。
 #
@@ -13,7 +13,7 @@ cd "$SCRIPT_DIR"
 
 echo ""
 echo "============================================================"
-echo "  🚀 CFA Prep Tool - 一键初始化"
+echo "  🚀 CFA Prep CLI - 一键初始化"
 echo "============================================================"
 echo ""
 

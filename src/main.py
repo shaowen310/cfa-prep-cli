@@ -35,7 +35,7 @@ def cmd_init(args) -> None:
     """
     初始化项目：创建所有必要的目录和默认配置文件。
     """
-    print_header("🚀 CFA Prep Tool - 项目初始化")
+    print_header("🚀 CFA Prep CLI - 项目初始化")
 
     root = get_project_root()
 

@@ -111,4 +111,4 @@
 
 ---
 
-*此模板由 CFA Prep Tool 自动生成*
+*此模板由 CFA Prep CLI 自动生成*

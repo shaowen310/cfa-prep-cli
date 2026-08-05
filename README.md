@@ -1,21 +1,21 @@
-# CFA Prep Tool
+# CFA Prep CLI
 
 > CFA 备考辅助工具 — 知识库检索 · 智能刷题 · 错题分析 · 进度追踪 · 闪卡生成 · IPS 模板
 
 ## 项目简介
 
-CFA Prep Tool 是一个纯 Python 实现的命令行 CFA 备考助手，覆盖 Level I / II / III 的全部备考需求。无需任何第三方依赖，开箱即用。
+CFA Prep CLI 是一个纯 Python 实现的命令行 CFA 备考助手，覆盖 Level I / II / III 的全部备考需求。无需任何第三方依赖，开箱即用。
 
 ### 核心功能
 
-| 功能 | 说明 |
-|------|------|
-| **知识库检索** | 在教材/Notes 切片中搜索关键词，支持正则和模糊匹配 |
-| **智能刷题** | L1 混合选题 / L2 vignette / L3 情景分析，错题优先出题 |
-| **错题分析** | 自动归类错因（概念不清/计算错误/审题失误），生成复习建议 |
-| **进度追踪** | 维护学习进度文件，追踪已掌握和模糊的知识点 |
-| **闪卡生成** | 从知识库自动提取 Q&A，支持导出 Anki CSV |
-| **IPS 模板** | L3 个人和机构 IPS 模板，含完整框架 |
+| 功能         | 说明                                     |
+| ---------- | -------------------------------------- |
+| **知识库检索**  | 在教材/Notes 切片中搜索关键词，支持正则和模糊匹配           |
+| **智能刷题**   | L1 混合选题 / L2 vignette / L3 情景分析，错题优先出题 |
+| **错题分析**   | 自动归类错因（概念不清/计算错误/审题失误），生成复习建议          |
+| **进度追踪**   | 维护学习进度文件，追踪已掌握和模糊的知识点                  |
+| **闪卡生成**   | 从知识库自动提取 Q&A，支持导出 Anki CSV             |
+| **IPS 模板** | L3 个人和机构 IPS 模板，含完整框架                  |
 
 ## 快速开始
 
@@ -33,21 +33,21 @@ python main.py search "FCFE"
 
 ## 命令列表
 
-| 命令 | 说明 | 示例 |
-|------|------|------|
-| `init` | 初始化项目目录和配置 | `python main.py init` |
-| `search <关键词>` | 搜索知识库 | `python main.py search "FCFE"` |
-| `search --regex` | 正则表达式搜索 | `python main.py search "FCF[EF]" --regex` |
-| `quiz --level L1` | L1 刷题（10 题混合） | `python main.py quiz --level L1` |
-| `quiz --level L2` | L2 刷题（vignette） | `python main.py quiz --level L2` |
-| `quiz --level L3` | L3 刷题（IPS 情景） | `python main.py quiz --level L3` |
-| `add-mistake` | 交互式录入错题 | `python main.py add-mistake` |
-| `recap` | 查看学习进度 | `python main.py recap` |
-| `recap --update` | 更新学习进度 | `python main.py recap --update` |
-| `flashcard --subject FRA` | 生成科目闪卡 | `python main.py flashcard --subject FRA` |
-| `flashcard --anki` | 导出 Anki CSV | `python main.py flashcard --anki` |
-| `ips personal` | 生成个人 IPS 模板 | `python main.py ips personal` |
-| `ips inst` | 生成机构 IPS 模板 | `python main.py ips inst` |
+| 命令                        | 说明              | 示例                                        |
+| ------------------------- | --------------- | ----------------------------------------- |
+| `init`                    | 初始化项目目录和配置      | `python main.py init`                     |
+| `search <关键词>`            | 搜索知识库           | `python main.py search "FCFE"`            |
+| `search --regex`          | 正则表达式搜索         | `python main.py search "FCF[EF]" --regex` |
+| `quiz --level L1`         | L1 刷题（10 题混合）   | `python main.py quiz --level L1`          |
+| `quiz --level L2`         | L2 刷题（vignette） | `python main.py quiz --level L2`          |
+| `quiz --level L3`         | L3 刷题（IPS 情景）   | `python main.py quiz --level L3`          |
+| `add-mistake`             | 交互式录入错题         | `python main.py add-mistake`              |
+| `recap`                   | 查看学习进度          | `python main.py recap`                    |
+| `recap --update`          | 更新学习进度          | `python main.py recap --update`           |
+| `flashcard --subject FRA` | 生成科目闪卡          | `python main.py flashcard --subject FRA`  |
+| `flashcard --anki`        | 导出 Anki CSV     | `python main.py flashcard --anki`         |
+| `ips personal`            | 生成个人 IPS 模板     | `python main.py ips personal`             |
+| `ips inst`                | 生成机构 IPS 模板     | `python main.py ips inst`                 |
 
 ## 目录结构
 
@@ -85,6 +85,7 @@ cfa-prep-tool/
 - **页码标记**：使用 `===== PAGE N =====` 标记每页开始
 
 示例：
+
 ```
 ===== PAGE 1 =====
 这里是第 1 页的内容...
@@ -106,16 +107,8 @@ python -m tests.test_basic
 - **编码**: UTF-8
 - **兼容性**: Windows / macOS / Linux
 
-## 贡献指南
-
-欢迎提交 Issue 和 Pull Request！
-
-1. Fork 本仓库
-2. 创建特性分支 (`git checkout -b feature/amazing-feature`)
-3. 提交更改 (`git commit -m 'Add amazing feature'`)
-4. 推送到分支 (`git push origin feature/amazing-feature`)
-5. 创建 Pull Request
+# 
 
 ---
 
-Built with CodeBuddy · CFA Prep Tool v1.0
+Built with CodeBuddy · CFA Prep CLI v1.0

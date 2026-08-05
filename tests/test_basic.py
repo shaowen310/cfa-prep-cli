@@ -138,7 +138,7 @@ def test_settings():
 def run_all_tests():
     """运行所有测试"""
     print("\n" + "=" * 60)
-    print("  🧪 CFA Prep Tool - 基础测试")
+    print("  🧪 CFA Prep CLI - 基础测试")
     print("=" * 60 + "\n")
 
     tests = [
