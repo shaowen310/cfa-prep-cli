@@ -18,6 +18,7 @@ from cfa_prep.progress_tracker import ProgressTracker
 from cfa_prep.flashcard_generator import FlashcardGenerator
 from cfa_prep.ips_builder import IPSBuilder
 from cfa_prep.quiz_engine import QuizEngine
+from cfa_prep.curriculum import Curriculum
 from cfa_prep.utils import (
     get_project_root,
     get_data_root,
@@ -140,6 +141,68 @@ def test_settings():
     print(f"  ✅ Config read/write is fine (level: {settings.get('level')})")
 
 
+def test_curriculum_seed_and_load():
+    """Test that the curriculum can be seeded and loaded, with all levels present"""
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as tmp:
+        os.environ["CFA_PREP_HOME"] = tmp
+        try:
+            c = Curriculum()
+            # No file yet: load() returns the default scaffold without writing
+            data = c.load()
+            assert set(data.keys()) == {"L1", "L2", "L3"}, f"Expected L1/L2/L3, got {list(data.keys())}"
+            # Subjects should be present for L1
+            assert len(c.all_subjects("L1")) >= 5, "L1 should have several subjects"
+            # Topics should be non-empty and formatted "[Subject] Topic"
+            topics = c.all_topics("L1")
+            assert len(topics) > 0
+            assert all(t.startswith("[") for t in topics)
+
+            # seed() writes the file; a second seed() is idempotent
+            assert c.seed() is True, "First seed should write a new file"
+            assert c.path.exists(), "seed() should create curriculum.json"
+            assert c.seed() is False, "Second seed should be a no-op"
+            print(f"  ✅ Curriculum seed + load is fine")
+        finally:
+            os.environ.pop("CFA_PREP_HOME", None)
+
+
+def test_curriculum_normalize_subject():
+    """Test subject auto-correction (aliases + case + whitespace)"""
+    c = Curriculum()
+    # alias correction: FRA -> Financial Statement Analysis
+    assert c.normalize_subject("FRA") == "Financial Statement Analysis"
+    assert c.normalize_subject("fra") == "Financial Statement Analysis"
+    assert c.normalize_subject("financial reporting") == "Financial Statement Analysis"
+    # canonical exact match
+    assert c.normalize_subject("Ethics") == "Ethical & Professional Standards"
+    assert c.normalize_subject("quant") == "Quantitative Methods"
+    # unknown returns None
+    assert c.normalize_subject("Zzznonsense") is None
+    print(f"  ✅ Curriculum subject normalization is fine")
+
+
+def test_quiz_uses_curriculum():
+    """Test that the quiz engine draws its topic pool from the curriculum"""
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as tmp:
+        os.environ["CFA_PREP_HOME"] = tmp
+        try:
+            c = Curriculum()
+            c.seed()
+            engine = QuizEngine()
+            topics = engine._get_all_topics("L1")
+            assert len(topics) > 0
+            # Topics should match the seeded curriculum subject names (e.g. FSA)
+            assert any("[Financial Statement Analysis]" in t for t in topics), \
+                "L1 topics should include Financial Statement Analysis from the scaffold"
+            print(f"  ✅ Quiz engine uses curriculum ({len(topics)} L1 topics)")
+        finally:
+            os.environ.pop("CFA_PREP_HOME", None)
+
+
 def test_data_root_env_override():
     """Test that get_data_root() honors the CFA_PREP_HOME env var"""
     import tempfile
@@ -174,6 +237,9 @@ def run_all_tests():
         ("Flashcard generator", test_flashcard_generator),
         ("Config read/write", test_settings),
         ("Data root env override", test_data_root_env_override),
+        ("Curriculum seed/load", test_curriculum_seed_and_load),
+        ("Curriculum subject normalization", test_curriculum_normalize_subject),
+        ("Quiz uses curriculum", test_quiz_uses_curriculum),
     ]
 
     passed = 0

@@ -7,6 +7,7 @@ Purpose: Provide a command-line interface that orchestrates all submodule functi
 """
 
 import os
+import json
 import argparse
 
 from .knowledge_base import KnowledgeBase
@@ -15,6 +16,7 @@ from .mistake_analyzer import MistakeAnalyzer
 from .progress_tracker import ProgressTracker
 from .flashcard_generator import FlashcardGenerator
 from .ips_builder import IPSBuilder
+from .curriculum import Curriculum
 from .utils import (
     get_data_root,
     get_data_dir,
@@ -67,6 +69,13 @@ def cmd_init(_args) -> None:
     tracker = ProgressTracker()
     _ = tracker.load()
     print(f"  ✅ Created progress file: progress/progress.md")
+
+    # Seed the default curriculum (idempotent; keeps an existing file if present)
+    curriculum = Curriculum()
+    if curriculum.seed():
+        print(f"  ✅ Seeded default curriculum: {curriculum.path.name}")
+    else:
+        print(f"  ℹ️  Curriculum already exists: {curriculum.path.name}")
 
     # Generate IPS templates
     builder = IPSBuilder()
@@ -240,6 +249,55 @@ def cmd_ips(args) -> None:
         print(f"\n💡 Use 'python main.py ips {ips_type} --show' to view the template content")
 
 
+def cmd_curriculum(args) -> None:
+    """
+    Manage the curriculum (single source of truth for subjects + topics).
+    Actions: seed / import / show.
+    """
+    curriculum = Curriculum()
+    action = args.action or "show"
+
+    if action == "seed":
+        print_header("📚 Seed Curriculum")
+        if curriculum.seed():
+            print(f"✅ Seeded default curriculum to: {curriculum.path}")
+        else:
+            print(f"ℹ️  Curriculum already exists at: {curriculum.path}")
+            print("   Use 'cfa-prep curriculum show' to view it, or 'import' to replace it.")
+        return
+
+    if action == "import":
+        print_header("📚 Import Curriculum")
+        if not args.file:
+            print("❌ Please provide a JSON file: cfa-prep curriculum import <file.json>")
+            return
+        try:
+            curriculum.import_file(args.file)
+        except (FileNotFoundError, ValueError, json.JSONDecodeError) as e:
+            print(f"❌ Import failed: {e}")
+            return
+        print(f"✅ Curriculum imported from: {args.file}")
+        print(f"   Saved to: {curriculum.path}")
+        cmd_curriculum(argparse.Namespace(action="show"))
+        return
+
+    # Default: show
+    print_header("📚 Curriculum Overview")
+    data = curriculum.load()
+    total_topics = 0
+    for level, subjects in data.items():
+        subj_count = len(subjects)
+        topic_count = sum(len(t) for t in subjects.values())
+        total_topics += topic_count
+        print(f"\n  🎯 {level}: {subj_count} subjects, {topic_count} topics")
+        for subject, topics in subjects.items():
+            print(f"    • {subject} ({len(topics)}):")
+            for t in topics:
+                print(f"        - {t}")
+    print(f"\n  📦 Total topics across all levels: {total_topics}")
+    print(f"\n  📁 Stored at: {curriculum.path}")
+
+
 def main():
     """Main entry function, parses command-line arguments and dispatches to the corresponding subcommand."""
     parser = argparse.ArgumentParser(
@@ -302,6 +360,12 @@ Data root (default ~/.cfa-prep) can be set via:
                        help="IPS type: personal or inst/institutional")
     _ = p_ips.add_argument("--show", action="store_true", help="display the template content in the terminal")
 
+    # curriculum command
+    p_curriculum = subparsers.add_parser("curriculum", help="Manage the study curriculum (subjects + topics)")
+    _ = p_curriculum.add_argument("action", nargs="?", choices=["seed", "import", "show"],
+                              default="show", help="action: seed / import / show (default show)")
+    _ = p_curriculum.add_argument("file", nargs="?", help="JSON file to import (for 'import' action)")
+
     args = parser.parse_args()
 
     if not args.command:
@@ -321,6 +385,7 @@ Data root (default ~/.cfa-prep) can be set via:
         "recap": cmd_recap,
         "flashcard": cmd_flashcard,
         "ips": cmd_ips,
+        "curriculum": cmd_curriculum,
     }
 
     if args.command in commands:

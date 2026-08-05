@@ -7,89 +7,11 @@ Purpose: Provide quiz modes for the three CFA exam levels (L1/L2/L3),
 """
 
 import random
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any
 
 from .mistake_analyzer import MistakeAnalyzer
 from .progress_tracker import ProgressTracker
-
-
-# Knowledge point pool per subject (sample data; users can customize)
-TOPIC_POOL = {
-    "FRA": [
-        "Revenue recognition principles",
-        "Inventory valuation methods (LIFO/FIFO)",
-        "Long-lived asset depreciation",
-        "Lease accounting",
-        "Deferred tax assets and liabilities",
-        "Cash flow statement preparation",
-        "Financial ratio analysis",
-    ],
-    "Equity": [
-        "FCFE valuation model",
-        "FCFF valuation model",
-        "DDM dividend discount model",
-        "Multiplier valuation methods (P/E, P/B, P/S)",
-        "Residual income model (RI)",
-        "Industry and company analysis",
-    ],
-    "Fixed Income": [
-        "Duration calculation (Macaulay/Modified/Effective)",
-        "Convexity",
-        "Yield curve strategies",
-        "Credit spread analysis",
-        "ABS/MBS structures",
-        "Bond pricing",
-    ],
-    "Derivatives": [
-        "Binomial tree option pricing",
-        "Black-Scholes model",
-        "Futures pricing and valuation",
-        "Swap pricing",
-        "Option strategies (Covered Call, Protective Put)",
-    ],
-    "Ethics": [
-        "Overview of the seven standards",
-        "Material Nonpublic Information",
-        "Loyalty, Prudence, and Care",
-        "Fair Dealing",
-        "Suitability",
-        "Conflicts of Interest",
-        "GIPS compliance requirements",
-    ],
-    "Economics": [
-        "Monetary and fiscal policy",
-        "Exchange rate determination theories",
-        "Economic growth models",
-        "Business cycle analysis",
-    ],
-    "Portfolio Management": [
-        "Asset allocation strategies",
-        "Risk management (VaR, CVaR)",
-        "Behavioral finance biases",
-        "Performance attribution analysis",
-        "IPS construction process",
-    ],
-    "Alternative Investments": [
-        "Private equity valuation",
-        "Hedge fund strategies",
-        "Real estate valuation",
-        "Commodity investing",
-    ],
-    "Quantitative Methods": [
-        "Time series analysis",
-        "Hypothesis testing",
-        "Regression analysis",
-        "Monte Carlo simulation",
-        "Probability distributions",
-    ],
-    "Corporate Finance": [
-        "Capital budgeting (NPV/IRR)",
-        "Capital structure theory (MM)",
-        "Dividend policy",
-        "Corporate governance",
-        "M&A analysis",
-    ],
-}
+from .curriculum import Curriculum
 
 
 class QuizEngine:
@@ -102,16 +24,17 @@ class QuizEngine:
     def __init__(self):
         self.mistake_analyzer = MistakeAnalyzer()
         self.progress_tracker = ProgressTracker()
+        self.curriculum = Curriculum()
         self.score = 0
         self.total = 0
 
-    def _get_all_topics(self) -> List[str]:
-        """Get all knowledge points across all subjects (flattened list)"""
-        all_topics = []
-        for subject, topics in TOPIC_POOL.items():
-            for topic in topics:
-                all_topics.append(f"[{subject}] {topic}")
-        return all_topics
+    def _get_all_topics(self, level: str = "L1") -> List[str]:
+        """
+        Get all knowledge points across all subjects for a level (flattened list).
+        Drawn from the curriculum; falls back to the built-in scaffold if no
+        curriculum file has been seeded yet, so the quiz never breaks.
+        """
+        return self.curriculum.all_topics(level.upper())
 
     def _get_mistake_topics(self) -> List[str]:
         """Extract knowledge points from the mistake log for priority question selection"""
@@ -127,13 +50,13 @@ class QuizEngine:
         """Extract fuzzy knowledge points from progress tracking"""
         return self.progress_tracker.get_key_points_to_review()
 
-    def _generate_l1_quiz(self) -> List[str]:
+    def _generate_l1_quiz(self, level: str = "L1") -> List[str]:
         """
         Generate L1 questions (10 mixed single-choice questions).
         40% from mistakes/fuzzy knowledge points, 60% random.
         Note: This generates the question framework; actual questions are answered by the user based on the knowledge point.
         """
-        all_topics = self._get_all_topics()
+        all_topics = self._get_all_topics(level)
         mistake_topics = self._get_mistake_topics()
         fuzzy_topics = self._get_fuzzy_topics()
 
@@ -163,12 +86,12 @@ class QuizEngine:
         random.shuffle(selected)
         return selected[:10]
 
-    def _generate_l2_quiz(self) -> Dict[str, any]:
+    def _generate_l2_quiz(self, level: str = "L2") -> Dict[str, Any]:
         """
         Generate L2 questions (1 vignette + 3 sub-questions).
         A vignette is a case scenario accompanied by 3 related questions.
         """
-        all_topics = self._get_all_topics()
+        all_topics = self._get_all_topics(level)
         priority_topics = list(set(self._get_mistake_topics() + self._get_fuzzy_topics()))
 
         # Choose the vignette topic
@@ -179,7 +102,8 @@ class QuizEngine:
 
         # Generate 3 related questions (selected from the relevant subject)
         subject = vignette_topic.split("]")[0].replace("[", "")
-        related_topics = TOPIC_POOL.get(subject, [])
+        data = self.curriculum.load()
+        related_topics = data.get(level.upper(), {}).get(subject, [])
         if not related_topics:
             related_topics = [vignette_topic]
 
@@ -193,7 +117,7 @@ class QuizEngine:
             "format": "1 case scenario + 3 multiple-choice questions",
         }
 
-    def _generate_l3_quiz(self) -> Dict[str, any]:
+    def _generate_l3_quiz(self) -> Dict[str, Any]:
         """
         Generate L3 questions (1 IPS scenario or behavioral finance scenario + essay questions).
         """
@@ -222,17 +146,17 @@ class QuizEngine:
         print("=" * 60)
 
         if level == "L1":
-            self._do_l1_quiz()
+            self._do_l1_quiz(level)
         elif level == "L2":
-            self._do_l2_quiz()
+            self._do_l2_quiz(level)
         elif level == "L3":
-            self._do_l3_quiz()
+            self._do_l3_quiz(level)
         else:
             print(f"❌ Unsupported level: {level}, please use L1/L2/L3")
 
-    def _do_l1_quiz(self) -> None:
+    def _do_l1_quiz(self, level: str = "L1") -> None:
         """Run the L1 quiz flow"""
-        topics = self._generate_l1_quiz()
+        topics = self._generate_l1_quiz(level)
         print(f"\n📋 {len(topics)} questions total (mixed knowledge points)")
         print("Answer each question based on the knowledge point; your responses will be recorded.\n")
 
@@ -267,9 +191,9 @@ class QuizEngine:
 
         self._show_quiz_summary()
 
-    def _do_l2_quiz(self) -> None:
+    def _do_l2_quiz(self, level: str = "L2") -> None:
         """Run the L2 quiz flow"""
-        quiz = self._generate_l2_quiz()
+        quiz = self._generate_l2_quiz(level)
         print(f"\n📋 Case topic: {quiz['vignette_topic']}")
         print(f"📋 Format: {quiz['format']}")
         print("\nPlease read the following case scenario (get the full vignette from the official curriculum):")
@@ -293,7 +217,7 @@ class QuizEngine:
 
         self._show_quiz_summary()
 
-    def _do_l3_quiz(self) -> None:
+    def _do_l3_quiz(self, level: str = "L3") -> None:
         """Run the L3 quiz flow"""
         quiz = self._generate_l3_quiz()
         print(f"\n📋 Scenario type: {quiz['scenario']}")

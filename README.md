@@ -85,8 +85,52 @@ cfa-prep search "FCFE"
 | `flashcard --anki`           | Export Anki CSV              | `cfa-prep flashcard --anki`                    |
 | `ips personal`               | Generate personal IPS template | `cfa-prep ips personal`                       |
 | `ips inst`                   | Generate institutional IPS template | `cfa-prep ips inst`                     |
+| `curriculum seed`            | Seed the default curriculum   | `cfa-prep curriculum seed`                   |
+| `curriculum import <file>`   | Replace curriculum from a JSON file | `cfa-prep curriculum import my.json`   |
+| `curriculum show`            | Display the current curriculum | `cfa-prep curriculum show`                   |
 
 > All commands accept the global `--home PATH` flag, e.g. `cfa-prep --home ./my-data search "FCFE"`.
+
+## Curriculum
+
+The **curriculum** is the single source of truth for the subjects and topics you study
+(per level L1/L2/L3). It drives quiz topic selection and (in a later pass) input
+auto-correction and progress-coverage percentages.
+
+`cfa-prep init` automatically seeds a default scaffold built from the **publicly published
+CFA topic structure** — the 10 official topic areas with typical sub-topics per level.
+Because actual CFA curriculum text is copyrighted by CFA Institute, the scaffold contains
+**factual structure only**, not reproduced copyrighted text. You are encouraged to refine
+it to match your own materials (your notes, the `kb/` text you already own).
+
+The curriculum is stored at `<data_root>/curriculum.json` with this shape:
+
+```json
+{
+  "L1": {
+    "Financial Statement Analysis": [
+      "Introduction to financial statement analysis",
+      "Understanding the income statement"
+    ]
+  }
+}
+```
+
+### Commands
+
+```bash
+# Show the current curriculum
+cfa-prep curriculum show
+
+# Re-seed the default scaffold (no-op if a file already exists)
+cfa-prep curriculum seed
+
+# Replace the curriculum with your own JSON file
+cfa-prep curriculum import /path/to/my-curriculum.json
+```
+
+The quiz engine draws its topic pool from the curriculum automatically — no other
+configuration needed.
 
 ## Repository Layout
 
@@ -107,6 +151,7 @@ cfa-prep-cli/
 │   ├── progress_tracker.py      # Progress tracking
 │   ├── flashcard_generator.py   # Flashcard generation
 │   ├── ips_builder.py           # IPS template building
+│   ├── curriculum.py            # Curriculum module (subjects + topics per level)
 │   └── utils.py                 # General utility functions (incl. data-root resolution)
 └── tests/
     └── test_basic.py            # Basic tests
@@ -123,6 +168,7 @@ Data files are stored under the configured data root (`~/.cfa-prep` by default):
 ├── progress/                 # Progress files (auto-generated)
 ├── flashcards/               # Flashcards (auto-generated)
 ├── templates/                # IPS templates
+├── curriculum.json           # Curriculum (subjects + topics per level)
 └── config/
     └── settings.json         # Configuration (includes data_root)
 ```
