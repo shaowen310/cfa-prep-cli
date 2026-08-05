@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 """
-CFA 备考工具 - 刷题引擎模块
-作者：CodeBuddy AI Assistant
-用途：提供三种 CFA 考试级别的刷题模式（L1/L2/L3），
-      支持随机出题、错题优先策略，交互式答题和即时判分。
+CFA Prep CLI - Quiz engine module
+Author: CodeBuddy AI Assistant
+Purpose: Provide quiz modes for the three CFA exam levels (L1/L2/L3),
+         with random question selection and mistake-priority strategy, interactive answering, and instant scoring.
 """
 
 import random
@@ -13,90 +13,90 @@ from .mistake_analyzer import MistakeAnalyzer
 from .progress_tracker import ProgressTracker
 
 
-# 各科目的知识点池（示例数据，用户可自定义）
+# Knowledge point pool per subject (sample data; users can customize)
 TOPIC_POOL = {
     "FRA": [
-        "收入确认原则",
-        "存货计价方法 (LIFO/FIFO)",
-        "长期资产折旧",
-        "租赁会计",
-        "递延税资产与负债",
-        "现金流量表编制",
-        "财务比率分析",
+        "Revenue recognition principles",
+        "Inventory valuation methods (LIFO/FIFO)",
+        "Long-lived asset depreciation",
+        "Lease accounting",
+        "Deferred tax assets and liabilities",
+        "Cash flow statement preparation",
+        "Financial ratio analysis",
     ],
     "Equity": [
-        "FCFE 估值模型",
-        "FCFF 估值模型",
-        "DDM 股利折现模型",
-        "乘数估值法 (P/E, P/B, P/S)",
-        "剩余收益模型 (RI)",
-        "行业与公司分析",
+        "FCFE valuation model",
+        "FCFF valuation model",
+        "DDM dividend discount model",
+        "Multiplier valuation methods (P/E, P/B, P/S)",
+        "Residual income model (RI)",
+        "Industry and company analysis",
     ],
     "Fixed Income": [
-        "Duration 计算 (Macaulay/Modified/Effective)",
-        "Convexity 凸性",
-        "收益率曲线策略",
-        "信用利差分析",
-        "ABS/MBS 结构",
-        "债券定价",
+        "Duration calculation (Macaulay/Modified/Effective)",
+        "Convexity",
+        "Yield curve strategies",
+        "Credit spread analysis",
+        "ABS/MBS structures",
+        "Bond pricing",
     ],
     "Derivatives": [
-        "二叉树期权定价",
-        "Black-Scholes 模型",
-        "期货定价与估值",
-        "互换定价",
-        "期权策略 (Covered Call, Protective Put)",
+        "Binomial tree option pricing",
+        "Black-Scholes model",
+        "Futures pricing and valuation",
+        "Swap pricing",
+        "Option strategies (Covered Call, Protective Put)",
     ],
     "Ethics": [
-        "七大准则概述",
+        "Overview of the seven standards",
         "Material Nonpublic Information",
         "Loyalty, Prudence, and Care",
         "Fair Dealing",
         "Suitability",
         "Conflicts of Interest",
-        "GIPS 合规要求",
+        "GIPS compliance requirements",
     ],
     "Economics": [
-        "货币政策与财政政策",
-        "汇率决定理论",
-        "经济增长模型",
-        "商业周期分析",
+        "Monetary and fiscal policy",
+        "Exchange rate determination theories",
+        "Economic growth models",
+        "Business cycle analysis",
     ],
     "Portfolio Management": [
-        "资产配置策略",
-        "风险管理 (VaR, CVaR)",
-        "行为金融偏差",
-        "绩效归因分析",
-        "IPS 构建流程",
+        "Asset allocation strategies",
+        "Risk management (VaR, CVaR)",
+        "Behavioral finance biases",
+        "Performance attribution analysis",
+        "IPS construction process",
     ],
     "Alternative Investments": [
-        "私募股权估值",
-        "对冲基金策略",
-        "房地产估值",
-        "大宗商品投资",
+        "Private equity valuation",
+        "Hedge fund strategies",
+        "Real estate valuation",
+        "Commodity investing",
     ],
     "Quantitative Methods": [
-        "时间序列分析",
-        "假设检验",
-        "回归分析",
-        "蒙特卡洛模拟",
-        "概率分布",
+        "Time series analysis",
+        "Hypothesis testing",
+        "Regression analysis",
+        "Monte Carlo simulation",
+        "Probability distributions",
     ],
     "Corporate Finance": [
-        "资本预算 (NPV/IRR)",
-        "资本结构理论 (MM)",
-        "股利政策",
-        "公司治理",
-        "并购分析",
+        "Capital budgeting (NPV/IRR)",
+        "Capital structure theory (MM)",
+        "Dividend policy",
+        "Corporate governance",
+        "M&A analysis",
     ],
 }
 
 
 class QuizEngine:
     """
-    CFA 刷题引擎。
-    根据级别（L1/L2/L3）生成不同类型的题目，
-    采用错题优先（40%）+ 随机抽取（60%）策略。
+    CFA quiz engine.
+    Generates different question types based on level (L1/L2/L3),
+    using a mistake-priority (40%) + random selection (60%) strategy.
     """
 
     def __init__(self):
@@ -106,7 +106,7 @@ class QuizEngine:
         self.total = 0
 
     def _get_all_topics(self) -> List[str]:
-        """获取所有科目的所有知识点（扁平化列表）"""
+        """Get all knowledge points across all subjects (flattened list)"""
         all_topics = []
         for subject, topics in TOPIC_POOL.items():
             for topic in topics:
@@ -114,7 +114,7 @@ class QuizEngine:
         return all_topics
 
     def _get_mistake_topics(self) -> List[str]:
-        """从错题本中提取考点，用于优先出题"""
+        """Extract knowledge points from the mistake log for priority question selection"""
         records = self.mistake_analyzer.get_recent_mistakes(limit=20)
         topics = []
         for r in records:
@@ -124,14 +124,14 @@ class QuizEngine:
         return topics
 
     def _get_fuzzy_topics(self) -> List[str]:
-        """从进度追踪中提取模糊知识点"""
+        """Extract fuzzy knowledge points from progress tracking"""
         return self.progress_tracker.get_key_points_to_review()
 
     def _generate_l1_quiz(self) -> List[str]:
         """
-        生成 L1 级别题目（10 道单选题混合）。
-        40% 来自错题/模糊知识点，60% 随机。
-        注意：这是题目框架生成，实际题目需要用户根据知识点自行作答。
+        Generate L1 questions (10 mixed single-choice questions).
+        40% from mistakes/fuzzy knowledge points, 60% random.
+        Note: This generates the question framework; actual questions are answered by the user based on the knowledge point.
         """
         all_topics = self._get_all_topics()
         mistake_topics = self._get_mistake_topics()
@@ -145,15 +145,15 @@ class QuizEngine:
 
         selected = []
 
-        # 优先选题
+        # Priority selection
         if priority_pool:
             selected.extend(random.sample(priority_pool, min(num_priority, len(priority_pool))))
 
-        # 随机补充
+        # Random supplement
         if regular_pool and num_regular > 0:
             selected.extend(random.sample(regular_pool, min(num_regular, len(regular_pool))))
 
-        # 如果还不够 10 题，从全部池中补充
+        # If still fewer than 10, supplement from the full pool
         while len(selected) < 10 and all_topics:
             remaining = [t for t in all_topics if t not in selected]
             if not remaining:
@@ -165,19 +165,19 @@ class QuizEngine:
 
     def _generate_l2_quiz(self) -> Dict[str, any]:
         """
-        生成 L2 级别题目（1 个 vignette + 3 小问）。
-        vignette 是一个情景案例，附带 3 个相关问题。
+        Generate L2 questions (1 vignette + 3 sub-questions).
+        A vignette is a case scenario accompanied by 3 related questions.
         """
         all_topics = self._get_all_topics()
         priority_topics = list(set(self._get_mistake_topics() + self._get_fuzzy_topics()))
 
-        # 选择 vignette 的主题
+        # Choose the vignette topic
         if priority_topics and random.random() < 0.4:
             vignette_topic = random.choice(priority_topics)
         else:
             vignette_topic = random.choice(all_topics)
 
-        # 生成 3 个相关问题（从相关科目中选）
+        # Generate 3 related questions (selected from the relevant subject)
         subject = vignette_topic.split("]")[0].replace("[", "")
         related_topics = TOPIC_POOL.get(subject, [])
         if not related_topics:
@@ -190,35 +190,35 @@ class QuizEngine:
         return {
             "vignette_topic": vignette_topic,
             "sub_questions": sub_questions,
-            "format": "1 个案例情景 + 3 个选择题",
+            "format": "1 case scenario + 3 multiple-choice questions",
         }
 
     def _generate_l3_quiz(self) -> Dict[str, any]:
         """
-        生成 L3 级别题目（1 个 IPS 情景或行为金融情景 + 主观题）。
+        Generate L3 questions (1 IPS scenario or behavioral finance scenario + essay questions).
         """
-        scenario_types = ["IPS 构建 (个人)", "IPS 构建 (机构)", "行为金融偏差分析", "资产配置决策"]
+        scenario_types = ["IPS construction (personal)", "IPS construction (institutional)", "Behavioral finance bias analysis", "Asset allocation decision"]
         scenario = random.choice(scenario_types)
 
         return {
             "scenario": scenario,
-            "format": "1 个情景分析 + 主观论述题",
-            "instructions": "请根据情景，写出你的分析过程和建议（建议计时 18 分钟）",
+            "format": "1 scenario analysis + essay question",
+            "instructions": "Based on the scenario, write your analysis process and recommendation (suggest 18 minutes)",
         }
 
     def start_quiz(self, level: str = "L1") -> None:
         """
-        开始刷题。
+        Start the quiz.
 
-        参数：
-            level: 考试级别 (L1, L2, L3)
+        Parameters:
+            level: exam level (L1, L2, L3)
         """
         level = level.upper()
         self.score = 0
         self.total = 0
 
         print("\n" + "=" * 60)
-        print(f"  📝 CFA {level} 刷题模式")
+        print(f"  📝 CFA {level} Quiz Mode")
         print("=" * 60)
 
         if level == "L1":
@@ -228,78 +228,78 @@ class QuizEngine:
         elif level == "L3":
             self._do_l3_quiz()
         else:
-            print(f"❌ 不支持的级别: {level}，请使用 L1/L2/L3")
+            print(f"❌ Unsupported level: {level}, please use L1/L2/L3")
 
     def _do_l1_quiz(self) -> None:
-        """执行 L1 刷题流程"""
+        """Run the L1 quiz flow"""
         topics = self._generate_l1_quiz()
-        print(f"\n📋 共 {len(topics)} 道题（混合知识点）")
-        print("每道题请根据考点回答，系统会记录你的作答情况。\n")
+        print(f"\n📋 {len(topics)} questions total (mixed knowledge points)")
+        print("Answer each question based on the knowledge point; your responses will be recorded.\n")
 
         for i, topic in enumerate(topics, 1):
             print(f"{'─' * 50}")
-            print(f"  📌 第 {i}/{len(topics)} 题")
-            print(f"  考点: {topic}")
+            print(f"  📌 Question {i}/{len(topics)}")
+            print(f"  Topic: {topic}")
             print(f"{'─' * 50}")
 
-            # 生成题目提示
+            # Generate the question prompt
             self._generate_question_prompt(topic, i)
 
-            # 用户作答
-            print("\n请选择答案（或输入 's' 跳过, 'q' 退出）:")
+            # User answer
+            print("\nPlease choose an answer (or enter 's' to skip, 'q' to quit):")
             print("  [A] [B] [C] [D]")
-            answer = input("你的选择: ").strip().upper()
+            answer = input("Your choice: ").strip().upper()
 
             if answer == "Q":
-                print("👋 已退出刷题")
+                print("👋 Quiz exited")
                 break
             elif answer == "S":
-                print(f"⏭️ 跳过第 {i} 题")
+                print(f"⏭️ Skipped question {i}")
                 continue
             elif answer in ("A", "B", "C", "D"):
                 self.total += 1
-                # 模拟判分（实际使用时需要与正确答案对比）
-                print(f"\n  ✅ 已记录答案: {answer}")
-                print(f"  💡 请对照标准答案检查，如有错误请用 'add-mistake' 命令录入错题本。")
-                self.score += 1  # 占位：实际应判断正误
+                # Simulated scoring (in practice, compare with the correct answer)
+                print(f"\n  ✅ Answer recorded: {answer}")
+                print(f"  💡 Check against the standard answer; if wrong, use the 'add-mistake' command to log it.")
+                self.score += 1  # Placeholder: should judge correctness in practice
             else:
-                print("⚠️ 无效输入，请选择 A/B/C/D/S/Q")
+                print("⚠️ Invalid input, please choose A/B/C/D/S/Q")
 
         self._show_quiz_summary()
 
     def _do_l2_quiz(self) -> None:
-        """执行 L2 刷题流程"""
+        """Run the L2 quiz flow"""
         quiz = self._generate_l2_quiz()
-        print(f"\n📋 案例主题: {quiz['vignette_topic']}")
-        print(f"📋 格式: {quiz['format']}")
-        print("\n请阅读以下案例情景（需从原版书获取完整 vignette）:")
-        print(f"  主题: {quiz['vignette_topic']}")
-        print(f"  子问题:")
+        print(f"\n📋 Case topic: {quiz['vignette_topic']}")
+        print(f"📋 Format: {quiz['format']}")
+        print("\nPlease read the following case scenario (get the full vignette from the official curriculum):")
+        print(f"  Topic: {quiz['vignette_topic']}")
+        print(f"  Sub-questions:")
         for i, q in enumerate(quiz["sub_questions"], 1):
             print(f"    {i}. {q}")
 
         self.total = 3
-        print("\n请逐题作答（或输入 'q' 退出）:")
+        print("\nPlease answer each question (or enter 'q' to quit):")
         for i, q in enumerate(quiz["sub_questions"], 1):
             print(f"\n{'─' * 50}")
-            print(f"  📌 第 {i}/3 小题: {q}")
+            print(f"  📌 Sub-question {i}/3: {q}")
             print(f"{'─' * 50}")
-            answer = input("你的答案 (A/B/C): ").strip().upper()
+            answer = input("Your answer (A/B/C): ").strip().upper()
             if answer == "Q":
-                print("👋 已退出刷题")
+                print("👋 Quiz exited")
                 break
-            print(f"  ✅ 已记录答案: {answer}")
-            print(f"  💡 请对照标准答案检查。")
+            print(f"  ✅ Answer recorded: {answer}")
+            print(f"  💡 Check against the standard answer.")
 
         self._show_quiz_summary()
 
     def _do_l3_quiz(self) -> None:
-        """执行 L3 刷题流程"""
+        """Run the L3 quiz flow"""
         quiz = self._generate_l3_quiz()
-        print(f"\n📋 情景类型: {quiz['scenario']}")
-        print(f"📋 格式: {quiz['format']}")
+        print(f"\n📋 Scenario type: {quiz['scenario']}")
+        print(f"📋 Format: {quiz['format']}")
         print(f"📋 {quiz['instructions']}")
-        print(f"\n请在下方写出你的分析（输入空行结束）:\n")
+        print(f"\nWrite your analysis below (enter a blank line to finish):\n")
 
         lines = []
         while True:
@@ -309,37 +309,37 @@ class QuizEngine:
             lines.append(line)
 
         self.total = 1
-        self.score = 1  # 占位
-        print("\n  ✅ 已记录你的作答。")
-        print("  💡 请参照标准答案自我评估，如需改进请用 'add-mistake' 记录薄弱点。")
+        self.score = 1  # Placeholder
+        print("\n  ✅ Your response has been recorded.")
+        print("  💡 Self-assess against the standard answer; if improvement is needed, use 'add-mistake' to log weak points.")
 
         self._show_quiz_summary()
 
     def _generate_question_prompt(self, topic: str, question_num: int) -> None:
         """
-        根据知识点生成题目提示。
-        实际使用中，用户需要从题库中选取对应题目。
+        Generate a question prompt based on the knowledge point.
+        In practice, users should select the corresponding question from a question bank.
 
-        参数：
-            topic: 知识点描述
-            question_num: 题目编号
+        Parameters:
+            topic: knowledge point description
+            question_num: question number
         """
-        # 给出题目方向提示
-        print(f"\n  📖 请从题库中选取与「{topic}」相关的题目进行练习。")
-        print(f"  建议使用原版书课后题或 QBank 中对应考点的题目。")
+        # Provide direction hints for the question
+        print(f"\n  📖 Please select a question related to「{topic}」from the question bank for practice.")
+        print(f"  We recommend using end-of-chapter questions from the official curriculum or QBank questions on this topic.")
 
     def _show_quiz_summary(self) -> None:
-        """显示刷题总结"""
+        """Show the quiz summary"""
         if self.total == 0:
-            print("\n📊 本次未完成任何题目。")
+            print("\n📊 No questions completed this time.")
             return
 
         print(f"\n{'=' * 50}")
-        print(f"  📊 刷题总结")
+        print(f"  📊 Quiz Summary")
         print(f"{'=' * 50}")
-        print(f"  完成题目: {self.total}")
-        print(f"  💡 请对照标准答案自行核对正确率。")
-        print(f"  📝 如有错题，使用以下命令录入:")
+        print(f"  Questions completed: {self.total}")
+        print(f"  💡 Check your accuracy rate against the standard answers.")
+        print(f"  📝 For any mistakes, log them with the following command:")
         print(f"     python main.py add-mistake")
-        print(f"  📊 查看进度:")
+        print(f"  📊 View progress:")
         print(f"     python main.py recap")

@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # -*- coding: utf-8 -*-
 #
-# CFA Prep CLI - 一键初始化脚本
-# 作者：CodeBuddy AI Assistant
-# 用途：创建所有必要目录、生成默认配置文件、打印使用指引。
+# CFA Prep CLI - One-click setup script
+# Author: CodeBuddy AI Assistant
+# Purpose: Create all necessary directories, generate a default config file, and print usage instructions.
 #
 
 set -e
@@ -13,12 +13,12 @@ cd "$SCRIPT_DIR"
 
 echo ""
 echo "============================================================"
-echo "  🚀 CFA Prep CLI - 一键初始化"
+echo "  🚀 CFA Prep CLI - One-click Setup"
 echo "============================================================"
 echo ""
 
-# 1. 创建目录结构
-echo "📁 创建目录结构..."
+# 1. Create directory structure
+echo "📁 Creating directory structure..."
 mkdir -p data/kb
 mkdir -p data/mistakes
 mkdir -p data/progress
@@ -26,11 +26,11 @@ mkdir -p data/flashcards
 mkdir -p data/templates
 mkdir -p config
 mkdir -p tests
-echo "  ✅ 目录创建完成"
+echo "  ✅ Directories created"
 
-# 2. 生成默认配置文件
+# 2. Generate default config file
 echo ""
-echo "⚙️  生成默认配置..."
+echo "⚙️  Generating default config..."
 cat > config/settings.json << 'JSONEOF'
 {
   "level": "L1",
@@ -44,46 +44,46 @@ cat > config/settings.json << 'JSONEOF'
 JSONEOF
 echo "  ✅ config/settings.json"
 
-# 3. 生成初始进度文件
+# 3. Generate initial progress file
 echo ""
-echo "📊 生成进度文件..."
+echo "📊 Generating progress file..."
 cat > data/progress/progress.md << 'MDEOF'
-# CFA 备考进度
+# CFA Study Progress
 
-> 进度总览（更新于 $(date +%Y-%m-%d)）
+> Progress overview (updated on $(date +%Y-%m-%d))
 
-## 已掌握
+## Mastered
 
-（暂无记录）
+(No records yet)
 
-## 仍模糊
+## Still Fuzzy
 
-（暂无记录）
+(No records yet)
 
-## 错因分布
+## Mistake Distribution
 
-（暂无数据）
+(No data yet)
 
-## 明日唯一任务
+## Sole Task for Tomorrow
 
-（暂无计划）
+(No plan yet)
 MDEOF
 echo "  ✅ data/progress/progress.md"
 
-# 4. 生成 IPS 模板
+# 4. Generate IPS templates
 echo ""
-echo "📄 生成 IPS 模板..."
-echo "  ✅ data/templates/ (使用 python main.py ips 命令生成)"
+echo "📄 Generating IPS templates..."
+echo "  ✅ data/templates/ (generated via python main.py ips command)"
 
-# 5. 检查 Python 环境
+# 5. Check Python environment
 echo ""
-echo "🐍 检查 Python 环境..."
+echo "🐍 Checking Python environment..."
 if command -v python3 &> /dev/null; then
     PYTHON=python3
 elif command -v python &> /dev/null; then
     PYTHON=python
 else
-    echo "  ⚠️  未找到 Python，请安装 Python 3.10+"
+    echo "  ⚠️  Python not found, please install Python 3.10+"
     PYTHON=""
 fi
 
@@ -91,29 +91,29 @@ if [ -n "$PYTHON" ]; then
     PY_VERSION=$($PYTHON --version 2>&1)
     echo "  ✅ $PY_VERSION"
 
-    # 初始化项目（运行 Python 初始化）
+    # Initialize the project (run Python initialization)
     echo ""
-    echo "🔧 运行 Python 初始化..."
-    $PYTHON -m src.main init 2>/dev/null || $PYTHON src/main.py init 2>/dev/null || echo "  ⚠️  请手动运行: python main.py init"
+    echo "🔧 Running Python initialization..."
+    $PYTHON -m src.main init 2>/dev/null || $PYTHON src/main.py init 2>/dev/null || echo "  ⚠️  Please run manually: python main.py init"
 fi
 
-# 6. 打印完成信息
+# 6. Print completion info
 echo ""
 echo "============================================================"
-echo "  🎉 初始化完成！"
+echo "  🎉 Setup complete!"
 echo "============================================================"
 echo ""
-echo "📋 下一步:"
-echo "  1. 将知识文件（.txt）放入 data/kb/ 目录"
-echo "     文件名格式：l1_vol1_p1-60.txt"
-echo "     文件内用 ===== PAGE N ===== 标记页码"
+echo "📋 Next steps:"
+echo "  1. Place knowledge files (.txt) into the data/kb/ directory"
+echo "     File name format: l1_vol1_p1-60.txt"
+echo "     Mark pages inside files with ===== PAGE N ====="
 echo ""
-echo "  2. 开始使用:"
-echo "     python main.py search \"FCFE\"        # 搜索知识库"
-echo "     python main.py quiz --level L1       # 开始刷题"
-echo "     python main.py recap                 # 查看进度"
-echo "     python main.py flashcard --subject FRA  # 生成闪卡"
-echo "     python main.py ips personal          # 生成 IPS 模板"
+echo "  2. Start using:"
+echo "     python main.py search \"FCFE\"        # Search the knowledge base"
+echo "     python main.py quiz --level L1       # Start quizzing"
+echo "     python main.py recap                 # View progress"
+echo "     python main.py flashcard --subject FRA  # Generate flashcards"
+echo "     python main.py ips personal          # Generate IPS template"
 echo ""
-echo "  📖 更多信息请查看 README.md"
+echo "  📖 See README.md for more information"
 echo ""

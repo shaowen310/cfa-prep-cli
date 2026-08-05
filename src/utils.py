@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """
-CFA 备考工具 - 通用工具函数
-作者：CodeBuddy AI Assistant
-用途：提供项目级的通用工具函数，包括路径管理、文件读写、格式化输出等。
+CFA Prep CLI - General utility functions
+Author: CodeBuddy AI Assistant
+Purpose: Provide project-level utility functions, including path management, file I/O, and formatted output.
 """
 
 import json
@@ -12,26 +12,26 @@ from typing import Any
 
 
 def get_project_root() -> Path:
-    """获取项目根目录（基于本文件位置向上两级：src -> 根目录）"""
+    """Return the project root directory (based on this file's location, two levels up: src -> root)"""
     return Path(__file__).resolve().parent.parent
 
 
 def get_data_dir(subdir: str = "") -> Path:
-    """获取 data/ 下指定子目录的路径"""
+    """Return the path of a specified subdirectory under data/"""
     p = get_project_root() / "data" / subdir
     p.mkdir(parents=True, exist_ok=True)
     return p
 
 
 def get_config_dir() -> Path:
-    """获取 config/ 目录路径"""
+    """Return the config/ directory path"""
     p = get_project_root() / "config"
     p.mkdir(parents=True, exist_ok=True)
     return p
 
 
 def load_json(filepath: Path) -> dict[str, Any]:
-    """安全加载 JSON 文件，文件不存在时返回空字典"""
+    """Safely load a JSON file, returning an empty dict if the file does not exist"""
     if filepath.exists():
         with open(filepath, "r", encoding="utf-8") as f:
             return json.load(f)
@@ -39,36 +39,36 @@ def load_json(filepath: Path) -> dict[str, Any]:
 
 
 def save_json(filepath: Path, data: dict[str, Any]) -> None:
-    """保存数据为 JSON 文件（UTF-8，缩进 2 空格）"""
+    """Save data as a JSON file (UTF-8, 2-space indent)"""
     filepath.parent.mkdir(parents=True, exist_ok=True)
     with open(filepath, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
 
 def load_settings() -> dict[str, Any]:
-    """加载 config/settings.json 配置"""
+    """Load the config/settings.json config"""
     return load_json(get_config_dir() / "settings.json")
 
 
 def save_settings(settings: dict[str, Any]) -> None:
-    """保存配置到 config/settings.json"""
+    """Save config to config/settings.json"""
     save_json(get_config_dir() / "settings.json", settings)
 
 
 def today_str() -> str:
-    """返回当天日期字符串 YYYYMMDD"""
+    """Return today's date string YYYYMMDD"""
     return datetime.now().strftime("%Y%m%d")
 
 
 def today_iso() -> str:
-    """返回当天日期字符串 YYYY-MM-DD"""
+    """Return today's date string YYYY-MM-DD"""
     return datetime.now().strftime("%Y-%m-%d")
 
 
 def fuzzy_match(pattern: str, text: str) -> bool:
     """
-    模糊匹配：将 pattern 中的每个字符按顺序在 text 中查找。
-    用于拼写近似或缩写搜索。
+    Fuzzy match: look up each character of pattern in text in order.
+    Used for approximate-spelling or abbreviation searches.
     """
     pattern = pattern.lower()
     text = text.lower()
@@ -83,17 +83,17 @@ def fuzzy_match(pattern: str, text: str) -> bool:
 
 def extract_context(text: str, keyword: str, window: int = 80) -> str:
     """
-    在文本中搜索关键词，返回关键词周围的上下文片段。
-    window: 关键词前后的字符数。
+    Search for keyword in the text and return a context snippet around it.
+    window: number of characters before/after the keyword.
     """
     idx = text.lower().find(keyword.lower())
     if idx == -1:
-        # 尝试模糊匹配
+        # Try fuzzy match
         lines = text.split("\n")
         for line in lines:
             if fuzzy_match(keyword, line):
                 return line.strip()[:window * 2]
-        return "（未找到匹配内容）"
+        return "(No matching content found)"
 
     start = max(0, idx - window)
     end = min(len(text), idx + len(keyword) + window)
@@ -106,7 +106,7 @@ def extract_context(text: str, keyword: str, window: int = 80) -> str:
 
 
 def read_file_lines(filepath: Path) -> list[str]:
-    """读取文件所有行（UTF-8），文件不存在返回空列表"""
+    """Read all lines of a file (UTF-8), returning an empty list if the file does not exist"""
     if not filepath.exists():
         return []
     with open(filepath, "r", encoding="utf-8") as f:
@@ -114,14 +114,14 @@ def read_file_lines(filepath: Path) -> list[str]:
 
 
 def write_file_lines(filepath: Path, lines: list[str]) -> None:
-    """将字符串列表写入文件（UTF-8）"""
+    """Write a list of strings to a file (UTF-8)"""
     filepath.parent.mkdir(parents=True, exist_ok=True)
     with open(filepath, "w", encoding="utf-8") as f:
         f.writelines(lines)
 
 
 def read_file_text(filepath: Path) -> str:
-    """读取文件全部文本内容（UTF-8）"""
+    """Read the entire text content of a file (UTF-8)"""
     if not filepath.exists():
         return ""
     with open(filepath, "r", encoding="utf-8") as f:
@@ -129,19 +129,19 @@ def read_file_text(filepath: Path) -> str:
 
 
 def write_file_text(filepath: Path, text: str) -> None:
-    """将文本写入文件（UTF-8）"""
+    """Write text to a file (UTF-8)"""
     filepath.parent.mkdir(parents=True, exist_ok=True)
     with open(filepath, "w", encoding="utf-8") as f:
         _ = f.write(text)
 
 
 def print_header(title: str) -> None:
-    """打印格式化的标题"""
+    """Print a formatted header"""
     print(f"\n{'=' * 60}")
     print(f"  {title}")
     print(f"{'=' * 60}\n")
 
 
 def print_section(title: str) -> None:
-    """打印格式化的子标题"""
+    """Print a formatted sub-header"""
     print(f"\n--- {title} ---")

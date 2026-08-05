@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 """
-CFA 备考工具 - 主入口 (CLI)
-作者：CodeBuddy AI Assistant
-用途：提供命令行交互界面，统一调度所有子模块功能。
-      支持 search / quiz / add-mistake / recap / flashcard / ips / init 命令。
+CFA Prep CLI - Main entry point (CLI)
+Author: CodeBuddy AI Assistant
+Purpose: Provide a command-line interface that orchestrates all submodule functionality.
+         Supports the search / quiz / add-mistake / recap / flashcard / ips / init commands.
 """
 
 import sys
@@ -11,7 +11,7 @@ import os
 import argparse
 from pathlib import Path
 
-# 将项目根目录加入路径，方便直接运行
+# Add the project root to the path for direct execution
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.knowledge_base import KnowledgeBase
@@ -33,13 +33,13 @@ from src.utils import (
 
 def cmd_init(args) -> None:
     """
-    初始化项目：创建所有必要的目录和默认配置文件。
+    Initialize the project: create all necessary directories and default config files.
     """
-    print_header("🚀 CFA Prep CLI - 项目初始化")
+    print_header("🚀 CFA Prep CLI - Project Initialization")
 
     root = get_project_root()
 
-    # 创建目录结构
+    # Create the directory structure
     dirs = [
         "data/kb",
         "data/mistakes",
@@ -52,9 +52,9 @@ def cmd_init(args) -> None:
     for d in dirs:
         p = root / d
         p.mkdir(parents=True, exist_ok=True)
-        print(f"  ✅ 创建目录: {d}")
+        print(f"  ✅ Created directory: {d}")
 
-    # 创建默认 settings.json
+    # Create the default settings.json
     settings = {
         "level": "L1",
         "version": "1.0",
@@ -65,50 +65,50 @@ def cmd_init(args) -> None:
         "templates_dir": "data/templates",
     }
     save_settings(settings)
-    print(f"  ✅ 创建配置: config/settings.json")
+    print(f"  ✅ Created config: config/settings.json")
 
-    # 创建初始进度文件
+    # Create the initial progress file
     tracker = ProgressTracker()
     tracker.load()
-    print(f"  ✅ 创建进度文件: data/progress/progress.md")
+    print(f"  ✅ Created progress file: data/progress/progress.md")
 
-    # 生成 IPS 模板
+    # Generate IPS templates
     builder = IPSBuilder()
     builder.generate("personal")
     builder.generate("institutional")
-    print(f"  ✅ 生成 IPS 模板: data/templates/")
+    print(f"  ✅ Generated IPS templates: data/templates/")
 
     print("\n" + "=" * 60)
-    print("  🎉 初始化完成！")
+    print("  🎉 Initialization complete!")
     print("=" * 60)
-    print("\n📋 下一步:")
-    print("  1. 将知识文件（.txt）放入 data/kb/ 目录")
-    print("     文件名格式：l1_vol1_p1-60.txt")
-    print("     文件内用 ===== PAGE N ===== 标记页码")
+    print("\n📋 Next steps:")
+    print("  1. Place knowledge files (.txt) into the data/kb/ directory")
+    print("     File name format: l1_vol1_p1-60.txt")
+    print("     Mark pages inside files with ===== PAGE N =====")
     print()
-    print("  2. 开始使用:")
-    print("     python main.py search \"FCFE\"        # 搜索知识库")
-    print("     python main.py quiz --level L1       # 开始刷题")
-    print("     python main.py recap                 # 查看进度")
+    print("  2. Start using:")
+    print("     python main.py search \"FCFE\"        # Search the knowledge base")
+    print("     python main.py quiz --level L1       # Start quizzing")
+    print("     python main.py recap                 # View progress")
     print()
 
 
 def cmd_search(args) -> None:
     """
-    搜索知识库：在 data/kb/ 下的所有文件中搜索关键词。
+    Search the knowledge base: search for keywords across all files under data/kb/.
     """
     if not args.keyword:
-        print("❌ 请提供搜索关键词")
-        print("用法: python main.py search <关键词>")
+        print("❌ Please provide a search keyword")
+        print("Usage: python main.py search <keyword>")
         return
 
-    print_header(f"🔍 搜索: {args.keyword}")
+    print_header(f"🔍 Search: {args.keyword}")
 
     kb = KnowledgeBase()
 
-    # 显示知识库状态
+    # Show the knowledge base status
     stats = kb.get_stats()
-    print(f"知识库: {stats['total_files']} 个文件, {stats['total_pages']} 页\n")
+    print(f"Knowledge base: {stats['total_files']} files, {stats['total_pages']} pages\n")
 
     results = kb.search(
         keyword=args.keyword,
@@ -118,18 +118,18 @@ def cmd_search(args) -> None:
     )
 
     if not results:
-        print(f"❌ 未找到与「{args.keyword}」相关的内容。")
-        print("💡 提示:")
-        print("  - 检查 data/kb/ 目录是否有 .txt 文件")
-        print("  - 尝试使用更简短的关键词")
-        print("  - 使用 --regex 启用正则搜索")
-        print("  - 使用 --no-fuzzy 关闭模糊匹配以提高精确度")
+        print(f"❌ No content matching「{args.keyword}」was found.")
+        print("💡 Tips:")
+        print("  - Check whether the data/kb/ directory contains .txt files")
+        print("  - Try a shorter keyword")
+        print("  - Use --regex to enable regex search")
+        print("  - Use --no-fuzzy to disable fuzzy matching for higher precision")
         return
 
-    print(f"找到 {len(results)} 条结果:\n")
+    print(f"Found {len(results)} result(s):\n")
     for i, r in enumerate(results, 1):
         print(f"{'─' * 60}")
-        print(f"  📄 [{i}] {r['file']} - 第 {r['page']} 页")
+        print(f"  📄 [{i}] {r['file']} - page {r['page']}")
         print(f"{'─' * 60}")
         print(f"  {r['snippet']}")
         print()
@@ -137,7 +137,7 @@ def cmd_search(args) -> None:
 
 def cmd_quiz(args) -> None:
     """
-    启动刷题模式。
+    Start the quiz mode.
     """
     level = args.level.upper() if args.level else "L1"
     engine = QuizEngine()
@@ -146,7 +146,7 @@ def cmd_quiz(args) -> None:
 
 def cmd_add_mistake(args) -> None:
     """
-    交互式录入错题。
+    Interactively log a mistake.
     """
     analyzer = MistakeAnalyzer()
     analyzer.add_mistake_interactive()
@@ -154,38 +154,38 @@ def cmd_add_mistake(args) -> None:
 
 def cmd_recap(args) -> None:
     """
-    查看和更新学习进度。
+    View and update study progress.
     """
     tracker = ProgressTracker()
     analyzer = MistakeAnalyzer()
 
     if args.update:
-        # 交互式更新
+        # Interactive update
         stats = analyzer.get_mistake_stats()
         tracker.interactive_update(mistake_stats=stats)
     else:
-        # 仅显示
-        print_header("📊 学习进度总览")
+        # Display only
+        print_header("📊 Study Progress Overview")
         tracker.show()
 
-        print_section("错题统计")
+        print_section("Mistake Statistics")
         stats = analyzer.get_mistake_stats()
-        print(f"  总错题数: {stats['total']}")
+        print(f"  Total mistakes: {stats['total']}")
         if stats["total"] > 0:
-            print(f"\n  错因分布:")
+            print(f"\n  Category distribution:")
             for cat, pct in sorted(stats["categories"].items(), key=lambda x: x[1], reverse=True):
                 bar = "█" * int(pct / 5)
                 print(f"    {cat}: {pct}% {bar}")
-            print(f"\n  科目分布:")
+            print(f"\n  Subject distribution:")
             for subj, count in sorted(stats["subjects"].items(), key=lambda x: x[1], reverse=True):
-                print(f"    {subj}: {count} 题")
+                print(f"    {subj}: {count} questions")
 
-        print(f"\n💡 使用 'python main.py recap --update' 更新进度")
+        print(f"\n💡 Use 'python main.py recap --update' to update progress")
 
 
 def cmd_flashcard(args) -> None:
     """
-    生成闪卡。
+    Generate flashcards.
     """
     generator = FlashcardGenerator()
 
@@ -193,11 +193,11 @@ def cmd_flashcard(args) -> None:
         generator.interactive_generate()
     else:
         subject = args.subject or ""
-        print_header(f"🃏 生成闪卡{' - ' + subject if subject else ''}")
+        print_header(f"🃏 Generate Flashcards{' - ' + subject if subject else ''}")
 
         md_path = generator.generate_by_subject(subject)
         if md_path:
-            print(f"✅ Markdown 闪卡: {md_path}")
+            print(f"✅ Markdown flashcards: {md_path}")
 
         if args.anki:
             csv_path = generator.export_anki_csv(subject)
@@ -205,17 +205,17 @@ def cmd_flashcard(args) -> None:
                 print(f"✅ Anki CSV: {csv_path}")
 
         if not md_path:
-            print("⚠️ 知识库为空，请先将资料放入 data/kb/ 目录。")
+            print("⚠️ Knowledge base is empty. Please place your materials into the data/kb/ directory first.")
 
 
 def cmd_ips(args) -> None:
     """
-    生成 IPS 模板。
+    Generate IPS templates.
     """
     ips_type = args.type.lower() if args.type else "personal"
     if ips_type not in ("personal", "p", "institutional", "inst", "i"):
-        print(f"❌ 不支持的 IPS 类型: {ips_type}")
-        print("请使用: personal (个人) 或 institutional/inst (机构)")
+        print(f"❌ Unsupported IPS type: {ips_type}")
+        print("Please use: personal or institutional/inst")
         return
 
     builder = IPSBuilder()
@@ -224,69 +224,69 @@ def cmd_ips(args) -> None:
         builder.show_template(ips_type)
     else:
         filepath = builder.generate(ips_type)
-        type_name = "个人" if ips_type in ("personal", "p") else "机构"
-        print_header(f"📄 生成 {type_name} IPS 模板")
-        print(f"✅ 已生成: {filepath}")
-        print(f"\n💡 使用 'python main.py ips {ips_type} --show' 查看模板内容")
+        type_name = "Personal" if ips_type in ("personal", "p") else "Institutional"
+        print_header(f"📄 Generate {type_name} IPS Template")
+        print(f"✅ Generated: {filepath}")
+        print(f"\n💡 Use 'python main.py ips {ips_type} --show' to view the template content")
 
 
 def main():
-    """主入口函数，解析命令行参数并分发到对应子命令。"""
+    """Main entry function, parses command-line arguments and dispatches to the corresponding subcommand."""
     parser = argparse.ArgumentParser(
-        description="CFA 备考工具 - 知识库检索、刷题、错题分析、进度追踪",
+        description="CFA Prep CLI - knowledge base search, quizzing, mistake analysis, progress tracking",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-示例:
-  python main.py init                    初始化项目
-  python main.py search "FCFE"           搜索知识库
-  python main.py search "FCFE" --regex   使用正则搜索
-  python main.py quiz --level L1         开始 L1 刷题
-  python main.py quiz --level L2         开始 L2 刷题
-  python main.py add-mistake             录入错题
-  python main.py recap                   查看进度
-  python main.py recap --update          更新进度
-  python main.py flashcard --subject FRA 生成 FRA 闪卡
-  python main.py flashcard --anki        导出 Anki CSV
-  python main.py ips personal            生成个人 IPS 模板
-  python main.py ips inst                生成机构 IPS 模板
+Examples:
+  python main.py init                    Initialize the project
+  python main.py search "FCFE"           Search the knowledge base
+  python main.py search "FCFE" --regex   Use regex search
+  python main.py quiz --level L1         Start L1 quizzing
+  python main.py quiz --level L2         Start L2 quizzing
+  python main.py add-mistake             Log a mistake
+  python main.py recap                   View progress
+  python main.py recap --update          Update progress
+  python main.py flashcard --subject FRA Generate FRA flashcards
+  python main.py flashcard --anki        Export Anki CSV
+  python main.py ips personal            Generate a personal IPS template
+  python main.py ips inst                Generate an institutional IPS template
         """,
     )
 
-    subparsers = parser.add_subparsers(dest="command", help="可用命令")
+    subparsers = parser.add_subparsers(dest="command", help="available commands")
 
-    # init 命令
-    p_init = subparsers.add_parser("init", help="初始化项目目录和配置")
+    # init command
+    p_init = subparsers.add_parser("init", help="Initialize project directories and config")
 
-    # search 命令
-    p_search = subparsers.add_parser("search", help="搜索知识库")
-    p_search.add_argument("keyword", nargs="?", help="搜索关键词")
-    p_search.add_argument("--regex", action="store_true", help="使用正则表达式搜索")
-    p_search.add_argument("--no-fuzzy", action="store_true", help="禁用模糊匹配")
-    p_search.add_argument("--max-results", type=int, default=10, help="最大结果数（默认 10）")
+    # search command
+    p_search = subparsers.add_parser("search", help="Search the knowledge base")
+    p_search.add_argument("keyword", nargs="?", help="search keyword")
+    p_search.add_argument("--regex", action="store_true", help="search using regular expressions")
+    p_search.add_argument("--no-fuzzy", action="store_true", help="disable fuzzy matching")
+    p_search.add_argument("--max-results", type=int, default=10, help="maximum number of results (default 10)")
 
-    # quiz 命令
-    p_quiz = subparsers.add_parser("quiz", help="开始刷题")
+    # quiz command
+    p_quiz = subparsers.add_parser("quiz", help="Start quizzing")
     p_quiz.add_argument("--level", choices=["L1", "L2", "L3", "l1", "l2", "l3"],
-                        default="L1", help="考试级别（默认 L1）")
+                        default="L1", help="exam level (default L1)")
 
-    # add-mistake 命令
-    p_mistake = subparsers.add_parser("add-mistake", help="录入错题")
+    # add-mistake command
+    p_mistake = subparsers.add_parser("add-mistake", help="Log a mistake")
 
-    # recap 命令
-    p_recap = subparsers.add_parser("recap", help="查看/更新学习进度")
-    p_recap.add_argument("--update", action="store_true", help="交互式更新进度")
+    # recap command
+    p_recap = subparsers.add_parser("recap", help="View/update study progress")
+    p_recap.add_argument("--update", action="store_true", help="interactively update progress")
 
-    # flashcard 命令
-    p_flash = subparsers.add_parser("flashcard", help="生成闪卡")
-    p_flash.add_argument("--subject", help="科目筛选（如 FRA, Equity）")
-    p_flash.add_argument("--anki", action="store_true", help="同时导出 Anki CSV 格式")
-    p_flash.add_argument("--interactive", "-i", action="store_true", help="交互式生成")
+    # flashcard command
+    p_flash = subparsers.add_parser("flashcard", help="Generate flashcards")
+    p_flash.add_argument("--subject", help="subject filter (e.g., FRA, Equity)")
+    p_flash.add_argument("--anki", action="store_true", help="also export in Anki CSV format")
+    p_flash.add_argument("--interactive", "-i", action="store_true", help="interactive generation")
 
-    # ips 命令
-    p_ips = subparsers.add_parser("ips", help="生成 IPS 模板")
+    # ips command
+    p_ips = subparsers.add_parser("ips", help="Generate IPS templates")
     p_ips.add_argument("type", nargs="?", default="personal",
-                       help="IPS 类型: personal (个人) 或 inst/institutional (机构)")
-    p_ips.add_argument("--show", action="store_true", help="在终端显示模板内容")
+                       help="IPS type: personal or inst/institutional")
+    p_ips.add_argument("--show", action="store_true", help="display the template content in the terminal")
 
     args = parser.parse_args()
 
@@ -294,7 +294,7 @@ def main():
         parser.print_help()
         return
 
-    # 分发命令
+    # Dispatch commands
     commands = {
         "init": cmd_init,
         "search": cmd_search,

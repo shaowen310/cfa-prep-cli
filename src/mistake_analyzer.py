@@ -1,16 +1,12 @@
 # -*- coding: utf-8 -*-
 """
-CFA 备考工具 - 错题分析器模块
-作者：CodeBuddy AI Assistant
-用途：录入和分析错题，按三类归类（概念不清/计算错误/审题失误），
-      自动写入 data/mistakes/ 目录，并生成复习建议。
+CFA Prep CLI - Mistake analyzer module
+Author: CodeBuddy AI Assistant
+Purpose: Log and analyze mistakes, categorized into three types (concept confusion / calculation error / misreading),
+         automatically written to the data/mistakes/ directory, and generate review suggestions.
 """
 
-import os
-import re
 from pathlib import Path
-from datetime import datetime
-from typing import Dict, List, Optional
 
 from .utils import (
     get_data_dir,
@@ -22,27 +18,27 @@ from .utils import (
 )
 
 
-# 错因分类
+# Mistake categories
 MISTAKE_CATEGORIES = {
-    "1": "概念不清",
-    "2": "计算错误",
-    "3": "审题失误",
+    "1": "Concept confusion",
+    "2": "Calculation error",
+    "3": "Misreading the question",
 }
 
 
 class MistakeAnalyzer:
     """
-    错题分析器。
-    管理错题的录入、分类、存储和检索。
+    Mistake analyzer.
+    Manages the entry, categorization, storage, and retrieval of mistakes.
     """
 
     def __init__(self):
-        self.mistakes_dir = get_data_dir("mistakes")
-        self.index_file = self.mistakes_dir / "mistakes_index.json"
-        self.index = load_json(self.index_file)
+        self.mistakes_dir: Path = get_data_dir("mistakes")
+        self.index_file: Path = self.mistakes_dir / "mistakes_index.json"
+        self.index: dict[str, object] = load_json(self.index_file)
 
     def _save_index(self) -> None:
-        """保存错题索引"""
+        """Save the mistake index"""
         save_json(self.index_file, self.index)
 
     def add_mistake(
@@ -57,47 +53,47 @@ class MistakeAnalyzer:
         source: str = "",
     ) -> str:
         """
-        添加一条错题记录。
+        Add a mistake record.
 
-        参数：
-            subject: 科目名称（如 FRA, Equity, Ethics）
-            question: 题目描述
-            user_answer: 用户的错误答案
-            correct_answer: 正确答案
-            category: 错因分类（概念不清/计算错误/审题失误）
-            key_point: 考点（一句话）
-            correct_conclusion: 正确结论（一句话）
-            source: 出处（如 @data/kb/l2_vol3_p120-180.txt (P145)）
+        Parameters:
+            subject: subject name (e.g., FRA, Equity, Ethics)
+            question: question description
+            user_answer: the user's incorrect answer
+            correct_answer: the correct answer
+            category: mistake category (Concept confusion / Calculation error / Misreading the question)
+            key_point: knowledge point (one sentence)
+            correct_conclusion: correct conclusion (one sentence)
+            source: source (e.g., @data/kb/l2_vol3_p120-180.txt (P145))
 
-        返回：
-            生成的错题文件路径
+        Returns:
+            the path of the generated mistake file
         """
         date_str = today_str()
         category_short = category.replace(" ", "_")
         filename = f"{date_str}_{subject}_{category_short}.md"
         filepath = self.mistakes_dir / filename
 
-        # 检查是否已有同一天的错题文件，有则追加
+        # Check if a mistake file for the same day already exists; if so, append
         existing = read_file_text(filepath)
 
         entry = f"""
-### 错题记录
+### Mistake Record
 
-**日期**: {date_str}
-**科目**: {subject}
-**错因**: {category}
-**考点**: {key_point}
-**正确结论**: {correct_conclusion}
-**出处**: {source if source else "（未指定）"}
+**Date**: {date_str}
+**Subject**: {subject}
+**Category**: {category}
+**Key point**: {key_point}
+**Correct conclusion**: {correct_conclusion}
+**Source**: {source if source else "(Not specified)"}
 
 ---
 
-**题目**:
+**Question**:
 {question}
 
-**我的答案**: {user_answer}
+**My answer**: {user_answer}
 
-**正确答案**: {correct_answer}
+**Correct answer**: {correct_answer}
 
 ---
 
@@ -107,11 +103,12 @@ class MistakeAnalyzer:
         else:
             write_file_text(filepath, entry)
 
-        # 更新索引
-        if "records" not in self.index:
-            self.index["records"] = []
-
-        self.index["records"].append({
+        # Update the index
+        records = self.index.get("records")
+        if not isinstance(records, list):
+            records = []
+            self.index["records"] = records
+        records.append({
             "date": date_str,
             "subject": subject,
             "category": category,
@@ -124,19 +121,19 @@ class MistakeAnalyzer:
 
     def add_mistake_interactive(self) -> None:
         """
-        交互式录入错题。
-        引导用户逐步输入错题信息。
+        Interactively log a mistake.
+        Guides the user through entering mistake details step by step.
         """
         print("\n" + "=" * 50)
-        print("  📝 录入错题")
+        print("  📝 Log a Mistake")
         print("=" * 50)
 
-        subject = input("科目（如 FRA, Equity, Ethics）: ").strip()
+        subject = input("Subject (e.g., FRA, Equity, Ethics): ").strip()
         if not subject:
-            print("❌ 科目不能为空")
+            print("❌ Subject cannot be empty")
             return
 
-        print("\n请输入题目描述（输入空行结束）:")
+        print("\nEnter the question description (enter a blank line to finish):")
         question_lines = []
         while True:
             line = input()
@@ -145,21 +142,21 @@ class MistakeAnalyzer:
             question_lines.append(line)
         question = "\n".join(question_lines)
         if not question.strip():
-            print("❌ 题目不能为空")
+            print("❌ Question cannot be empty")
             return
 
-        user_answer = input("\n你的答案: ").strip()
-        correct_answer = input("正确答案: ").strip()
+        user_answer = input("\nYour answer: ").strip()
+        correct_answer = input("Correct answer: ").strip()
 
-        print("\n错因分类:")
+        print("\nMistake category:")
         for key, value in MISTAKE_CATEGORIES.items():
             print(f"  [{key}] {value}")
-        cat_choice = input("选择错因分类 (1/2/3): ").strip()
-        category = MISTAKE_CATEGORIES.get(cat_choice, "概念不清")
+        cat_choice = input("Choose a mistake category (1/2/3): ").strip()
+        category = MISTAKE_CATEGORIES.get(cat_choice, "Concept confusion")
 
-        key_point = input("\n考点（一句话总结）: ").strip()
-        correct_conclusion = input("正确结论（一句话总结）: ").strip()
-        source = input("出处（如 @data/kb/l2_vol3_p120-180.txt (P145)）: ").strip()
+        key_point = input("\nKey point (one-sentence summary): ").strip()
+        correct_conclusion = input("Correct conclusion (one-sentence summary): ").strip()
+        source = input("Source (e.g., @data/kb/l2_vol3_p120-180.txt (P145)): ").strip()
 
         filepath = self.add_mistake(
             subject=subject,
@@ -171,23 +168,35 @@ class MistakeAnalyzer:
             correct_conclusion=correct_conclusion,
             source=source,
         )
-        print(f"\n✅ 错题已保存到: {filepath}")
+        print(f"\n✅ Mistake saved to: {filepath}")
 
-    def get_recent_mistakes(self, limit: int = 10) -> List[Dict]:
+    def get_recent_mistakes(self, limit: int = 10) -> list[dict[str, object]]:
         """
-        获取最近 N 条错题记录。
-        按日期降序排列。
+        Get the most recent N mistake records.
+        Sorted by date in descending order.
         """
         records = self.index.get("records", [])
-        records.sort(key=lambda r: r.get("date", ""), reverse=True)
-        return records[:limit]
+        if not isinstance(records, list):
+            return []
 
-    def get_mistake_stats(self) -> Dict[str, any]:
+        dict_records: list[dict[str, object]] = [r for r in records if isinstance(r, dict)]
+        dict_records.sort(key=lambda r: str(r.get("date", "")), reverse=True)
+        return dict_records[:limit]
+
+    def get_mistake_stats(self) -> dict[str, object]:
         """
-        获取错题统计数据。
-        返回各类错因的数量和百分比。
+        Get mistake statistics.
+        Returns the count and percentage for each mistake category.
         """
         records = self.index.get("records", [])
+        if not isinstance(records, list):
+            return {
+                "total": 0,
+                "categories": {},
+                "subjects": {},
+                "key_points": [],
+            }
+
         total = len(records)
         if total == 0:
             return {
@@ -197,22 +206,26 @@ class MistakeAnalyzer:
                 "key_points": [],
             }
 
-        # 统计错因分布
-        cat_count: Dict[str, int] = {}
+        # Count the category distribution
+        cat_count: dict[str, int] = {}
         for r in records:
-            cat = r.get("category", "未分类")
+            if not isinstance(r, dict):
+                continue
+            cat = str(r.get("category", "Uncategorized"))
             cat_count[cat] = cat_count.get(cat, 0) + 1
 
         cat_pct = {k: round(v / total * 100, 1) for k, v in cat_count.items()}
 
-        # 统计科目分布
-        subj_count: Dict[str, int] = {}
+        # Count the subject distribution
+        subj_count: dict[str, int] = {}
         for r in records:
-            subj = r.get("subject", "未知")
+            if not isinstance(r, dict):
+                continue
+            subj = str(r.get("subject", "Unknown"))
             subj_count[subj] = subj_count.get(subj, 0) + 1
 
-        # 提取所有考点
-        key_points = [r.get("key_point", "") for r in records if r.get("key_point")]
+        # Extract all knowledge points
+        key_points = [str(r.get("key_point", "")) for r in records if isinstance(r, dict) and r.get("key_point")]
 
         return {
             "total": total,
@@ -221,8 +234,8 @@ class MistakeAnalyzer:
             "key_points": key_points,
         }
 
-    def list_mistake_files(self) -> List[Path]:
-        """列出所有错题文件"""
+    def list_mistake_files(self) -> list[Path]:
+        """List all mistake files"""
         return sorted(
             [f for f in self.mistakes_dir.glob("*.md") if f.name != "mistakes_index.json"],
             reverse=True,

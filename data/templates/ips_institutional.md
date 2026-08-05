@@ -1,142 +1,142 @@
-# 机构投资政策声明 (Institutional IPS)
+# Institutional Investment Policy Statement (Institutional IPS)
 
-> 生成日期: 2026-08-03
-> CFA Level III 备考工具
-
----
-
-## 1. 机构概况 (Institution Profile)
-
-- **机构类型**: 养老基金 / 基金会 / 捐赠基金 / 保险公司 / 银行 / 其他
-- **机构名称**: （填写）
-- **使命/目的**: （填写）
-- **资产规模**: （填写）
+> Generated: 2026-08-05
+> CFA Level III Study Tool
 
 ---
 
-## 2. 收益要求 (Return Requirement)
+## 1. Institution Profile
 
-| 类别 | 描述 |
+- **Institution type**: Pension fund / Foundation / Endowment / Insurance company / Bank / Other
+- **Institution name**: (fill in)
+- **Mission/purpose**: (fill in)
+- **Asset size**: (fill in)
+
+---
+
+## 2. Return Requirement
+
+| Category | Description |
 |------|------|
-| **精算假设收益率** | （如 DB 养老金计划的折现率） |
-| **支出率 (Spending Rate)** | （如 捐赠基金 4-5%） |
-| **通胀调整** | （是否需保护购买力） |
-| **净收益要求** | （扣除费用后的目标） |
+| **Actuarial assumed rate of return** | (e.g., discount rate of a DB pension plan) |
+| **Spending Rate** | (e.g., 4-5% for endowments) |
+| **Inflation adjustment** | (whether purchasing power needs to be preserved) |
+| **Net return requirement** | (target after fees) |
 
-**分析**: （填写详细分析）
+**Analysis**: (fill in detailed analysis)
 
 ---
 
-## 3. 风险承受能力 (Risk Tolerance)
+## 3. Risk Tolerance
 
-| 因素 | 评估 |
+| Factor | Assessment |
 |------|------|
-| **资金充足率 (Funded Status)** | 超额 / 充足 / 不足 |
-| **缴费灵活性** | 高 / 中 / 低 |
-| **监管约束** | （如有） |
-| **综合风险承受力** | 高于平均 / 平均 / 低于平均 |
+| **Funded Status** | Surplus / Adequate / Underfunded |
+| **Contribution flexibility** | High / Medium / Low |
+| **Regulatory constraints** | (if any) |
+| **Overall risk capacity** | Above average / Average / Below average |
 
-**关键考量**:
-- （盈余/赤字对风险承受力的影响）
-- （缴费人/受益人的风险偏好）
+**Key considerations**:
+- (effect of surplus/deficit on risk capacity)
+- (risk preferences of contributors/beneficiaries)
 
 ---
 
-## 4. 时间期限 (Time Horizon)
+## 4. Time Horizon
 
-| 因素 | 描述 |
+| Factor | Description |
 |------|------|
-| **负债期限结构** | （如养老金计划的 duration） |
-| **永续经营假设** | 是 / 否 |
-| **阶段性目标** | （列表） |
+| **Liability duration structure** | (e.g., duration of a pension plan) |
+| **Going-concern assumption** | Yes / No |
+| **Phased objectives** | (list) |
 
 ---
 
-## 5. 流动性需求 (Liquidity Requirements)
+## 5. Liquidity Requirements
 
-| 需求类型 | 金额/比例 | 时间 |
+| Requirement type | Amount/ratio | Time |
 |----------|-----------|------|
-| **养老金支付** | | |
-| **运营费用** | | |
-| **资本调用 (Capital Calls)** | | |
-| **其他承诺** | | |
+| **Pension payments** | | |
+| **Operating expenses** | | |
+| **Capital Calls** | | |
+| **Other commitments** | | |
 
-**分析**: （填写）
+**Analysis**: (fill in)
 
 ---
 
-## 6. 法律与监管 (Legal & Regulatory)
+## 6. Legal & Regulatory
 
-| 项目 | 说明 |
+| Item | Description |
 |------|------|
-| **ERISA / 相关法规** | （适用法律） |
-| **UPMIFA / 审慎投资人规则** | （适用规则） |
-| **税务地位** | 免税 / 应税 |
-| **报告要求** | （监管报告义务） |
+| **ERISA / related regulations** | (applicable laws) |
+| **UPMIFA / prudent investor rule** | (applicable rules) |
+| **Tax status** | Tax-exempt / Taxable |
+| **Reporting requirements** | (regulatory reporting obligations) |
 
 ---
 
-## 7. 支出政策 (Spending Policy)
+## 7. Spending Policy
 
-| 参数 | 数值 |
+| Parameter | Value |
 |------|------|
-| **支出率** | （如资产市值的 4-5%） |
-| **计算方式** | 移动平均 / 滞后市值 / 混合法 |
-| **平滑机制** | （如 Yale 公式、3 年平均） |
-| **保本条款** | （是否保留本金购买力） |
+| **Spending rate** | (e.g., 4-5% of asset market value) |
+| **Calculation method** | Moving average / Lagged market value / Hybrid method |
+| **Smoothing mechanism** | (e.g., Yale formula, 3-year average) |
+| **Principal protection clause** | (whether to preserve principal purchasing power) |
 
-**分析**: （填写）
+**Analysis**: (fill in)
 
 ---
 
-## 8. 董事会/投资委员会监督 (Board Oversight)
+## 8. Board Oversight
 
-| 职责 | 描述 |
+| Responsibility | Description |
 |------|------|
-| **IPS 审批** | 董事会 / 投资委员会 |
-| **投资经理选择** | 内部 / 外部 / 混合 |
-| **业绩审查频率** | 季度 / 年度 |
-| **合规监督** | （填写） |
+| **IPS approval** | Board / Investment committee |
+| **Investment manager selection** | Internal / External / Hybrid |
+| **Performance review frequency** | Quarterly / Annually |
+| **Compliance oversight** | (fill in) |
 
 ---
 
-## 9. 独特情况 (Unique Circumstances)
+## 9. Unique Circumstances
 
-- （如社会/环境影响投资要求）
-- （如集中持股限制）
-- （如捐赠者限制条款）
-- （其他个性化需求）
+- (e.g., social/environmental impact investing requirements)
+- (e.g., concentrated holding restrictions)
+- (e.g., donor restriction clauses)
+- (other personalized needs)
 
 ---
 
-## 10. 资产配置建议 (Asset Allocation)
+## 10. Asset Allocation
 
-| 资产类别 | 目标权重 | 允许范围 |
+| Asset class | Target weight | Allowed range |
 |----------|----------|----------|
-| 全球权益 | | |
-| 固定收益 | | |
-| 另类投资 | | |
-| 实物资产 | | |
-| 现金 | | |
+| Global equity | | |
+| Fixed income | | |
+| Alternative investments | | |
+| Real assets | | |
+| Cash | | |
 
-**再平衡策略**: （填写）
-
----
-
-## 11. 业绩基准 (Benchmark)
-
-- **综合基准**: （如 Policy Portfolio Benchmark）
-- **各资产类别基准**: （列表）
-- **相对基准评估**: （填写）
+**Rebalancing strategy**: (fill in)
 
 ---
 
-## 12. 监控与审查 (Monitoring & Review)
+## 11. Benchmark
 
-- **审查频率**: 年度（至少）
-- **触发条件**: 市场剧烈波动 / 法规变化 / 机构目标变化
-- **IPS 修订流程**: （填写）
+- **Composite benchmark**: (e.g., Policy Portfolio Benchmark)
+- **Per-asset-class benchmarks**: (list)
+- **Relative benchmark evaluation**: (fill in)
 
 ---
 
-*此模板由 CFA Prep CLI 自动生成*
+## 12. Monitoring & Review
+
+- **Review frequency**: Annually (at minimum)
+- **Trigger conditions**: Significant market volatility / regulatory changes / change in institutional objectives
+- **IPS revision process**: (fill in)
+
+---
+
+*This template was auto-generated by CFA Prep CLI*

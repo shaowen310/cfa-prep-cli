@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 """
-CFA 备考工具 - 闪卡生成器模块
-作者：CodeBuddy AI Assistant
-用途：从知识库（data/kb/）中提取关键概念，生成 Q&A 格式闪卡，
-      输出到 data/flashcards/，支持按科目分文件和导出 Anki 兼容 CSV 格式。
+CFA Prep CLI - Flashcard generator module
+Author: CodeBuddy AI Assistant
+Purpose: Extract key concepts from the knowledge base (data/kb/), generate Q&A flashcards,
+         output to data/flashcards/, support per-subject files and export to Anki-compatible CSV.
 """
 
 import re
@@ -22,9 +22,9 @@ from .knowledge_base import KnowledgeBase
 
 class FlashcardGenerator:
     """
-    闪卡生成器。
-    从知识库文本中自动提取关键概念，生成问答对，
-    并支持导出为 Anki CSV 格式。
+    Flashcard generator.
+    Automatically extracts key concepts from knowledge base text, generates Q&A pairs,
+    and supports exporting to Anki CSV format.
     """
 
     def __init__(self):
@@ -33,22 +33,22 @@ class FlashcardGenerator:
 
     def extract_concepts(self, text: str) -> List[Dict[str, str]]:
         """
-        从文本中提取关键概念，生成 Q&A 对。
+        Extract key concepts from text, generating Q&A pairs.
 
-        识别策略：
-        1. 查找 "定义"、"是指"、"即"、"简称" 等模式
-        2. 查找加粗/标题样式的术语
-        3. 查找公式/关键数字
+        Recognition strategy:
+        1. Look for patterns like "X is defined as/means" and related definition markers
+        2. Look for bold/heading-style terms
+        3. Look for formulas / key numbers
 
-        参数：
-            text: 知识库页面文本
+        Parameters:
+            text: knowledge base page text
 
-        返回：
-            [{"question": "...", "answer": "..."}] 列表
+        Returns:
+            a list of {"question": "...", "answer": "..."} dicts
         """
         concepts = []
 
-        # 模式 1: "X 是指/即 Y"
+        # Pattern 1: "X is defined as / means Y"
         pattern1 = re.compile(
             r"([\u4e00-\u9fff\w\s（）()（）]{2,40})[，,]?\s*(是指|即|定义为|指的是|意思是)\s*[：:]?\s*([\u4e00-\u9fff\w\s（）()（）,.，。；;！!？?]{3,200})",
         )
@@ -57,11 +57,11 @@ class FlashcardGenerator:
             definition = match.group(3).strip()
             if len(term) >= 2 and len(definition) >= 5:
                 concepts.append({
-                    "question": f"什么是 {term}？",
-                    "answer": definition.rstrip("。，,.") + "。",
+                    "question": f"What is {term}?",
+                    "answer": definition.rstrip("。，,.") + ".",
                 })
 
-        # 模式 2: 查找英文缩写及其中文全称
+        # Pattern 2: find English abbreviations and their Chinese full forms
         pattern2 = re.compile(
             r"([A-Z]{2,8})\s*[（(]\s*([\u4e00-\u9fff\w\s]{2,40})\s*[）)]",
         )
@@ -70,22 +70,22 @@ class FlashcardGenerator:
             full = match.group(2).strip()
             if len(abbr) >= 2:
                 concepts.append({
-                    "question": f"{abbr} 的全称是什么？",
-                    "answer": f"{abbr}：{full}。",
+                    "question": f"What is the full form of {abbr}?",
+                    "answer": f"{abbr}: {full}.",
                 })
 
-        # 模式 3: 查找公式（包含 = 号的等式）
+        # Pattern 3: look for formulas (equations containing =)
         pattern3 = re.compile(r"([\u4e00-\u9fff\w\s（）()（）]{2,30})\s*[:：]?\s*(.+?=.+?)(?:[，,。\n]|$)")
         for match in pattern3.finditer(text):
             name = match.group(1).strip()
             formula = match.group(2).strip()
             if len(formula) >= 5 and len(formula) <= 150:
                 concepts.append({
-                    "question": f"{name} 的计算公式是什么？",
-                    "answer": formula.rstrip("。，,.") + "。",
+                    "question": f"What is the formula for {name}?",
+                    "answer": formula.rstrip("。，,.") + ".",
                 })
 
-        # 去重（基于 question）
+        # De-duplicate (based on question)
         seen = set()
         unique = []
         for c in concepts:
@@ -97,13 +97,13 @@ class FlashcardGenerator:
 
     def generate_by_subject(self, subject: str = "") -> str:
         """
-        按科目生成闪卡。
+        Generate flashcards by subject.
 
-        参数：
-            subject: 科目名称（用于筛选文件，空字符串表示全部）
+        Parameters:
+            subject: subject name (used to filter files; empty string means all)
 
-        返回：
-            生成的闪卡文件路径
+        Returns:
+            the path of the generated flashcard file
         """
         all_data = self.kb.load_all()
         all_cards = []
@@ -111,7 +111,7 @@ class FlashcardGenerator:
         for filepath, pages in all_data.items():
             fname = Path(filepath).stem
 
-            # 如果指定了科目，筛选文件名
+            # If a subject is specified, filter by file name
             if subject and subject.lower() not in fname.lower():
                 continue
 
@@ -124,7 +124,7 @@ class FlashcardGenerator:
         if not all_cards:
             return ""
 
-        # 确定输出文件名
+        # Determine the output file name
         if subject:
             out_name = f"{today_str()}_{subject}_flashcards.md"
         else:
@@ -132,13 +132,13 @@ class FlashcardGenerator:
 
         out_path = self.flashcards_dir / out_name
 
-        # 生成 Markdown 格式闪卡
-        lines = [f"# CFA 闪卡 - {subject or '全部科目'}\n", f"> 生成日期: {today_str()}\n\n"]
+        # Generate Markdown-format flashcards
+        lines = [f"# CFA Flashcards - {subject or 'All subjects'}\n", f"> Generated: {today_str()}\n\n"]
         for i, card in enumerate(all_cards, 1):
-            lines.append(f"## 闪卡 {i}\n")
+            lines.append(f"## Flashcard {i}\n")
             lines.append(f"**Q**: {card['question']}\n\n")
             lines.append(f"**A**: {card['answer']}\n\n")
-            lines.append(f"*来源: {card.get('source', '')}*\n\n")
+            lines.append(f"*Source: {card.get('source', '')}*\n\n")
             lines.append("---\n\n")
 
         write_file_text(out_path, "".join(lines))
@@ -146,15 +146,15 @@ class FlashcardGenerator:
 
     def export_anki_csv(self, subject: str = "") -> str:
         """
-        导出为 Anki 兼容的 CSV 格式。
+        Export to an Anki-compatible CSV format.
 
-        CSV 列：Front, Back, Tags, Source
+        CSV columns: Front, Back, Tags, Source
 
-        参数：
-            subject: 科目筛选
+        Parameters:
+            subject: subject filter
 
-        返回：
-            生成的 CSV 文件路径
+        Returns:
+            the path of the generated CSV file
         """
         all_data = self.kb.load_all()
         all_cards = []
@@ -188,35 +188,35 @@ class FlashcardGenerator:
         return str(out_path)
 
     def interactive_generate(self) -> None:
-        """交互式生成闪卡"""
+        """Interactively generate flashcards"""
         print("\n" + "=" * 50)
-        print("  🃏 生成闪卡")
+        print("  🃏 Generate Flashcards")
         print("=" * 50)
 
-        # 显示知识库统计
+        # Show knowledge base statistics
         stats = self.kb.get_stats()
-        print(f"\n知识库状态: {stats['total_files']} 个文件, {stats['total_pages']} 页")
+        print(f"\nKnowledge base status: {stats['total_files']} files, {stats['total_pages']} pages")
         for f in stats["files"]:
-            print(f"  - {f['name']} ({f['pages']} 页)")
+            print(f"  - {f['name']} ({f['pages']} pages)")
 
-        subject = input("\n请输入科目筛选（留空生成全部）: ").strip()
+        subject = input("\nEnter a subject filter (leave empty for all): ").strip()
 
-        print("\n请选择导出格式:")
-        print("  [1] Markdown 格式")
-        print("  [2] Anki CSV 格式")
-        print("  [3] 两种都要")
-        choice = input("选择 (1/2/3): ").strip()
+        print("\nChoose an export format:")
+        print("  [1] Markdown format")
+        print("  [2] Anki CSV format")
+        print("  [3] Both")
+        choice = input("Choice (1/2/3): ").strip()
 
         if choice in ("1", "3"):
             path = self.generate_by_subject(subject)
             if path:
-                print(f"✅ Markdown 闪卡已生成: {path}")
+                print(f"✅ Markdown flashcards generated: {path}")
             else:
-                print("⚠️ 未找到匹配的知识内容")
+                print("⚠️ No matching knowledge content found")
 
         if choice in ("2", "3"):
             path = self.export_anki_csv(subject)
             if path:
-                print(f"✅ Anki CSV 已生成: {path}")
+                print(f"✅ Anki CSV generated: {path}")
             else:
-                print("⚠️ 未找到匹配的知识内容")
+                print("⚠️ No matching knowledge content found")

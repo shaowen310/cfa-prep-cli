@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """
-CFA 备考工具 - 知识库管理模块
-作者：CodeBuddy AI Assistant
-用途：读取 data/kb/ 下的 TXT 知识文件，按页码分块，支持关键词搜索（正则 + 模糊匹配）。
+CFA Prep CLI - Knowledge base management module
+Author: CodeBuddy AI Assistant
+Purpose: Read TXT knowledge files under data/kb/, split them into pages, and support keyword search (regex + fuzzy matching).
 """
 
 import re
@@ -20,26 +20,26 @@ from .utils import (
 
 class KnowledgeBase:
     """
-    CFA 知识库管理器。
-    负责扫描 data/kb/ 目录下的 .txt 文件，
-    按 "===== PAGE N =====" 标记分页，
-    提供关键词搜索功能。
+    CFA knowledge base manager.
+    Scans .txt files under data/kb/,
+    splits pages using the "===== PAGE N =====" marker,
+    and provides keyword search functionality.
     """
 
     def __init__(self):
         self.kb_dir = get_data_dir("kb")
-        # 缓存：{文件路径: {页码: 页面文本}}
+        # Cache: {file path: {page number: page text}}
         self._cache: Dict[str, Dict[int, str]] = {}
 
     def scan_files(self) -> List[Path]:
-        """扫描 data/kb/ 下的所有 .txt 文件"""
+        """Scan all .txt files under data/kb/"""
         return sorted(self.kb_dir.glob("*.txt"))
 
     def load_file(self, filepath: Path) -> Dict[int, str]:
         """
-        加载单个知识文件，按页码分块。
-        返回 {页码: 页面文本} 字典。
-        页码标记格式：===== PAGE N =====
+        Load a single knowledge file, split by page number.
+        Returns a {page number: page text} dict.
+        Page marker format: ===== PAGE N =====
         """
         if str(filepath) in self._cache:
             return self._cache[str(filepath)]
@@ -47,18 +47,18 @@ class KnowledgeBase:
         text = read_file_text(filepath)
         pages: Dict[int, str] = {}
 
-        # 按 ===== PAGE N ===== 分割
-        # 使用正则匹配页码标记
+        # Split by ===== PAGE N =====
+        # Use regex to match the page marker
         pattern = r"^=====\s*PAGE\s+(\d+)\s*=====\s*$"
         parts = re.split(pattern, text, flags=re.MULTILINE)
 
-        # parts[0] 是第一页标记之前的内容（如果有的话）
-        # 然后是 (页码1, 内容1, 页码2, 内容2, ...)
+        # parts[0] is the content before the first page marker (if any)
+        # Then it is (page1, content1, page2, content2, ...)
         if len(parts) > 1:
-            # 跳过 parts[0]（第一个标记之前的内容，如果有的话）
+            # Skip parts[0] (content before the first marker, if any)
             start = 0
             if not re.match(pattern, parts[0].strip(), re.MULTILINE):
-                # parts[0] 是标记前内容，当作第 0 页
+                # parts[0] is content before the marker; treat it as page 0
                 if parts[0].strip():
                     pages[0] = parts[0].strip()
                 start = 1
@@ -72,14 +72,14 @@ class KnowledgeBase:
                 except (ValueError, IndexError):
                     continue
         else:
-            # 没有页码标记，整个文件作为一页
+            # No page markers; treat the whole file as a single page
             pages[1] = text.strip()
 
         self._cache[str(filepath)] = pages
         return pages
 
     def load_all(self) -> Dict[str, Dict[int, str]]:
-        """加载所有知识文件"""
+        """Load all knowledge files"""
         result = {}
         for fp in self.scan_files():
             result[str(fp)] = self.load_file(fp)
@@ -93,16 +93,16 @@ class KnowledgeBase:
         max_results: int = 10,
     ) -> List[Dict[str, any]]:
         """
-        在所有知识文件中搜索关键词。
+        Search for a keyword across all knowledge files.
 
-        参数：
-            keyword: 搜索关键词
-            use_regex: 是否使用正则表达式搜索
-            use_fuzzy: 是否启用模糊匹配（拼写近似）
-            max_results: 最多返回结果数
+        Parameters:
+            keyword: the search keyword
+            use_regex: whether to search using regular expressions
+            use_fuzzy: whether to enable fuzzy matching (approximate spelling)
+            max_results: maximum number of results to return
 
-        返回：
-            [{file, page, snippet}] 列表
+        Returns:
+            a list of {file, page, snippet} dicts
         """
         results = []
         all_data = self.load_all()
@@ -119,21 +119,21 @@ class KnowledgeBase:
                             matched = True
                             snippet = extract_context(page_text, keyword)
                     except re.error:
-                        # 正则表达式有误，回退到普通搜索
+                        # Invalid regex; fall back to normal search
                         pass
 
                 if not matched and use_fuzzy:
-                    # 先尝试精确包含匹配
+                    # First try exact containment matching
                     if keyword.lower() in page_text.lower():
                         matched = True
                         snippet = extract_context(page_text, keyword)
-                    # 再尝试模糊匹配
+                    # Then try fuzzy matching
                     elif fuzzy_match(keyword, page_text):
                         matched = True
                         snippet = extract_context(page_text, keyword)
 
                 if not matched:
-                    # 普通包含匹配
+                    # Plain containment matching
                     if keyword.lower() in page_text.lower():
                         matched = True
                         snippet = extract_context(page_text, keyword)
@@ -154,7 +154,7 @@ class KnowledgeBase:
         return results[:max_results]
 
     def get_stats(self) -> Dict[str, any]:
-        """获取知识库统计信息"""
+        """Return knowledge base statistics"""
         files = self.scan_files()
         total_pages = 0
         file_stats = []
@@ -174,5 +174,5 @@ class KnowledgeBase:
         }
 
     def clear_cache(self) -> None:
-        """清除缓存"""
+        """Clear the cache"""
         self._cache.clear()

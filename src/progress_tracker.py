@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 """
-CFA 备考工具 - 进度追踪模块
-作者：CodeBuddy AI Assistant
-用途：维护和更新 data/progress/progress.md 进度文件，
-      追踪已掌握/仍模糊的知识点，统计错因分布，生成明日任务建议。
+CFA Prep CLI - Progress tracking module
+Author: CodeBuddy AI Assistant
+Purpose: Maintain and update the data/progress/progress.md progress file,
+         track mastered/still-fuzzy knowledge points, summarize mistake distribution, and generate next-day task suggestions.
 """
 
 from datetime import datetime
@@ -19,9 +19,9 @@ from .utils import (
 
 class ProgressTracker:
     """
-    进度追踪器。
-    管理学习进度文件，记录已掌握和模糊的知识点，
-    以及每日复习任务。
+    Progress tracker.
+    Manages the study progress file, records mastered and fuzzy knowledge points,
+    as well as daily review tasks.
     """
 
     def __init__(self):
@@ -29,30 +29,30 @@ class ProgressTracker:
         self.progress_file = self.progress_dir / "progress.md"
 
     def _get_default_content(self) -> str:
-        """生成默认的进度文件内容"""
-        return f"""# CFA 备考进度
+        """Generate the default progress file content"""
+        return f"""# CFA Study Progress
 
-> 进度总览（更新于 {today_iso()}）
+> Progress overview (updated on {today_iso()})
 
-## 已掌握
+## Mastered
 
-（暂无记录）
+(No records yet)
 
-## 仍模糊
+## Still Fuzzy
 
-（暂无记录）
+(No records yet)
 
-## 错因分布
+## Mistake Distribution
 
-（暂无数据）
+(No data yet)
 
-## 明日唯一任务
+## Sole Task for Tomorrow
 
-（暂无计划）
+(No plan yet)
 """
 
     def load(self) -> str:
-        """读取当前进度文件内容"""
+        """Read the current progress file content"""
         content = read_file_text(self.progress_file)
         if not content:
             content = self._get_default_content()
@@ -67,74 +67,74 @@ class ProgressTracker:
         tomorrow_task: str = "",
     ) -> None:
         """
-        更新进度文件。
+        Update the progress file.
 
-        参数：
-            mastered: 已掌握知识点列表
-            fuzzy: 仍模糊知识点列表
-            mistake_stats: 错因统计（来自 MistakeAnalyzer.get_mistake_stats()）
-            tomorrow_task: 明日唯一任务描述
+        Parameters:
+            mastered: list of mastered knowledge points
+            fuzzy: list of still-fuzzy knowledge points
+            mistake_stats: mistake statistics (from MistakeAnalyzer.get_mistake_stats())
+            tomorrow_task: description of tomorrow's sole task
         """
         mastered = mastered or []
         fuzzy = fuzzy or []
         mistake_stats = mistake_stats or {}
 
-        # 格式化已掌握
-        mastered_str = "\n".join(f"- {item}" for item in mastered) if mastered else "（暂无记录）"
+        # Format mastered items
+        mastered_str = "\n".join(f"- {item}" for item in mastered) if mastered else "(No records yet)"
 
-        # 格式化仍模糊
-        fuzzy_str = "\n".join(f"- {item}" for item in fuzzy) if fuzzy else "（暂无记录）"
+        # Format still-fuzzy items
+        fuzzy_str = "\n".join(f"- {item}" for item in fuzzy) if fuzzy else "(No records yet)"
 
-        # 格式化错因分布
+        # Format mistake distribution
         cats = mistake_stats.get("categories", {})
         if cats:
             cat_lines = []
             for cat, pct in sorted(cats.items(), key=lambda x: x[1], reverse=True):
-                cat_lines.append(f"- {cat}：{pct}%")
+                cat_lines.append(f"- {cat}: {pct}%")
             cat_str = "\n".join(cat_lines)
         else:
-            cat_str = "（暂无数据）"
+            cat_str = "(No data yet)"
 
-        # 格式化明日任务
-        task_str = tomorrow_task if tomorrow_task else "（暂无计划）"
+        # Format tomorrow's task
+        task_str = tomorrow_task if tomorrow_task else "(No plan yet)"
 
-        content = f"""# CFA 备考进度
+        content = f"""# CFA Study Progress
 
-> 进度总览（更新于 {today_iso()}）
+> Progress overview (updated on {today_iso()})
 
-## 已掌握
+## Mastered
 
 {mastered_str}
 
-## 仍模糊
+## Still Fuzzy
 
 {fuzzy_str}
 
-## 错因分布
+## Mistake Distribution
 
 {cat_str}
 
-## 明日唯一任务
+## Sole Task for Tomorrow
 
 {task_str}
 """
         write_file_text(self.progress_file, content)
 
     def show(self) -> None:
-        """在终端显示当前进度"""
+        """Display the current progress in the terminal"""
         content = self.load()
         print(content)
 
     def interactive_update(self, mistake_stats: Dict[str, any] = None) -> None:
         """
-        交互式更新进度。
-        引导用户输入已掌握和模糊的知识点。
+        Interactively update the progress.
+        Guides the user to enter mastered and fuzzy knowledge points.
         """
         print("\n" + "=" * 50)
-        print("  📊 更新学习进度")
+        print("  📊 Update Study Progress")
         print("=" * 50)
 
-        print("\n请输入已掌握的知识点（每行一个，空行结束）:")
+        print("\nEnter the knowledge points you have mastered (one per line, blank line to finish):")
         mastered = []
         while True:
             line = input("  > ").strip()
@@ -142,7 +142,7 @@ class ProgressTracker:
                 break
             mastered.append(line)
 
-        print("\n请输入仍模糊的知识点（每行一个，空行结束）:")
+        print("\nEnter the knowledge points still fuzzy (one per line, blank line to finish):")
         fuzzy = []
         while True:
             line = input("  > ").strip()
@@ -150,7 +150,7 @@ class ProgressTracker:
                 break
             fuzzy.append(line)
 
-        tomorrow = input("\n明天的唯一任务（可选）: ").strip()
+        tomorrow = input("\nSole task for tomorrow (optional): ").strip()
 
         self.update(
             mastered=mastered,
@@ -158,26 +158,26 @@ class ProgressTracker:
             mistake_stats=mistake_stats,
             tomorrow_task=tomorrow,
         )
-        print(f"\n✅ 进度已更新到: {self.progress_file}")
+        print(f"\n✅ Progress updated to: {self.progress_file}")
 
     def get_key_points_to_review(self) -> List[str]:
         """
-        从进度文件中提取需要复习的知识点。
-        优先返回仍模糊的知识点。
+        Extract the knowledge points that need review from the progress file.
+        Returns the still-fuzzy knowledge points first.
         """
         content = self.load()
         fuzzy_points = []
 
         in_fuzzy = False
         for line in content.split("\n"):
-            if line.startswith("## 仍模糊"):
+            if line.startswith("## Still Fuzzy"):
                 in_fuzzy = True
                 continue
             if in_fuzzy and line.startswith("## "):
                 break
             if in_fuzzy and line.strip().startswith("- "):
                 point = line.strip()[2:].strip()
-                if point and point != "（暂无记录）":
+                if point and point != "(No records yet)":
                     fuzzy_points.append(point)
 
         return fuzzy_points
