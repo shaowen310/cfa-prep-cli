@@ -24,6 +24,7 @@ from src.utils import (
     fuzzy_match,
     extract_context,
     today_str,
+    today_iso,
     load_settings,
     save_settings,
 )
@@ -90,15 +91,16 @@ def test_progress_tracker():
 def test_ips_builder():
     """Test the IPS builder"""
     builder = IPSBuilder()
+    today = today_iso()
     # Test personal IPS generation
-    path = builder.generate("personal")
+    path = builder.generate("personal", today)
     assert Path(path).exists()
     content = open(path, "r", encoding="utf-8").read()
     assert "Individual Investment Policy Statement" in content
     print(f"  ✅ IPS builder is fine (personal)")
 
     # Test institutional IPS generation
-    path = builder.generate("institutional")
+    path = builder.generate("institutional", today)
     assert Path(path).exists()
     content = open(path, "r", encoding="utf-8").read()
     assert "Institutional Investment Policy Statement" in content

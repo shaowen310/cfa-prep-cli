@@ -7,7 +7,6 @@ Purpose: Provide a command-line interface that orchestrates all submodule functi
 """
 
 import sys
-import os
 import argparse
 from pathlib import Path
 
@@ -22,16 +21,14 @@ from src.flashcard_generator import FlashcardGenerator
 from src.ips_builder import IPSBuilder
 from src.utils import (
     get_project_root,
-    get_data_dir,
-    get_config_dir,
-    load_settings,
     save_settings,
     print_header,
     print_section,
+    today_iso,
 )
 
 
-def cmd_init(args) -> None:
+def cmd_init(_args) -> None:
     """
     Initialize the project: create all necessary directories and default config files.
     """
@@ -69,13 +66,14 @@ def cmd_init(args) -> None:
 
     # Create the initial progress file
     tracker = ProgressTracker()
-    tracker.load()
+    _ = tracker.load()
     print(f"  ✅ Created progress file: data/progress/progress.md")
 
     # Generate IPS templates
     builder = IPSBuilder()
-    builder.generate("personal")
-    builder.generate("institutional")
+    today = today_iso()
+    _ = builder.generate("personal", today)
+    _ = builder.generate("institutional", today)
     print(f"  ✅ Generated IPS templates: data/templates/")
 
     print("\n" + "=" * 60)
@@ -144,7 +142,7 @@ def cmd_quiz(args) -> None:
     engine.start_quiz(level=level)
 
 
-def cmd_add_mistake(args) -> None:
+def cmd_add_mistake(_args) -> None:
     """
     Interactively log a mistake.
     """
@@ -170,14 +168,26 @@ def cmd_recap(args) -> None:
 
         print_section("Mistake Statistics")
         stats = analyzer.get_mistake_stats()
-        print(f"  Total mistakes: {stats['total']}")
-        if stats["total"] > 0:
+        total_value = stats.get("total")
+        total = total_value if isinstance(total_value, int) else 0
+        print(f"  Total mistakes: {total}")
+        if total > 0:
             print(f"\n  Category distribution:")
-            for cat, pct in sorted(stats["categories"].items(), key=lambda x: x[1], reverse=True):
+            categories_value = stats.get("categories")
+            categories: dict[str, float] = {
+                str(k): float(v)
+                for k, v in (categories_value.items() if isinstance(categories_value, dict) else {}.items())
+            }
+            for cat, pct in sorted(categories.items(), key=lambda x: x[1], reverse=True):
                 bar = "█" * int(pct / 5)
                 print(f"    {cat}: {pct}% {bar}")
             print(f"\n  Subject distribution:")
-            for subj, count in sorted(stats["subjects"].items(), key=lambda x: x[1], reverse=True):
+            subjects_value = stats.get("subjects")
+            subjects: dict[str, int] = {
+                str(k): int(v)
+                for k, v in (subjects_value.items() if isinstance(subjects_value, dict) else {}.items())
+            }
+            for subj, count in sorted(subjects.items(), key=lambda x: x[1], reverse=True):
                 print(f"    {subj}: {count} questions")
 
         print(f"\n💡 Use 'python main.py recap --update' to update progress")
@@ -219,11 +229,12 @@ def cmd_ips(args) -> None:
         return
 
     builder = IPSBuilder()
+    today = today_iso()
 
     if args.show:
-        builder.show_template(ips_type)
+        builder.show_template(ips_type, today)
     else:
-        filepath = builder.generate(ips_type)
+        filepath = builder.generate(ips_type, today)
         type_name = "Personal" if ips_type in ("personal", "p") else "Institutional"
         print_header(f"📄 Generate {type_name} IPS Template")
         print(f"✅ Generated: {filepath}")
@@ -254,39 +265,33 @@ Examples:
 
     subparsers = parser.add_subparsers(dest="command", help="available commands")
 
-    # init command
-    p_init = subparsers.add_parser("init", help="Initialize project directories and config")
-
     # search command
     p_search = subparsers.add_parser("search", help="Search the knowledge base")
-    p_search.add_argument("keyword", nargs="?", help="search keyword")
-    p_search.add_argument("--regex", action="store_true", help="search using regular expressions")
-    p_search.add_argument("--no-fuzzy", action="store_true", help="disable fuzzy matching")
-    p_search.add_argument("--max-results", type=int, default=10, help="maximum number of results (default 10)")
+    _ = p_search.add_argument("keyword", nargs="?", help="search keyword")
+    _ = p_search.add_argument("--regex", action="store_true", help="search using regular expressions")
+    _ = p_search.add_argument("--no-fuzzy", action="store_true", help="disable fuzzy matching")
+    _ = p_search.add_argument("--max-results", type=int, default=10, help="maximum number of results (default 10)")
 
     # quiz command
     p_quiz = subparsers.add_parser("quiz", help="Start quizzing")
-    p_quiz.add_argument("--level", choices=["L1", "L2", "L3", "l1", "l2", "l3"],
+    _ = p_quiz.add_argument("--level", choices=["L1", "L2", "L3", "l1", "l2", "l3"],
                         default="L1", help="exam level (default L1)")
-
-    # add-mistake command
-    p_mistake = subparsers.add_parser("add-mistake", help="Log a mistake")
 
     # recap command
     p_recap = subparsers.add_parser("recap", help="View/update study progress")
-    p_recap.add_argument("--update", action="store_true", help="interactively update progress")
+    _ = p_recap.add_argument("--update", action="store_true", help="interactively update progress")
 
     # flashcard command
     p_flash = subparsers.add_parser("flashcard", help="Generate flashcards")
-    p_flash.add_argument("--subject", help="subject filter (e.g., FRA, Equity)")
-    p_flash.add_argument("--anki", action="store_true", help="also export in Anki CSV format")
-    p_flash.add_argument("--interactive", "-i", action="store_true", help="interactive generation")
+    _ = p_flash.add_argument("--subject", help="subject filter (e.g., FRA, Equity)")
+    _ = p_flash.add_argument("--anki", action="store_true", help="also export in Anki CSV format")
+    _ = p_flash.add_argument("--interactive", "-i", action="store_true", help="interactive generation")
 
     # ips command
     p_ips = subparsers.add_parser("ips", help="Generate IPS templates")
-    p_ips.add_argument("type", nargs="?", default="personal",
+    _ = p_ips.add_argument("type", nargs="?", default="personal",
                        help="IPS type: personal or inst/institutional")
-    p_ips.add_argument("--show", action="store_true", help="display the template content in the terminal")
+    _ = p_ips.add_argument("--show", action="store_true", help="display the template content in the terminal")
 
     args = parser.parse_args()
 

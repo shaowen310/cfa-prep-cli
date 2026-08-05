@@ -19,6 +19,18 @@ CFA Prep CLI is a pure-Python command-line CFA study assistant covering all prep
 
 ## Quick Start
 
+Run the one-click setup script for your platform (creates all directories, config, and progress file):
+
+```bash
+# Linux/macOS
+./setup.sh
+
+# Windows (PowerShell)
+powershell -ExecutionPolicy Bypass -File setup.ps1
+```
+
+Or initialize manually:
+
 ```bash
 # 1. Initialize the project
 python main.py init
@@ -55,6 +67,7 @@ python main.py search "FCFE"
 cfa-prep-cli/
 ├── README.md                    # This file
 ├── setup.sh                     # One-click setup script (Linux/macOS)
+├── setup.ps1                    # One-click setup script (Windows/PowerShell)
 ├── .gitignore
 ├── src/
 │   ├── main.py                  # CLI entry point

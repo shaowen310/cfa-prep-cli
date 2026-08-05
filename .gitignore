@@ -1,4 +1,4 @@
-# CFA Prep Tool - Git 忽略规则
+# CFA Prep CLI - Git ignore rules
 
 # Python
 __pycache__/
@@ -10,7 +10,7 @@ dist/
 build/
 *.egg
 
-# 虚拟环境
+# Virtual environments
 venv/
 .env/
 .venv/
@@ -22,22 +22,26 @@ venv/
 *.swo
 *~
 
-# 操作系统
+# OS
 .DS_Store
 Thumbs.db
 
-# 用户数据（知识库文件由用户自行管理，不纳入版本控制）
+# User data (knowledge base files are managed by the user and not version-controlled)
 data/kb/*.txt
 data/mistakes/*.md
 data/progress/progress.md
 data/flashcards/*.md
 data/flashcards/*.csv
 
-# 保留目录结构
+# Generated IPS templates (contain an auto-generated date; regenerate via `python main.py ips`)
+data/templates/*.md
+
+# Keep directory structure
 !data/kb/.gitkeep
 !data/mistakes/.gitkeep
 !data/progress/.gitkeep
 !data/flashcards/.gitkeep
+!data/templates/.gitkeep
 
-# 日志
+# Logs
 *.log

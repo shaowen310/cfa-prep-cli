@@ -7,13 +7,10 @@ Purpose: Generate CFA L3 personal and institutional Investment Policy Statement 
 """
 
 from pathlib import Path
-from typing import Optional
 
 from .utils import (
     get_data_dir,
     write_file_text,
-    read_file_text,
-    today_iso,
 )
 
 
@@ -287,14 +284,15 @@ class IPSBuilder:
     """
 
     def __init__(self):
-        self.templates_dir = get_data_dir("templates")
+        self.templates_dir: Path = get_data_dir("templates")
 
-    def generate(self, ips_type: str) -> str:
+    def generate(self, ips_type: str, date: str) -> str:
         """
         Generate an IPS template.
 
         Parameters:
             ips_type: "personal" or "institutional" (supports shorthand personal/inst)
+            date: the generation date string (YYYY-MM-DD)
 
         Returns:
             the generated file path
@@ -309,18 +307,18 @@ class IPSBuilder:
         else:
             raise ValueError(f"Unsupported IPS type: {ips_type}, please use personal or institutional")
 
-        content = template.format(date=today_iso())
+        content = template.format(date=date)
         filepath = self.templates_dir / filename
         write_file_text(filepath, content)
 
         return str(filepath)
 
-    def show_template(self, ips_type: str) -> None:
+    def show_template(self, ips_type: str, date: str) -> None:
         """Display the IPS template content in the terminal"""
         ips_type = ips_type.lower()
         if ips_type in ("personal", "p"):
-            print(IPS_PERSONAL_TEMPLATE.format(date=today_iso()))
+            print(IPS_PERSONAL_TEMPLATE.format(date=date))
         elif ips_type in ("institutional", "inst", "i"):
-            print(IPS_INSTITUTIONAL_TEMPLATE.format(date=today_iso()))
+            print(IPS_INSTITUTIONAL_TEMPLATE.format(date=date))
         else:
             print(f"❌ Unsupported IPS type: {ips_type}")
