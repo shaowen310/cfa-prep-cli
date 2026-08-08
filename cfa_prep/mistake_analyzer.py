@@ -158,7 +158,9 @@ class MistakeAnalyzer:
                     return
 
             if is_mcq:
-                self._log_mcq(subject, module_name, curriculum, level)
+                while True:
+                    if not self._log_mcq(subject, module_name, curriculum, level):
+                        break
             else:
                 self._log_freeform(subject, module_name, level)
 
@@ -167,12 +169,16 @@ class MistakeAnalyzer:
 
     def _log_mcq(
         self, subject: str, module_name: str, curriculum, level: str
-    ) -> None:
-        """Log an L1 MCQ mistake with 3-option input."""
-        question = self._prompt("\nQuestion text: ").strip()
+    ) -> bool:
+        """
+        Log an L1 MCQ mistake with 3-option input.
+        Returns True if a mistake was saved, False if the user cancelled
+        (blank question) so the caller can loop or stop.
+        """
+        module_label = f" [{module_name}]" if module_name else ""
+        question = self._prompt(f"\nQuestion text{module_label} (blank to finish): ").strip()
         if not question:
-            print("  Cancelled.")
-            return
+            return False
 
         # Collect the 3 options
         print("\n  Enter the 3 answer options:")
@@ -180,14 +186,8 @@ class MistakeAnalyzer:
         option_b = self._prompt("    B: ").strip()
         option_c = self._prompt("    C: ").strip()
 
-        # Which one did the user pick?
-        print("\n  Your answer was:")
-        print(f"    [A] {option_a}")
-        print(f"    [B] {option_b}")
-        print(f"    [C] {option_c}")
-        user_letter = self._prompt("  > ").strip().upper()
-
-        correct_letter = self._prompt("\nCorrect answer (A/B/C): ").strip().upper()
+        user_letter = self._prompt("\nYour answer (A/B/C): ").strip().upper()
+        correct_letter = self._prompt("Correct answer (A/B/C): ").strip().upper()
 
         # Map letters to option text so the machine can identify the answer
         # regardless of display order (quiz can shuffle options later).
@@ -222,6 +222,7 @@ class MistakeAnalyzer:
             level=level,
         )
         print(f"\n✅ Mistake saved to: {filepath}")
+        return True
 
     def _log_freeform(self, subject: str, module_name: str, level: str = "L1") -> None:
         """Log an L2/L3 free-form mistake."""
