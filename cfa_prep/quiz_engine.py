@@ -30,9 +30,8 @@ class QuizEngine:
 
     def _get_all_topics(self, level: str = "L1") -> List[str]:
         """
-        Get all knowledge points across all subjects for a level (flattened list).
-        Drawn from the curriculum; falls back to the built-in scaffold if no
-        curriculum file has been seeded yet, so the quiz never breaks.
+        Get all knowledge points across all subjects and modules for a level.
+        Drawn from the imported curriculum; returns [] if the curriculum is empty.
         """
         return self.curriculum.all_topics(level.upper())
 
@@ -86,6 +85,27 @@ class QuizEngine:
         random.shuffle(selected)
         return selected[:10]
 
+    def _subject_from_label(self, label: str) -> str:
+        """
+        Extract the subject name from a curriculum topic label of the form
+        "[Subject > Module] Topic". Returns the subject portion, or "" if unparseable.
+        """
+        bracket = label.find("]")
+        if bracket == -1:
+            return ""
+        inner = label[1:bracket]
+        # Inner is "Subject > Module"; subject is the part before the module separator.
+        if ">" in inner:
+            return inner.split(">", 1)[0].strip()
+        return inner.strip()
+
+    def _subject_topics(self, level: str, subject: str) -> list[str]:
+        """Return all "[Subject > Module] Topic" labels for a subject, across its modules."""
+        if not subject:
+            return []
+        all_topics = self._get_all_topics(level)
+        return [t for t in all_topics if t.startswith(f"[{subject} >")]
+
     def _generate_l2_quiz(self, level: str = "L2") -> Dict[str, Any]:
         """
         Generate L2 questions (1 vignette + 3 sub-questions).
@@ -100,10 +120,9 @@ class QuizEngine:
         else:
             vignette_topic = random.choice(all_topics)
 
-        # Generate 3 related questions (selected from the relevant subject)
-        subject = vignette_topic.split("]")[0].replace("[", "")
-        data = self.curriculum.load()
-        related_topics = data.get(level.upper(), {}).get(subject, [])
+        # Generate 3 related questions (selected from the relevant subject's modules)
+        subject = self._subject_from_label(vignette_topic)
+        related_topics = self._subject_topics(level, subject)
         if not related_topics:
             related_topics = [vignette_topic]
 

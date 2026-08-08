@@ -142,28 +142,55 @@ def test_settings():
 
 
 def test_curriculum_seed_and_load():
-    """Test that the curriculum can be seeded and loaded, with all levels present"""
+    """Test that the curriculum loads empty when no file exists, and seed() is idempotent"""
     import tempfile
 
     with tempfile.TemporaryDirectory() as tmp:
         os.environ["CFA_PREP_HOME"] = tmp
         try:
             c = Curriculum()
-            # No file yet: load() returns the default scaffold without writing
-            data = c.load()
-            assert set(data.keys()) == {"L1", "L2", "L3"}, f"Expected L1/L2/L3, got {list(data.keys())}"
-            # Subjects should be present for L1
-            assert len(c.all_subjects("L1")) >= 5, "L1 should have several subjects"
-            # Topics should be non-empty and formatted "[Subject] Topic"
-            topics = c.all_topics("L1")
-            assert len(topics) > 0
-            assert all(t.startswith("[") for t in topics)
+            # No file yet: load() returns an empty curriculum (no bundled scaffold)
+            assert c.load() == {}
+            assert c.all_subjects("L1") == []
+            assert c.all_topics("L1") == []
 
-            # seed() writes the file; a second seed() is idempotent
+            # seed() creates an empty file; a second seed() is idempotent
             assert c.seed() is True, "First seed should write a new file"
             assert c.path.exists(), "seed() should create curriculum.json"
             assert c.seed() is False, "Second seed should be a no-op"
             print(f"  ✅ Curriculum seed + load is fine")
+        finally:
+            os.environ.pop("CFA_PREP_HOME", None)
+
+
+def test_curriculum_import_nested_modules():
+    """Test that nested {module: [topics]} curriculum imports and flattens correctly"""
+    import tempfile
+    import json
+
+    nested = {
+        "L1": {
+            "Economics": {
+                "Module 1: Intro": ["1.01 A", "1.02 B"],
+                "Module 2: Policy": ["2.01 C"],
+            }
+        }
+    }
+    with tempfile.TemporaryDirectory() as tmp:
+        os.environ["CFA_PREP_HOME"] = tmp
+        try:
+            src = Path(tmp) / "nested.json"
+            src.write_text(json.dumps(nested), encoding="utf-8")
+            c = Curriculum()
+            c.import_file(str(src))
+            # Modules are preserved as the internal grouping; topics carry module labels
+            topics = c.all_topics("L1")
+            assert "[Economics > Module 1: Intro] 1.01 A" in topics
+            assert "[Economics > Module 1: Intro] 1.02 B" in topics
+            assert "[Economics > Module 2: Policy] 2.01 C" in topics
+            # Module names are queryable per subject
+            assert c.all_modules("L1", "Economics") == ["Module 1: Intro", "Module 2: Policy"]
+            print(f"  ✅ Curriculum nested-module import is fine ({len(topics)} topics)")
         finally:
             os.environ.pop("CFA_PREP_HOME", None)
 
@@ -184,20 +211,25 @@ def test_curriculum_normalize_subject():
 
 
 def test_quiz_uses_curriculum():
-    """Test that the quiz engine draws its topic pool from the curriculum"""
+    """Test that the quiz engine draws its topic pool from the imported curriculum"""
     import tempfile
+    import json
 
+    data = {"L1": {"Economics": ["Demand and supply", "Monetary policy"]}}
     with tempfile.TemporaryDirectory() as tmp:
         os.environ["CFA_PREP_HOME"] = tmp
         try:
             c = Curriculum()
             c.seed()
+            src = Path(tmp) / "cur.json"
+            src.write_text(json.dumps(data), encoding="utf-8")
+            c.import_file(str(src))
             engine = QuizEngine()
             topics = engine._get_all_topics("L1")
             assert len(topics) > 0
-            # Topics should match the seeded curriculum subject names (e.g. FSA)
-            assert any("[Financial Statement Analysis]" in t for t in topics), \
-                "L1 topics should include Financial Statement Analysis from the scaffold"
+            # Flat imports get wrapped under the default module "General"
+            assert "[Economics > General] Demand and supply" in topics, \
+                "L1 topics should come from the imported curriculum"
             print(f"  ✅ Quiz engine uses curriculum ({len(topics)} L1 topics)")
         finally:
             os.environ.pop("CFA_PREP_HOME", None)
@@ -238,6 +270,7 @@ def run_all_tests():
         ("Config read/write", test_settings),
         ("Data root env override", test_data_root_env_override),
         ("Curriculum seed/load", test_curriculum_seed_and_load),
+        ("Curriculum nested-module import", test_curriculum_import_nested_modules),
         ("Curriculum subject normalization", test_curriculum_normalize_subject),
         ("Quiz uses curriculum", test_quiz_uses_curriculum),
     ]

@@ -87,7 +87,7 @@ cfa-prep search "FCFE"
 | `flashcard --anki`           | Export Anki CSV              | `cfa-prep flashcard --anki`                    |
 | `ips personal`               | Generate personal IPS template | `cfa-prep ips personal`                       |
 | `ips inst`                   | Generate institutional IPS template | `cfa-prep ips inst`                     |
-| `curriculum seed`            | Seed the default curriculum   | `cfa-prep curriculum seed`                   |
+| `curriculum seed`            | Create an empty curriculum    | `cfa-prep curriculum seed`                   |
 | `curriculum import <file>`   | Replace curriculum from a JSON file | `cfa-prep curriculum import my.json`   |
 | `curriculum show`            | Display the current curriculum | `cfa-prep curriculum show`                   |
 
@@ -99,24 +99,35 @@ The **curriculum** is the single source of truth for the subjects and topics you
 (per level L1/L2/L3). It drives quiz topic selection and (in a later pass) input
 auto-correction and progress-coverage percentages.
 
-`cfa-prep init` automatically seeds a default scaffold built from the **publicly published
-CFA topic structure** — the 10 official topic areas with typical sub-topics per level.
-Because actual CFA curriculum text is copyrighted by CFA Institute, the scaffold contains
-**factual structure only**, not reproduced copyrighted text. You are encouraged to refine
-it to match your own materials (your notes, the `kb/` text you already own).
+There is **no bundled default scaffold** — the curriculum starts empty and is populated
+by you via `cfa-prep curriculum import`. `cfa-prep init` only creates an empty
+`curriculum.json`. Because actual CFA curriculum text is copyrighted by CFA Institute,
+you should provide your own legally-owned material (your notes, the `kb/` text you
+already own, or a topic list you export yourself).
 
-The curriculum is stored at `<data_root>/curriculum.json` with this shape:
+The curriculum is stored at `<data_root>/kb/curriculum.json` with this shape — each subject
+maps to one or more **modules**, and each module maps to a list of topics:
 
 ```json
 {
   "L1": {
-    "Financial Statement Analysis": [
-      "Introduction to financial statement analysis",
-      "Understanding the income statement"
-    ]
+    "Financial Statement Analysis": {
+      "Module 1: Analysis Framework": [
+        "Introduction to financial statement analysis",
+        "Financial reporting standards"
+      ],
+      "Module 2: The Financial Statements": [
+        "Understanding the income statement",
+        "Understanding the balance sheet"
+      ]
+    }
   }
 }
 ```
+
+A subject can also be provided as a plain list of topics — those get wrapped under a
+default module named `General` automatically. Modules are first-class: the quiz draws
+topics grouped by module, and progress can be tracked per-module.
 
 ### Commands
 
@@ -124,7 +135,7 @@ The curriculum is stored at `<data_root>/curriculum.json` with this shape:
 # Show the current curriculum
 cfa-prep curriculum show
 
-# Re-seed the default scaffold (no-op if a file already exists)
+# Create an empty curriculum file (no-op if one already exists)
 cfa-prep curriculum seed
 
 # Replace the curriculum with your own JSON file
@@ -165,12 +176,11 @@ Data files are stored under the configured data root (`~/.cfa-prep` by default):
 
 ```
 ~/.cfa-prep/
-├── kb/                       # Knowledge files (.txt) — place your material here
+├── kb/                       # Knowledge files (.txt) and curriculum.json
 ├── mistakes/                 # Mistake log (auto-generated)
 ├── progress/                 # Progress files (auto-generated)
 ├── flashcards/               # Flashcards (auto-generated)
 ├── templates/                # IPS templates
-├── curriculum.json           # Curriculum (subjects + topics per level)
 └── config/
     └── settings.json         # Configuration (includes data_root)
 ```

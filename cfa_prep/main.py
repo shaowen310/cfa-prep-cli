@@ -72,10 +72,11 @@ def cmd_init(_args) -> None:
     _ = tracker.load()
     print(f"  ✅ Created progress file: progress/progress.md")
 
-    # Seed the default curriculum (idempotent; keeps an existing file if present)
+    # Create an empty curriculum file (idempotent; keeps an existing file if present)
     curriculum = Curriculum()
     if curriculum.seed():
-        print(f"  ✅ Seeded default curriculum: {curriculum.path.name}")
+        print(f"  ✅ Created empty curriculum: {curriculum.path.name}")
+        print(f"     Use 'cfa-prep curriculum import <file.json>' to populate it.")
     else:
         print(f"  ℹ️  Curriculum already exists: {curriculum.path.name}")
 
@@ -302,7 +303,8 @@ def cmd_curriculum(args) -> None:
     if action == "seed":
         print_header("📚 Seed Curriculum")
         if curriculum.seed():
-            print(f"✅ Seeded default curriculum to: {curriculum.path}")
+            print(f"✅ Created empty curriculum at: {curriculum.path}")
+            print("   Use 'cfa-prep curriculum import <file.json>' to populate it.")
         else:
             print(f"ℹ️  Curriculum already exists at: {curriculum.path}")
             print("   Use 'cfa-prep curriculum show' to view it, or 'import' to replace it.")
@@ -329,13 +331,20 @@ def cmd_curriculum(args) -> None:
     total_topics = 0
     for level, subjects in data.items():
         subj_count = len(subjects)
-        topic_count = sum(len(t) for t in subjects.values())
+        topic_count = sum(
+            len(module_topics)
+            for modules in subjects.values()
+            for module_topics in modules.values()
+        )
         total_topics += topic_count
         print(f"\n  🎯 {level}: {subj_count} subjects, {topic_count} topics")
-        for subject, topics in subjects.items():
-            print(f"    • {subject} ({len(topics)}):")
-            for t in topics:
-                print(f"        - {t}")
+        for subject, modules in subjects.items():
+            module_count = len(modules)
+            print(f"    • {subject} ({module_count} modules):")
+            for module, module_topics in modules.items():
+                print(f"        ⤷ {module} ({len(module_topics)}):")
+                for t in module_topics:
+                    print(f"            - {t}")
     print(f"\n  📦 Total topics across all levels: {total_topics}")
     print(f"\n  📁 Stored at: {curriculum.path}")
 

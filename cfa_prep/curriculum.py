@@ -6,15 +6,15 @@ Purpose: Provide a single source of truth for the CFA exam curriculum (subjects 
          per level, stored at <data_root>/curriculum.json. Powers quiz topic selection,
          input auto-correction, and progress coverage tracking.
 
-The scaffold is generated from the publicly published CFA topic structure
-(10 topic areas + typical sub-topics per level). It is factual structure, not
-reproduced copyrighted text. Users may replace it via `curriculum import`.
+The curriculum is user-supplied via `curriculum import` — there is no bundled default
+scaffold. Imported curriculum text is provided by the user and should respect the
+copyright of its source (e.g. the CFA Institute).
 """
 
 import json
 from pathlib import Path
 
-from .utils import get_data_root, load_json, save_json, fuzzy_match
+from .utils import get_data_dir, load_json, save_json, fuzzy_match
 
 # Official CFA topic area names (public, non-copyrighted structure)
 CANONICAL_SUBJECTS = [
@@ -70,266 +70,69 @@ SUBJECT_ALIASES = {
     "et&ps": "Ethical & Professional Standards",
 }
 
-# Default scaffold keyed by level. Subjects use the canonical names above.
-# Sub-topics are typical topics from the publicly published Candidate Body of
-# Knowledge; edit freely after import.
-DEFAULT_CURRICULUM = {
-    "L1": {
-        "Ethical & Professional Standards": [
-            "CFA Institute Code of Ethics",
-            "Standards of Professional Conduct (I-VII)",
-            "GIPS compliance overview",
-            "Global Investment Performance Standards",
-        ],
-        "Quantitative Methods": [
-            "Time value of money",
-            "Probability concepts",
-            "Common probability distributions",
-            "Sampling and estimation",
-            "Hypothesis testing",
-            "Introduction to linear regression",
-            "Time-series analysis basics",
-        ],
-        "Economics": [
-            "Demand and supply analysis",
-            "Consumer and producer theory",
-            "Firm and market structures",
-            "Monetary and fiscal policy",
-            "International trade and capital flows",
-            "Exchange rate determination",
-            "Economic growth",
-            "Business cycle analysis",
-        ],
-        "Financial Statement Analysis": [
-            "Introduction to financial statement analysis",
-            "Financial reporting standards",
-            "Understanding the income statement",
-            "Understanding the balance sheet",
-            "Understanding the cash flow statement",
-            "Financial analysis techniques (ratios)",
-            "Inventories",
-            "Long-lived assets",
-            "Income taxes",
-            "Non-current liabilities (leases, debt)",
-            "Financial reporting quality",
-        ],
-        "Corporate Issuers": [
-            "Corporate governance",
-            "Capital budgeting",
-            "Cost of capital",
-            "Measures of leverage",
-            "Working capital management",
-            "Introduction to corporate finance (financing)",
-        ],
-        "Equity Investments": [
-            "Market organization and structure",
-            "Security market indices",
-            "Market efficiency",
-            "Overview of equity securities",
-            "Introduction to industry and company analysis",
-            "Equity valuation concepts",
-        ],
-        "Fixed Income": [
-            "Fixed-income securities definitions",
-            "Fixed-income markets",
-            "Introduction to fixed-income valuation",
-            "Term structure of interest rates",
-            "Introduction to asset-backed securities",
-            "Understanding fixed-income risk and return",
-            "Credit risk basics",
-        ],
-        "Derivatives": [
-            "Derivative markets and instruments",
-            "Basics of derivative pricing",
-            "Options basics",
-            "Forward and futures basics",
-            "Swap basics",
-        ],
-        "Alternative Investments": [
-            "Alternative investments overview",
-            "Hedge funds",
-            "Private equity",
-            "Real estate",
-            "Commodities",
-        ],
-        "Portfolio Management": [
-            "Portfolio management: an overview",
-            "Portfolio risk and return: Part I & II",
-            "Behavioral finance",
-            "Introduction to risk management",
-            "Technical analysis",
-            "Introduction to asset allocation",
-        ],
-    },
-    "L2": {
-        "Ethical & Professional Standards": [
-            "Code of Ethics and Standards application",
-            "GIPS: composite construction",
-            "Asset manager code of professional conduct",
-        ],
-        "Quantitative Methods": [
-            "Multiple regression",
-            "Time-series analysis",
-            "Machine learning basics",
-            "Probability, decision analysis, and simulation",
-            "Big data and FinTech",
-        ],
-        "Economics": [
-            "Currency exchange rate forecasting",
-            "Economic growth and investment decision",
-            "Economics of regulation",
-        ],
-        "Financial Statement Analysis": [
-            "Intercorporate investments",
-            "Employee compensation (pensions, share-based)",
-            "Multinational operations (FX effects)",
-            "Analysis of financial institutions",
-            "Evaluating financial reporting quality",
-            "Analysis of inventory and long-lived assets",
-        ],
-        "Corporate Issuers": [
-            "Capital structure and company analysis",
-            "Corporate governance and ESG",
-            "Cost of capital: advanced",
-            "Mergers and acquisitions",
-            "Dividend policy and share repurchases",
-        ],
-        "Equity Investments": [
-            "Equity valuation: applications",
-            "Free cash flow valuation (FCFF/FCFE)",
-            "Market-based valuation (multiples)",
-            "Residual income valuation",
-            "Private company valuation",
-        ],
-        "Fixed Income": [
-            "Fixed-income valuation: analysis of bonds",
-            "Term structure and yield spreads",
-            "Fixed-income risk and return",
-            "Credit analysis models",
-            "Asset-backed securities",
-            "Fixed-income portfolio management basics",
-        ],
-        "Derivatives": [
-            "Option valuation (binomial, Black-Scholes)",
-            "Forward and futures valuation",
-            "Swap valuation",
-            "Credit derivatives",
-        ],
-        "Alternative Investments": [
-            "Alternative investments: private equity",
-            "Real estate investments",
-            "Hedge fund strategies and valuation",
-            "Commodities and other alternatives",
-        ],
-        "Portfolio Management": [
-            "Portfolio concepts: mean-variance analysis",
-            "Asset allocation strategies",
-            "Fixed-income and equity portfolio management",
-            "Derivatives in portfolio management",
-            "Alternative investments in portfolios",
-        ],
-    },
-    "L3": {
-        "Ethical & Professional Standards": [
-            "Ethics application in portfolio management",
-            "GIPS for asset owners and firms",
-            "CFA Institute guidance for standards",
-        ],
-        "Quantitative Methods": [
-            "Portfolio risk and return measurement",
-            "Trade strategy and execution analytics",
-            "Performance evaluation",
-        ],
-        "Economics": [
-            "Capital market expectations",
-            "Economic and capital market cycles",
-            "Currency management",
-        ],
-        "Financial Statement Analysis": [
-            "Financial analysis in portfolio context",
-            "Multi-currency accounting decisions",
-            "ESG considerations in analysis",
-        ],
-        "Corporate Issuers": [
-            "Capital structure policy",
-            "Dividend and share repurchase policy",
-            "Corporate restructuring",
-        ],
-        "Equity Investments": [
-            "Equity portfolio management",
-            "Passive vs active equity strategies",
-            "Equity manager selection and evaluation",
-        ],
-        "Fixed Income": [
-            "Fixed-income portfolio management: liability-driven",
-            "Yield curve strategies",
-            "Credit strategies in fixed income",
-            "Global fixed-income investing",
-            "Fixed-income performance evaluation",
-        ],
-        "Derivatives": [
-            "Risk management using derivatives",
-            "Options strategies for portfolios",
-            "Futures and swaps in portfolio management",
-        ],
-        "Alternative Investments": [
-            "Alternative investments portfolio construction",
-            "Due diligence of alternative investments",
-            "Risk and return of alternative assets",
-        ],
-        "Portfolio Management": [
-            "Asset allocation",
-            "Portfolio construction and monitoring",
-            "Rebalancing and performance attribution",
-            "Behavioral finance in practice",
-            "Risk governance",
-        ],
-    },
-}
-
 
 class Curriculum:
     """
     Load / save / query the CFA curriculum.
 
-    Stored as <data_root>/curriculum.json with shape:
+    Stored as <data_root>/kb/curriculum.json with shape:
         {
-            "L1": {"<Subject>": ["<Topic>", ...], ...},
+            "L1": {
+                "<Subject>": {
+                    "<Module>": ["<Topic>", ...],
+                    ...
+                },
+                ...
+            },
             "L2": {...},
             "L3": {...}
         }
+
+    Modules are first-class: every subject maps to a dict of modules, each of which
+    maps to a list of topics. A subject imported as a flat list of topics is wrapped
+    under a default module ("General") so the model stays consistent.
+
+    The curriculum is populated by the user via `import_file`; an empty / missing
+    file is treated as an empty curriculum.
     """
 
+    # Default module name used when a subject is provided as a flat list of topics.
+    DEFAULT_MODULE: str = "General"
+
     def __init__(self):
-        self.path: Path = get_data_root() / "curriculum.json"
+        self.path: Path = get_data_dir("kb") / "curriculum.json"
 
     # --- persistence -------------------------------------------------------
 
-    def load(self) -> dict[str, dict[str, list[str]]]:
-        """Load the curriculum, returning the DEFAULT scaffold if no file exists yet."""
+    def load(self) -> dict[str, dict[str, dict[str, list[str]]]]:
+        """Load the curriculum, returning an empty dict if no file exists yet."""
         data = load_json(self.path)
         if not data:
-            return DEFAULT_CURRICULUM
+            return {}
         return data
 
-    def save(self, data: dict[str, dict[str, list[str]]]) -> None:
+    def save(self, data: dict[str, dict[str, dict[str, list[str]]]]) -> None:
         """Write the curriculum data to curriculum.json."""
         save_json(self.path, data)
 
     def seed(self) -> bool:
         """
-        Write the DEFAULT scaffold if no curriculum file exists yet (idempotent).
+        Create an empty curriculum file if none exists yet (idempotent).
         Returns True if a file was written, False if one already existed.
         """
         if self.path.exists():
             return False
-        self.save(DEFAULT_CURRICULUM)
+        self.save({})
         return True
 
     def import_file(self, filepath: str) -> None:
         """
         Replace the curriculum from a user-provided JSON file.
-        Validates the structure: dict of levels -> dict of subjects -> list of topics.
+        Validates the structure: dict of levels -> dict of subjects -> modules/topics.
+
+        Subject shapes accepted (all normalized to the nested module form):
+          * {"Subject": ["Topic", ...]}               -> wrapped under "General"
+          * {"Subject": {"Module": ["Topic", ...]}}   -> kept as-is (modules preserved)
         """
         path = Path(filepath)
         if not path.exists():
@@ -341,18 +144,42 @@ class Curriculum:
             raise ValueError("Curriculum file must be a JSON object mapping level -> subject -> topics")
 
         # Normalize / validate structure
-        cleaned: dict[str, dict[str, list[str]]] = {}
+        cleaned: dict[str, dict[str, dict[str, list[str]]]] = {}
         for level, subjects in data.items():
             if not isinstance(subjects, dict):
                 raise ValueError(f"Level {level!r} must map to a dictionary of subjects")
             level_key = str(level).upper()
             cleaned[level_key] = {}
-            for subject, topics in subjects.items():
-                if not isinstance(topics, list):
-                    raise ValueError(f"Subject {subject!r} in {level_key} must map to a list of topics")
-                cleaned[level_key][str(subject)] = [str(t) for t in topics]
+            for subject, value in subjects.items():
+                cleaned[level_key][str(subject)] = self._normalize_modules(value, subject, level_key)
 
         self.save(cleaned)
+
+    @staticmethod
+    def _normalize_modules(value, subject: str, level_key: str) -> dict[str, list[str]]:
+        """
+        Normalize a subject's topic definition into the nested "module -> [topics]" form.
+
+        Supports:
+          * a list of topic strings   -> wrapped under Curriculum.DEFAULT_MODULE
+          * a dict of modules         -> kept as-is, each module validated as a list of topics
+        """
+        if isinstance(value, list):
+            return {Curriculum.DEFAULT_MODULE: [str(t) for t in value]}
+
+        if isinstance(value, dict):
+            modules: dict[str, list[str]] = {}
+            for module, items in value.items():
+                if not isinstance(items, list):
+                    raise ValueError(
+                        f"Module {module!r} in {level_key} / {subject!r} must map to a list of topics"
+                    )
+                modules[str(module)] = [str(item) for item in items]
+            return modules
+
+        raise ValueError(
+            f"Subject {subject!r} in {level_key} must map to a list of topics or a dict of modules"
+        )
 
     # --- queries -----------------------------------------------------------
 
@@ -361,37 +188,55 @@ class Curriculum:
         return list(self.load().keys())
 
     def all_subjects(self, level: str = "L1") -> list[str]:
-        """Return the list of subjects for a given level (fallback to scaffold)."""
+        """Return the list of subjects for a given level."""
         data = self.load()
         return list(data.get(level.upper(), {}).keys())
 
+    def subject_modules(self, level: str = "L1", subject: str = "") -> dict[str, list[str]]:
+        """Return the {module: [topics]} dict for a subject, or {} if absent."""
+        if not subject:
+            return {}
+        data = self.load()
+        return data.get(level.upper(), {}).get(subject, {})
+
+    def all_modules(self, level: str = "L1", subject: str = "") -> list[str]:
+        """Return the module names for a subject (or across all subjects if none given)."""
+        data = self.load()
+        if subject:
+            return list(data.get(level.upper(), {}).get(subject, {}).keys())
+        modules: list[str] = []
+        for subj in data.get(level.upper(), {}).values():
+            modules.extend(subj.keys())
+        return modules
+
     def all_topics(self, level: str = "L1") -> list[str]:
         """
-        Return all topics across all subjects for a level, flattened as
-        "[Subject] Topic" strings (same format the quiz engine uses).
+        Return all topics for a level, flattened as "[Subject > Module] Topic" strings.
+        The module layer is preserved in each label so quiz / progress can track per-module.
         """
         data = self.load()
         subjects = data.get(level.upper(), {})
         topics: list[str] = []
-        for subject, topic_list in subjects.items():
-            for topic in topic_list:
-                topics.append(f"[{subject}] {topic}")
+        for subject, modules in subjects.items():
+            for module, module_topics in modules.items():
+                for topic in module_topics:
+                    topics.append(f"[{subject} > {module}] {topic}")
         return topics
 
     def count_topics(self, level: str = "L1") -> int:
         """Return the total number of topics for a level."""
         data = self.load()
         subjects = data.get(level.upper(), {})
-        return sum(len(t) for t in subjects.values())
+        return sum(len(t) for m in subjects.values() for t in m.values())
 
     def find_topic(self, level: str, subject: str, topic: str) -> str | None:
-        """Look up a topic within a subject; returns the exact topic string or None."""
-        data = self.load()
-        topics = data.get(level.upper(), {}).get(subject, [])
+        """Look up a topic within a subject (searching all its modules); exact match or None."""
+        modules = self.subject_modules(level, subject)
         norm = topic.strip().lower()
-        for t in topics:
-            if t.strip().lower() == norm:
-                return t
+        for module_topics in modules.values():
+            for t in module_topics:
+                if t.strip().lower() == norm:
+                    return t
         return None
 
     # --- input correction ---------------------------------------------------
@@ -431,7 +276,8 @@ class Curriculum:
 
     def normalize_topic(self, text: str, subject: str, level: str = "L1") -> str | None:
         """
-        Correct / normalize a typed topic against the curriculum for a subject.
+        Correct / normalize a typed topic against the curriculum for a subject,
+        searching across all of the subject's modules.
 
         Returns the exact curriculum topic string, or None if no confident match.
         """
@@ -439,16 +285,16 @@ class Curriculum:
         if not cleaned:
             return None
 
-        data = self.load()
-        topics = data.get(level.upper(), {}).get(subject, [])
+        modules = self.subject_modules(level, subject)
+        all_topics: list[str] = [t for ts in modules.values() for t in ts]
 
         # exact match
-        for t in topics:
+        for t in all_topics:
             if t.lower() == cleaned:
                 return t
 
         # fuzzy (subsequence) match
-        candidates = [t for t in topics if fuzzy_match(cleaned, t)]
+        candidates = [t for t in all_topics if fuzzy_match(cleaned, t)]
         if len(candidates) == 1:
             return candidates[0]
 
