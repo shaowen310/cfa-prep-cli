@@ -9,7 +9,6 @@ Purpose: Extract key concepts from the knowledge base (data/kb/), generate Q&A f
 import re
 import csv
 from pathlib import Path
-from typing import List, Dict, Tuple
 
 from .utils import (
     get_data_dir,
@@ -27,10 +26,10 @@ class FlashcardGenerator:
     """
 
     def __init__(self):
-        self.flashcards_dir = get_data_dir("flashcards")
-        self.kb = KnowledgeBase()
+        self.flashcards_dir: Path = get_data_dir("flashcards")
+        self.kb: KnowledgeBase = KnowledgeBase()
 
-    def extract_concepts(self, text: str) -> List[Dict[str, str]]:
+    def extract_concepts(self, text: str) -> list[dict[str, str]]:
         """
         Extract key concepts from text, generating Q&A pairs.
 
