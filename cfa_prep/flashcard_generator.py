@@ -14,7 +14,6 @@ from typing import List, Dict, Tuple
 from .utils import (
     get_data_dir,
     write_file_text,
-    read_file_text,
     today_str,
 )
 from .knowledge_base import KnowledgeBase

@@ -8,7 +8,7 @@ Purpose: Read TXT knowledge files under data/kb/, split them into pages, and sup
 import re
 import os
 from pathlib import Path
-from typing import List, Dict, Optional, Tuple
+from typing import TypedDict
 
 from .utils import (
     get_data_dir,
@@ -16,6 +16,27 @@ from .utils import (
     extract_context,
     read_file_text,
 )
+
+
+class SearchResult(TypedDict):
+    """A single search hit: a snippet of matching page text."""
+    file: str
+    filepath: str
+    page: int
+    snippet: str
+
+
+class FileStat(TypedDict):
+    """Per-file page count for the stats report."""
+    name: str
+    pages: int
+
+
+class KnowledgeBaseStats(TypedDict):
+    """Overall knowledge base statistics."""
+    total_files: int
+    total_pages: int
+    files: list[FileStat]
 
 
 class KnowledgeBase:
@@ -27,15 +48,15 @@ class KnowledgeBase:
     """
 
     def __init__(self):
-        self.kb_dir = get_data_dir("kb")
+        self.kb_dir: Path = get_data_dir("kb")
         # Cache: {file path: {page number: page text}}
-        self._cache: Dict[str, Dict[int, str]] = {}
+        self._cache: dict[str, dict[int, str]] = {}
 
-    def scan_files(self) -> List[Path]:
+    def scan_files(self) -> list[Path]:
         """Scan all .txt files under data/kb/"""
         return sorted(self.kb_dir.glob("*.txt"))
 
-    def load_file(self, filepath: Path) -> Dict[int, str]:
+    def load_file(self, filepath: Path) -> dict[int, str]:
         """
         Load a single knowledge file, split by page number.
         Returns a {page number: page text} dict.
@@ -45,7 +66,7 @@ class KnowledgeBase:
             return self._cache[str(filepath)]
 
         text = read_file_text(filepath)
-        pages: Dict[int, str] = {}
+        pages: dict[int, str] = {}
 
         # Split by ===== PAGE N =====
         # Use regex to match the page marker
@@ -78,7 +99,7 @@ class KnowledgeBase:
         self._cache[str(filepath)] = pages
         return pages
 
-    def load_all(self) -> Dict[str, Dict[int, str]]:
+    def load_all(self) -> dict[str, dict[int, str]]:
         """Load all knowledge files"""
         result = {}
         for fp in self.scan_files():
@@ -91,7 +112,7 @@ class KnowledgeBase:
         use_regex: bool = False,
         use_fuzzy: bool = True,
         max_results: int = 10,
-    ) -> List[Dict[str, any]]:
+    ) -> list[SearchResult]:
         """
         Search for a keyword across all knowledge files.
 
@@ -153,7 +174,7 @@ class KnowledgeBase:
 
         return results[:max_results]
 
-    def get_stats(self) -> Dict[str, any]:
+    def get_stats(self) -> KnowledgeBaseStats:
         """Return knowledge base statistics"""
         files = self.scan_files()
         total_pages = 0
