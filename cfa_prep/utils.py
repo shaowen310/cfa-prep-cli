@@ -56,6 +56,24 @@ def get_config_dir() -> Path:
     return p
 
 
+def set_data_root(new_root: str | Path) -> Path:
+    """
+    Persist the data root to the default config (config/settings.json under ~/.cfa-prep),
+    so future runs resolve the same folder. Returns the resolved path.
+
+    NOTE: If CFA_PREP_HOME is set, the env var takes precedence at resolution time and
+    cannot be overridden from here; this only writes the config fallback.
+    """
+    resolved = Path(new_root).expanduser().resolve()
+    default_root = Path.home() / ".cfa-prep"
+    config_dir = default_root / "config"
+    config_dir.mkdir(parents=True, exist_ok=True)
+    settings = load_json(config_dir / "settings.json")
+    settings["data_root"] = str(resolved)
+    save_json(config_dir / "settings.json", settings)
+    return resolved
+
+
 def load_json(filepath: Path) -> dict[str, Any]:
     """Safely load a JSON file, returning an empty dict if the file does not exist"""
     if filepath.exists():
