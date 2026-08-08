@@ -217,18 +217,34 @@ class ProgressTracker:
             else:
                 unparsed.append(entry)
 
-        # Print the full curriculum hierarchy, with progress counts per module
+        # Print the full curriculum hierarchy, with progress counts per module.
+        # Auto-collapse: if all topics in a module are in the list, hide the
+        # topic details and show a ✓ marker.  Same for subjects.
         all_subjects = curriculum.subject_modules(level)
         for subject in sorted(all_subjects):
             curriculum_modules = all_subjects[subject]
             progress_modules = entry_by_subject_module.get(subject, {})
             done_count = sum(len(ts) for ts in progress_modules.values())
             total_count = sum(len(ts) for ts in curriculum_modules.values())
-            print(f"    📖 {subject} ({done_count}/{total_count} topics with progress)")
+            # Collapse subject if every module is fully complete
+            subject_complete = (
+                total_count > 0
+                and all(
+                    len(progress_modules.get(m, [])) == len(curriculum_modules[m])
+                    for m in curriculum_modules
+                )
+            )
+            marker = " ✅" if subject_complete else ""
+            print(f"    📖 {subject} ({done_count}/{total_count}){marker}")
+            if subject_complete:
+                continue
             for module in sorted(curriculum_modules):
                 progress_topics = progress_modules.get(module, [])
                 module_total = len(curriculum_modules[module])
-                if progress_topics:
+                module_complete = progress_topics and len(progress_topics) == module_total
+                if module_complete:
+                    print(f"        ⤷ {module} ✅ ({len(progress_topics)}/{module_total})")
+                elif progress_topics:
                     print(f"        ⤷ {module} ({len(progress_topics)}/{module_total}):")
                     for entry in sorted(progress_topics):
                         topic = cls._label_to_topic(entry)
