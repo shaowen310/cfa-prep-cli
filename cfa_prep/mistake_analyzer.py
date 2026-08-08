@@ -2,17 +2,16 @@
 """
 CFA Prep CLI - Mistake analyzer module
 Author: CodeBuddy AI Assistant
-Purpose: Log and analyze mistakes, categorized into three types (concept confusion / calculation error / misreading),
-         automatically written to the data/mistakes/ directory, and generate review suggestions.
+Purpose: Log and analyze mistakes, stored as JSON at <data_root>/mistakes/mistakes.json.
+         Supports MCQ (L1) and free-form (L2/L3) mistake logging.
 """
 
 from pathlib import Path
+from typing import TypedDict
 
 from .utils import (
     get_data_dir,
     today_str,
-    write_file_text,
-    read_file_text,
     load_json,
     save_json,
 )
@@ -26,20 +25,44 @@ MISTAKE_CATEGORIES = {
 }
 
 
+class MistakeRecord(TypedDict):
+    date: str
+    level: str
+    subject: str
+    module: str
+    question: str
+    options: list[str]  # [A text, B text, C text]
+    user_answer: str     # the option text the user chose
+    correct_answer: str  # the option text that is correct
+    category: str
+    key_point: str
+    correct_conclusion: str
+    source: str
+
+
 class MistakeAnalyzer:
     """
     Mistake analyzer.
     Manages the entry, categorization, storage, and retrieval of mistakes.
+    All records stored in a single mistakes.json file.
     """
 
     def __init__(self):
         self.mistakes_dir: Path = get_data_dir("mistakes")
-        self.index_file: Path = self.mistakes_dir / "mistakes_index.json"
-        self.index: dict[str, object] = load_json(self.index_file)
+        self.data_file: Path = self.mistakes_dir / "mistakes.json"
 
-    def _save_index(self) -> None:
-        """Save the mistake index"""
-        save_json(self.index_file, self.index)
+    def _load(self) -> list[MistakeRecord]:
+        """Load all mistake records."""
+        data = load_json(self.data_file)
+        records = data.get("records", [])
+        if not isinstance(records, list):
+            return []
+        # At runtime these are dicts matching the MistakeRecord shape.
+        return records  # type: ignore[return-value]
+
+    def _save(self, records: list[MistakeRecord]) -> None:
+        """Save all mistake records."""
+        save_json(self.data_file, {"records": list(records)})
 
     def add_mistake(
         self,
@@ -51,86 +74,58 @@ class MistakeAnalyzer:
         key_point: str,
         correct_conclusion: str,
         source: str = "",
+        module_name: str = "",
+        level: str = "L1",
+        options: list[str] | None = None,
     ) -> str:
         """
-        Add a mistake record.
+        Add a mistake record to mistakes.json.
 
         Parameters:
-            subject: subject name (e.g., FRA, Equity, Ethics)
-            question: question description
+            subject: subject name (e.g., Economics)
+            question: question text (without options)
             user_answer: the user's incorrect answer
             correct_answer: the correct answer
-            category: mistake category (Concept confusion / Calculation error / Misreading the question)
-            key_point: knowledge point (one sentence)
-            correct_conclusion: correct conclusion (one sentence)
-            source: source (e.g., @data/kb/l2_vol3_p120-180.txt (P145))
+            category: mistake category
+            key_point: knowledge point
+            correct_conclusion: correct conclusion
+            source: source reference
+            module_name: module within the subject
+            level: exam level (L1/L2/L3)
+            options: list of option texts [A, B, C] for MCQ (optional)
 
         Returns:
-            the path of the generated mistake file
+            the path of the mistakes file
         """
-        date_str = today_str()
-        category_short = category.replace(" ", "_")
-        filename = f"{date_str}_{subject}_{category_short}.md"
-        filepath = self.mistakes_dir / filename
-
-        # Check if a mistake file for the same day already exists; if so, append
-        existing = read_file_text(filepath)
-
-        entry = f"""
-### Mistake Record
-
-**Date**: {date_str}
-**Subject**: {subject}
-**Category**: {category}
-**Key point**: {key_point}
-**Correct conclusion**: {correct_conclusion}
-**Source**: {source if source else "(Not specified)"}
-
----
-
-**Question**:
-{question}
-
-**My answer**: {user_answer}
-
-**Correct answer**: {correct_answer}
-
----
-
-"""
-        if existing:
-            write_file_text(filepath, existing + "\n" + entry)
-        else:
-            write_file_text(filepath, entry)
-
-        # Update the index
-        records = self.index.get("records")
-        if not isinstance(records, list):
-            records = []
-            self.index["records"] = records
-        records.append({
-            "date": date_str,
-            "subject": subject,
-            "category": category,
-            "key_point": key_point,
-            "file": filename,
-        })
-        self._save_index()
-
-        return str(filepath)
+        records = self._load()
+        records.append(MistakeRecord(
+            date=today_str(),
+            level=level,
+            subject=subject,
+            module=module_name,
+            question=question,
+            options=options or [],
+            user_answer=user_answer,
+            correct_answer=correct_answer,
+            category=category,
+            key_point=key_point,
+            correct_conclusion=correct_conclusion,
+            source=source,
+        ))
+        self._save(records)
+        return str(self.data_file)
 
     @staticmethod
     def _prompt(prompt: str = "") -> str:
         """
-        Safely read a line of input.
-        Returns "" on Ctrl+C / EOF (Ctrl+D) so the caller can exit gracefully
-        instead of raising a traceback.
+        Read a line of input.  On Ctrl+C / EOF, re-raises so the outer
+        handler in add_mistake_interactive can abort cleanly.
         """
         try:
             return input(prompt)
         except (KeyboardInterrupt, EOFError):
-            print("\n⚠️  Input cancelled.")
-            return ""
+            print()
+            raise
 
     def add_mistake_interactive(
         self, curriculum=None, level: str = "L1"
@@ -165,7 +160,7 @@ class MistakeAnalyzer:
             if is_mcq:
                 self._log_mcq(subject, module_name, curriculum, level)
             else:
-                self._log_freeform(subject, module_name)
+                self._log_freeform(subject, module_name, level)
 
         except (KeyboardInterrupt, EOFError):
             print("\n\n⚠️  Aborted — mistake was NOT saved.")
@@ -173,14 +168,32 @@ class MistakeAnalyzer:
     def _log_mcq(
         self, subject: str, module_name: str, curriculum, level: str
     ) -> None:
-        """Log an L1 MCQ mistake with streamlined input."""
+        """Log an L1 MCQ mistake with 3-option input."""
         question = self._prompt("\nQuestion text: ").strip()
         if not question:
             print("  Cancelled.")
             return
 
-        user_answer = self._prompt("Your answer (A/B/C): ").strip().upper()
-        correct_answer = self._prompt("Correct answer (A/B/C): ").strip().upper()
+        # Collect the 3 options
+        print("\n  Enter the 3 answer options:")
+        option_a = self._prompt("    A: ").strip()
+        option_b = self._prompt("    B: ").strip()
+        option_c = self._prompt("    C: ").strip()
+
+        # Which one did the user pick?
+        print("\n  Your answer was:")
+        print(f"    [A] {option_a}")
+        print(f"    [B] {option_b}")
+        print(f"    [C] {option_c}")
+        user_letter = self._prompt("  > ").strip().upper()
+
+        correct_letter = self._prompt("\nCorrect answer (A/B/C): ").strip().upper()
+
+        # Map letters to option text so the machine can identify the answer
+        # regardless of display order (quiz can shuffle options later).
+        letter_to_text = {"A": option_a, "B": option_b, "C": option_c}
+        user_answer = letter_to_text.get(user_letter, user_letter)
+        correct_answer = letter_to_text.get(correct_letter, correct_letter)
 
         print("\nMistake category:")
         for key, value in MISTAKE_CATEGORIES.items():
@@ -198,16 +211,19 @@ class MistakeAnalyzer:
         filepath = self.add_mistake(
             subject=subject,
             question=question,
+            options=[option_a, option_b, option_c],
             user_answer=user_answer,
             correct_answer=correct_answer,
             category=category,
             key_point=key_point,
             correct_conclusion=correct_conclusion,
             source=f"{subject} > {module_name}" if module_name else "",
+            module_name=module_name,
+            level=level,
         )
         print(f"\n✅ Mistake saved to: {filepath}")
 
-    def _log_freeform(self, subject: str, module_name: str) -> None:
+    def _log_freeform(self, subject: str, module_name: str, level: str = "L1") -> None:
         """Log an L2/L3 free-form mistake."""
         print("\nEnter the question description (enter a blank line to finish):")
         question_lines = []
@@ -247,6 +263,8 @@ class MistakeAnalyzer:
             key_point=key_point,
             correct_conclusion=correct_conclusion,
             source=source,
+            module_name=module_name,
+            level=level,
         )
         print(f"\n✅ Mistake saved to: {filepath}")
 
@@ -319,33 +337,21 @@ class MistakeAnalyzer:
 
         return subject, module_name
 
-    def get_recent_mistakes(self, limit: int = 10) -> list[dict[str, object]]:
+    def get_recent_mistakes(self, limit: int = 10) -> list[MistakeRecord]:
         """
         Get the most recent N mistake records.
         Sorted by date in descending order.
         """
-        records = self.index.get("records", [])
-        if not isinstance(records, list):
-            return []
-
-        dict_records: list[dict[str, object]] = [r for r in records if isinstance(r, dict)]
-        dict_records.sort(key=lambda r: str(r.get("date", "")), reverse=True)
-        return dict_records[:limit]
+        records = self._load()
+        records.sort(key=lambda r: r.get("date", ""), reverse=True)
+        return records[:limit]
 
     def get_mistake_stats(self) -> dict[str, object]:
         """
         Get mistake statistics.
         Returns the count and percentage for each mistake category.
         """
-        records = self.index.get("records", [])
-        if not isinstance(records, list):
-            return {
-                "total": 0,
-                "categories": {},
-                "subjects": {},
-                "key_points": [],
-            }
-
+        records = self._load()
         total = len(records)
         if total == 0:
             return {
@@ -355,27 +361,19 @@ class MistakeAnalyzer:
                 "key_points": [],
             }
 
-        # Count the category distribution
         cat_count: dict[str, int] = {}
+        subj_count: dict[str, int] = {}
+        key_points: list[str] = []
         for r in records:
-            if not isinstance(r, dict):
-                continue
-            cat = str(r.get("category", "Uncategorized"))
+            cat = r.get("category", "Uncategorized")
             cat_count[cat] = cat_count.get(cat, 0) + 1
+            subj = r.get("subject", "Unknown")
+            subj_count[subj] = subj_count.get(subj, 0) + 1
+            kp = r.get("key_point", "")
+            if kp:
+                key_points.append(kp)
 
         cat_pct = {k: round(v / total * 100, 1) for k, v in cat_count.items()}
-
-        # Count the subject distribution
-        subj_count: dict[str, int] = {}
-        for r in records:
-            if not isinstance(r, dict):
-                continue
-            subj = str(r.get("subject", "Unknown"))
-            subj_count[subj] = subj_count.get(subj, 0) + 1
-
-        # Extract all knowledge points
-        key_points = [str(r.get("key_point", "")) for r in records if isinstance(r, dict) and r.get("key_point")]
-
         return {
             "total": total,
             "categories": cat_pct,
@@ -384,8 +382,7 @@ class MistakeAnalyzer:
         }
 
     def list_mistake_files(self) -> list[Path]:
-        """List all mistake files"""
-        return sorted(
-            [f for f in self.mistakes_dir.glob("*.md") if f.name != "mistakes_index.json"],
-            reverse=True,
-        )
+        """List the mistakes data file if it exists."""
+        if self.data_file.exists():
+            return [self.data_file]
+        return []
