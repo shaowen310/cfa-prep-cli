@@ -99,6 +99,14 @@ def cmd_init(_args) -> None:
     print()
 
 
+def cmd_home(_args) -> None:
+    """
+    Show the resolved data root (home) directory path.
+    """
+    root = get_data_root()
+    print(root)
+
+
 def cmd_search(args) -> None:
     """
     Search the knowledge base: search for keywords across all files under data/kb/.
@@ -306,6 +314,7 @@ def main():
         epilog="""
 Examples:
   cfa-prep init                          Initialize the project
+  cfa-prep home                          Show the data root (home) path
   cfa-prep search "FCFE"                 Search the knowledge base
   cfa-prep search "FCFE" --regex         Use regex search
   cfa-prep quiz --level L1               Start L1 quizzing
@@ -328,6 +337,9 @@ Data root (default ~/.cfa-prep) can be set via:
 
     # init command
     _ = subparsers.add_parser("init", help="Initialize the data root directories and config")
+
+    # home command
+    _ = subparsers.add_parser("home", help="Show the data root (home) directory path")
 
     # add-mistake command
     _ = subparsers.add_parser("add-mistake", help="Interactively log a mistake")
@@ -379,6 +391,7 @@ Data root (default ~/.cfa-prep) can be set via:
     # Dispatch commands
     commands = {
         "init": cmd_init,
+        "home": cmd_home,
         "search": cmd_search,
         "quiz": cmd_quiz,
         "add-mistake": cmd_add_mistake,

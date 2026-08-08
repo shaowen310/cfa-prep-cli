@@ -73,6 +73,7 @@ cfa-prep search "FCFE"
 | Command                      | Description                  | Example                                        |
 | ---------------------------- | ---------------------------- | ---------------------------------------------- |
 | `init`                       | Initialize data root dirs and config | `cfa-prep init`                          |
+| `home`                       | Show the data root (home) directory path | `cfa-prep home`                    |
 | `search <keyword>`           | Search the knowledge base    | `cfa-prep search "FCFE"`                       |
 | `search --regex`             | Regex search                 | `cfa-prep search "FCF[EF]" --regex`            |
 | `quiz --level L1`            | L1 quiz (10 mixed questions) | `cfa-prep quiz --level L1`                     |
