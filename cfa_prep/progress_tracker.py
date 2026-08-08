@@ -278,40 +278,135 @@ class ProgressTracker:
     ) -> None:
         """
         Interactively update the progress.
-        Guides the user to enter mastered and fuzzy knowledge points.
-        If a Curriculum instance is provided, each entry is validated against
-        the curriculum and auto-corrected on a confident match.
+        Supports free-text entry (module names, topic names) and browsing
+        the curriculum to select topics by number.
+        If the user aborts (Ctrl+C), progress is NOT saved.
         """
         print("\n" + "=" * 50)
         print("  📊 Update Study Progress")
         print("=" * 50)
 
-        print("\nEnter the knowledge points you have mastered (one per line, blank line to finish):")
-        print("  (You can also enter a module name to mark all its topics at once.)")
-        mastered: list[str] = []
+        try:
+            print("\nEnter mastered knowledge points (one per line, blank line to finish):")
+            print("  • Type a topic or module name, or `?` to browse the curriculum.")
+            mastered: list[str] = self._collect_entries(curriculum, level)
+
+            print("\nEnter fuzzy knowledge points (one per line, blank line to finish):")
+            print("  • Type a topic or module name, or `?` to browse the curriculum.")
+            fuzzy: list[str] = self._collect_entries(curriculum, level)
+
+            self.update(
+                mastered=mastered,
+                fuzzy=fuzzy,
+                mistake_stats=mistake_stats,
+            )
+            print(f"\n✅ Progress updated to: {self.progress_file}")
+        except (KeyboardInterrupt, EOFError):
+            print("\n\n⚠️  Aborted — progress was NOT saved.")
+
+    def _collect_entries(self, curriculum, level: str) -> list[str]:
+        """Collect progress entries line by line; `?` enters curriculum browse mode."""
+        entries: list[str] = []
         while True:
             line = input("  > ").strip()
             if line == "":
                 break
-            results = self._validate_entry(line, curriculum, level)
-            mastered.extend(results)
+            if line == "?" and curriculum:
+                picked = self._browse_curriculum(curriculum, level)
+                entries.extend(picked)
+            else:
+                results = self._validate_entry(line, curriculum, level)
+                entries.extend(results)
+        return entries
 
-        print("\nEnter the knowledge points still fuzzy (one per line, blank line to finish):")
-        print("  (You can also enter a module name to mark all its topics at once.)")
-        fuzzy: list[str] = []
-        while True:
-            line = input("  > ").strip()
-            if line == "":
-                break
-            results = self._validate_entry(line, curriculum, level)
-            fuzzy.extend(results)
+    @staticmethod
+    def _browse_curriculum(curriculum, level: str) -> list[str]:
+        """
+        Interactive curriculum browser: pick subject → module → topics.
+        Returns a list of "[Subject > Module] Topic" labels for selected topics.
+        """
+        # 1. Pick subject
+        subjects = curriculum.all_subjects(level)
+        if not subjects:
+            print("     Curriculum is empty.")
+            return []
 
-        self.update(
-            mastered=mastered,
-            fuzzy=fuzzy,
-            mistake_stats=mistake_stats,
-        )
-        print(f"\n✅ Progress updated to: {self.progress_file}")
+        print("\n     Pick a subject:")
+        for i, s in enumerate(subjects, 1):
+            print(f"       [{i}] {s}")
+        choice = input("     > ").strip()
+        if not choice.isdigit():
+            return []
+        idx = int(choice) - 1
+        if idx < 0 or idx >= len(subjects):
+            return []
+        subject = subjects[idx]
+
+        # 2. Pick module(s)
+        modules = curriculum.all_modules(level, subject)
+        if not modules:
+            print(f"     No modules in {subject}.")
+            return []
+
+        print(f"\n     {subject} — pick module(s) (space-separated numbers, or 'all'):")
+        for i, m in enumerate(modules, 1):
+            print(f"       [{i}] {m}")
+        choice = input("     > ").strip().lower()
+
+        if choice == "all":
+            picked_modules = list(range(len(modules)))
+        else:
+            picked_modules = [int(n) - 1 for n in choice.split() if n.isdigit()]
+        if not picked_modules:
+            return []
+
+        # 3. For each selected module, ask: all topics or pick individually?
+        results: list[str] = []
+        data = curriculum.subject_modules(level)
+        subject_modules = data.get(subject, {})
+        for mi in picked_modules:
+            if mi < 0 or mi >= len(modules):
+                continue
+            module = modules[mi]
+            topics = subject_modules.get(module, [])
+            if not topics:
+                continue
+
+            print(f"\n     📁 {module} ({len(topics)} topics)")
+            print(f"       Add all? [y]es / [n]o (pick individually) / [s]kip")
+            choice = input("     > ").strip().lower()
+
+            if choice == "s" or choice == "skip":
+                continue
+
+            if choice == "n" or choice == "no":
+                # Show individual topics to pick
+                print(f"       Pick topic(s) (space-separated numbers, or 'all'):")
+                for i, t in enumerate(topics, 1):
+                    print(f"         [{i}] {t}")
+                pick = input("       > ").strip().lower()
+                if pick == "all":
+                    for t in topics:
+                        label = f"[{subject} > {module}] {t}"
+                        results.append(label)
+                        print(f"         ↳ {t}")
+                else:
+                    for n in pick.split():
+                        if n.isdigit():
+                            ti = int(n) - 1
+                            if 0 <= ti < len(topics):
+                                t = topics[ti]
+                                label = f"[{subject} > {module}] {t}"
+                                results.append(label)
+                                print(f"         ↳ {t}")
+            else:
+                # Default: add all
+                for t in topics:
+                    label = f"[{subject} > {module}] {t}"
+                    results.append(label)
+                    print(f"       ↳ {t}")
+        print(f"     → Added {len(results)} topics total.")
+        return results
 
     @staticmethod
     def _validate_entry(text: str, curriculum, level: str) -> list[str]:
