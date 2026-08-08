@@ -103,44 +103,39 @@ def cmd_init(_args) -> None:
     print()
 
 
-def cmd_home(_args) -> None:
+def cmd_home(args) -> None:
     """
-    Show the resolved data root (home) directory path.
+    Show the resolved data root (home) directory path, or set it to a new path.
+
+    Usage:
+        cfa-prep home              # show current home
+        cfa-prep home --set <path> # set home to an existing folder
     """
+    if args.set_path:
+        target = Path(args.set_path).expanduser()
+        if not target.exists():
+            print(f"❌ Path does not exist: {target}")
+            print("   Use 'cfa-prep init' to create a fresh data root, or point to an existing folder.")
+            return
+        if not target.is_dir():
+            print(f"❌ Not a directory: {target}")
+            return
+
+        expected = ["kb", "mistakes", "progress", "flashcards", "templates", "config"]
+        has_subdirs = any((target / d).is_dir() for d in expected)
+
+        resolved = set_data_root(target)
+        print(f"✅ Data root (home) set to: {resolved}")
+        print(f"   Persisted in: {Path.home() / '.cfa-prep' / 'config' / 'settings.json'}")
+        if not has_subdirs:
+            print("   ℹ️  This folder doesn't look like a cfa-prep data root yet.")
+            print("      Run 'cfa-prep init' (with this home) to create the standard structure.")
+        else:
+            print("   ℹ️  Existing cfa-prep structure detected; the folder is ready to use.")
+        return
+
     root = get_data_root()
     print(root)
-
-
-def cmd_set_home(args) -> None:
-    """
-    Set the data root (home) to an existing folder and persist it in settings.json.
-    """
-    if not args.path:
-        print("❌ Please provide a folder path: cfa-prep set-home <path>")
-        return
-
-    target = Path(args.path).expanduser()
-    if not target.exists():
-        print(f"❌ Path does not exist: {target}")
-        print("   Use 'cfa-prep init' to create a fresh data root, or point to an existing folder.")
-        return
-    if not target.is_dir():
-        print(f"❌ Not a directory: {target}")
-        return
-
-    # Validate it looks like a cfa-prep data root (has expected subfolders) OR is empty.
-    # Allow any existing folder, but warn if it doesn't look like a data root yet.
-    expected = ["kb", "mistakes", "progress", "flashcards", "templates", "config"]
-    has_subdirs = any((target / d).is_dir() for d in expected)
-
-    resolved = set_data_root(target)
-    print(f"✅ Data root (home) set to: {resolved}")
-    print(f"   Persisted in: {Path.home() / '.cfa-prep' / 'config' / 'settings.json'}")
-    if not has_subdirs:
-        print("   ℹ️  This folder doesn't look like a cfa-prep data root yet.")
-        print("      Run 'cfa-prep init' (with this home) to create the standard structure.")
-    else:
-        print("   ℹ️  Existing cfa-prep structure detected; the folder is ready to use.")
 
 
 def cmd_search(args) -> None:
@@ -375,7 +370,7 @@ def main():
 Examples:
   cfa-prep init                          Initialize the project
   cfa-prep home                          Show the data root (home) path
-  cfa-prep set-home /path/to/folder      Set the data root to an existing folder
+  cfa-prep home --set /path/to/folder     Set the data root to an existing folder
   cfa-prep search "FCFE"                 Search the knowledge base
   cfa-prep search "FCFE" --regex         Use regex search
   cfa-prep quiz --level L1               Start L1 quizzing
@@ -401,11 +396,9 @@ Data root (default ~/.cfa-prep) can be set via:
     _ = subparsers.add_parser("init", help="Initialize the data root directories and config")
 
     # home command
-    _ = subparsers.add_parser("home", help="Show the data root (home) directory path")
-
-    # set-home command
-    p_set_home = subparsers.add_parser("set-home", help="Set the data root (home) to an existing folder")
-    _ = p_set_home.add_argument("path", help="path to an existing folder to use as the data root")
+    p_home = subparsers.add_parser("home", help="Show or set the data root (home) directory")
+    _ = p_home.add_argument("--set", dest="set_path", metavar="PATH",
+                            help="set the data root to an existing folder")
 
     # add-mistake command
     _ = subparsers.add_parser("add-mistake", help="Interactively log a mistake")
@@ -459,7 +452,6 @@ Data root (default ~/.cfa-prep) can be set via:
     commands = {
         "init": cmd_init,
         "home": cmd_home,
-        "set-home": cmd_set_home,
         "search": cmd_search,
         "quiz": cmd_quiz,
         "add-mistake": cmd_add_mistake,
