@@ -22,6 +22,7 @@ from .utils import (
     get_data_root,
     get_data_dir,
     set_data_root,
+    load_settings,
     save_settings,
     print_header,
     print_section,
@@ -196,9 +197,13 @@ def cmd_quiz(args) -> None:
 def cmd_add_mistake(_args) -> None:
     """
     Interactively log a mistake.
+    Subject input is validated against the curriculum when available.
     """
     analyzer = MistakeAnalyzer()
-    analyzer.add_mistake_interactive()
+    curriculum = Curriculum()
+    settings = load_settings()
+    level = settings.get("level", "L1")
+    analyzer.add_mistake_interactive(curriculum=curriculum, level=level)
 
 
 def cmd_recap(args) -> None:
@@ -208,14 +213,26 @@ def cmd_recap(args) -> None:
     tracker = ProgressTracker()
     analyzer = MistakeAnalyzer()
 
+    if args.remove:
+        # Interactive removal of progress entries
+        print_header("📊 Remove Progress Entries")
+        tracker.remove_interactive()
+        return
+
     if args.update:
-        # Interactive update
+        # Interactive update with curriculum validation
+        curriculum = Curriculum()
+        settings = load_settings()
+        level = settings.get("level", "L1")
         stats = analyzer.get_mistake_stats()
-        tracker.interactive_update(mistake_stats=stats)
+        tracker.interactive_update(mistake_stats=stats, curriculum=curriculum, level=level)
     else:
         # Display only
+        settings = load_settings()
+        level = settings.get("level", "L1")
+        curriculum = Curriculum()
         print_header("📊 Study Progress Overview")
-        tracker.show()
+        tracker.display_structured(level=level, curriculum=curriculum)
 
         print_section("Mistake Statistics")
         stats = analyzer.get_mistake_stats()
@@ -366,6 +383,7 @@ Examples:
   cfa-prep add-mistake                   Log a mistake
   cfa-prep recap                         View progress
   cfa-prep recap --update                Update progress
+  cfa-prep recap --remove                Remove progress entries
   cfa-prep flashcard --subject FRA       Generate FRA flashcards
   cfa-prep flashcard --anki              Export Anki CSV
   cfa-prep ips personal                  Generate a personal IPS template
@@ -407,6 +425,7 @@ Data root (default ~/.cfa-prep) can be set via:
     # recap command
     p_recap = subparsers.add_parser("recap", help="View/update study progress")
     _ = p_recap.add_argument("--update", action="store_true", help="interactively update progress")
+    _ = p_recap.add_argument("--remove", action="store_true", help="interactively remove progress entries")
 
     # flashcard command
     p_flash = subparsers.add_parser("flashcard", help="Generate flashcards")

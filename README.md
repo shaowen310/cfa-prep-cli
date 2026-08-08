@@ -83,6 +83,7 @@ cfa-prep search "FCFE"
 | `add-mistake`                | Interactive mistake entry    | `cfa-prep add-mistake`                         |
 | `recap`                      | View study progress          | `cfa-prep recap`                               |
 | `recap --update`             | Update study progress        | `cfa-prep recap --update`                      |
+| `recap --remove`             | Remove progress entries      | `cfa-prep recap --remove`                      |
 | `flashcard --subject FRA`    | Generate flashcards for a subject | `cfa-prep flashcard --subject FRA`         |
 | `flashcard --anki`           | Export Anki CSV              | `cfa-prep flashcard --anki`                    |
 | `ips personal`               | Generate personal IPS template | `cfa-prep ips personal`                       |
@@ -178,7 +179,7 @@ Data files are stored under the configured data root (`~/.cfa-prep` by default):
 ~/.cfa-prep/
 ├── kb/                       # Knowledge files (.txt) and curriculum.json
 ├── mistakes/                 # Mistake log (auto-generated)
-├── progress/                 # Progress files (auto-generated)
+├── progress/                 # Progress file (progress.json, auto-generated)
 ├── flashcards/               # Flashcards (auto-generated)
 ├── templates/                # IPS templates
 └── config/

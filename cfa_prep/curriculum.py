@@ -192,11 +192,14 @@ class Curriculum:
         data = self.load()
         return list(data.get(level.upper(), {}).keys())
 
-    def subject_modules(self, level: str = "L1", subject: str = "") -> dict[str, list[str]]:
-        """Return the {module: [topics]} dict for a subject, or {} if absent."""
-        if not subject:
-            return {}
+    def subject_modules(
+        self, level: str = "L1", subject: str = ""
+    ) -> dict[str, dict[str, list[str]]] | dict[str, list[str]]:
+        """Return the {module: [topics]} dict for a subject, or the full
+        {subject: {module: [topics]}} dict for the level when no subject is given."""
         data = self.load()
+        if not subject:
+            return data.get(level.upper(), {})
         return data.get(level.upper(), {}).get(subject, {})
 
     def all_modules(self, level: str = "L1", subject: str = "") -> list[str]:
@@ -299,3 +302,100 @@ class Curriculum:
             return candidates[0]
 
         return None
+
+    # --- interactive validation helpers ------------------------------------
+
+    def resolve_label(self, text: str, level: str = "L1") -> str | None:
+        """
+        Resolve a free-text entry against the full curriculum topic labels
+        ("[Subject > Module] Topic").
+
+        Matches in order:
+          1. Exact (case-insensitive) against a full label.
+          2. Fuzzy match (subsequence) against a full label (single match only).
+          3. Exact match against just the topic portion (within any module).
+
+        Returns the resolved label string, or None if no confident match.
+        """
+        cleaned = text.strip().lower()
+        if not cleaned:
+            return None
+
+        labels = self.all_topics(level)
+        if not labels:
+            return None
+
+        # 1. exact label match
+        for label in labels:
+            if label.lower() == cleaned:
+                return label
+
+        # 2. fuzzy label match (single candidate)
+        fuzzy_candidates = [lbl for lbl in labels if fuzzy_match(cleaned, lbl)]
+        if len(fuzzy_candidates) == 1:
+            return fuzzy_candidates[0]
+
+        # 3. match against topic portion only (the part after "] ")
+        topic_candidates: list[str] = []
+        for label in labels:
+            topic = label[label.rfind("]") + 2:] if "]" in label else label
+            if topic.strip().lower() == cleaned:
+                return label
+            if fuzzy_match(cleaned, topic):
+                topic_candidates.append(label)
+        if len(topic_candidates) == 1:
+            return topic_candidates[0]
+
+        return None
+
+    def resolve_subject(self, text: str, level: str = "L1") -> str | None:
+        """
+        Resolve a typed subject name against the curriculum.
+        Extends normalize_subject with fuzzy fallback across all loaded subjects.
+        """
+        result = self.normalize_subject(text, level)
+        if result:
+            return result
+
+        # Last resort: fuzzy match against all loaded subjects (not just aliases)
+        cleaned = text.strip().lower()
+        subjects = self.all_subjects(level)
+        candidates = [s for s in subjects if fuzzy_match(cleaned, s)]
+        if len(candidates) == 1:
+            return candidates[0]
+
+        return None
+
+    def resolve_module(self, text: str, level: str = "L1") -> list[str]:
+        """
+        If the input matches a module name, return all "[Subject > Module] Topic"
+        labels for that module. Supports:
+          * Exact match against a module name across all subjects.
+          * Fuzzy match against a module name (single candidate only).
+
+        Returns the full list of topic labels for the matched module, or [] if
+        the input is not a module name.
+        """
+        cleaned = text.strip().lower()
+        if not cleaned:
+            return []
+
+        data = self.load()
+        subjects = data.get(level.upper(), {})
+
+        # Collect all module names with their topics
+        candidates: list[tuple[str, str, list[str]]] = []
+        for subject, modules in subjects.items():
+            for module, topics in modules.items():
+                if module.lower() == cleaned:
+                    return [
+                        f"[{subject} > {module}] {t}" for t in topics
+                    ]
+                if fuzzy_match(cleaned, module):
+                    candidates.append((subject, module, topics))
+
+        if len(candidates) == 1:
+            subject, module, topics = candidates[0]
+            return [f"[{subject} > {module}] {t}" for t in topics]
+
+        return []

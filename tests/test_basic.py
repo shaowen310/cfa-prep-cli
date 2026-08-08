@@ -25,7 +25,6 @@ from cfa_prep.utils import (
     get_data_dir,
     fuzzy_match,
     extract_context,
-    today_str,
     today_iso,
     load_settings,
     save_settings,
@@ -83,11 +82,37 @@ def test_mistake_analyzer():
 
 
 def test_progress_tracker():
-    """Test the progress tracker"""
-    tracker = ProgressTracker()
-    content = tracker.load()
-    assert "# CFA Study Progress" in content
-    print(f"  ✅ Progress tracker is fine")
+    """Test the progress tracker stores and retrieves JSON data"""
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as tmp:
+        os.environ["CFA_PREP_HOME"] = tmp
+        try:
+            tracker = ProgressTracker()
+            # Fresh load returns default structure
+            data = tracker.load()
+            assert "mastered" in data
+            assert "fuzzy" in data
+            assert data["mastered"] == []
+            assert data["fuzzy"] == []
+            # Update with entries
+            tracker.update(mastered=["[Econ > Module 1] Topic A"], fuzzy=["[Econ > Module 2] Topic B"])
+            loaded = tracker.load()
+            assert loaded["mastered"] == ["[Econ > Module 1] Topic A"]
+            assert loaded["fuzzy"] == ["[Econ > Module 2] Topic B"]
+            # Deduplication
+            tracker.update(mastered=["[Econ > Module 1] Topic A"])
+            assert len(tracker.load()["mastered"]) == 1
+            # Remove entries
+            _ = tracker.remove_entries({0, 1})
+            assert tracker.load()["mastered"] == []
+            assert tracker.load()["fuzzy"] == []
+            # get_key_points_to_review returns fuzzy only
+            tracker.update(fuzzy=["[Econ > Module 2] Topic B"])
+            assert tracker.get_key_points_to_review() == ["[Econ > Module 2] Topic B"]
+            print(f"  ✅ Progress tracker is fine")
+        finally:
+            _ = os.environ.pop("CFA_PREP_HOME", None)
 
 
 def test_ips_builder():
@@ -112,7 +137,7 @@ def test_ips_builder():
 def test_quiz_engine():
     """Test the quiz engine"""
     engine = QuizEngine()
-    topics = engine._generate_l1_quiz()
+    topics = engine._generate_l1_quiz()  # pyright: ignore[reportPrivateUsage]
     assert len(topics) <= 10
     print(f"  ✅ Quiz engine is fine (L1 question count: {len(topics)})")
 
@@ -160,7 +185,7 @@ def test_curriculum_seed_and_load():
             assert c.seed() is False, "Second seed should be a no-op"
             print(f"  ✅ Curriculum seed + load is fine")
         finally:
-            os.environ.pop("CFA_PREP_HOME", None)
+            _ = os.environ.pop("CFA_PREP_HOME", None)
 
 
 def test_curriculum_import_nested_modules():
@@ -180,7 +205,7 @@ def test_curriculum_import_nested_modules():
         os.environ["CFA_PREP_HOME"] = tmp
         try:
             src = Path(tmp) / "nested.json"
-            src.write_text(json.dumps(nested), encoding="utf-8")
+            _ = src.write_text(json.dumps(nested), encoding="utf-8")
             c = Curriculum()
             c.import_file(str(src))
             # Modules are preserved as the internal grouping; topics carry module labels
@@ -190,9 +215,28 @@ def test_curriculum_import_nested_modules():
             assert "[Economics > Module 2: Policy] 2.01 C" in topics
             # Module names are queryable per subject
             assert c.all_modules("L1", "Economics") == ["Module 1: Intro", "Module 2: Policy"]
+            # resolve_label: fuzzy match on topic portion
+            resolved = c.resolve_label("1.01 A", "L1")
+            assert resolved is not None
+            assert "1.01 A" in resolved
+            # resolve_label: exact full-label match
+            assert c.resolve_label("[Economics > Module 1: Intro] 1.01 A", "L1") is not None
+            # resolve_subject: alias
+            assert c.resolve_subject("econ", "L1") == "Economics"
+            # resolve_module: exact match expands all topics
+            module_topics = c.resolve_module("Module 1: Intro", "L1")
+            assert len(module_topics) == 2
+            assert "[Economics > Module 1: Intro] 1.01 A" in module_topics
+            assert "[Economics > Module 1: Intro] 1.02 B" in module_topics
+            # resolve_module: fuzzy match
+            fuzzy_module = c.resolve_module("Module 2", "L1")
+            assert len(fuzzy_module) == 1
+            assert "[Economics > Module 2: Policy] 2.01 C" in fuzzy_module
+            # resolve_module: no match returns empty
+            assert c.resolve_module("Nonexistent Module", "L1") == []
             print(f"  ✅ Curriculum nested-module import is fine ({len(topics)} topics)")
         finally:
-            os.environ.pop("CFA_PREP_HOME", None)
+            _ = os.environ.pop("CFA_PREP_HOME", None)
 
 
 def test_curriculum_normalize_subject():
@@ -220,19 +264,19 @@ def test_quiz_uses_curriculum():
         os.environ["CFA_PREP_HOME"] = tmp
         try:
             c = Curriculum()
-            c.seed()
+            _ = c.seed()
             src = Path(tmp) / "cur.json"
-            src.write_text(json.dumps(data), encoding="utf-8")
+            _ = src.write_text(json.dumps(data), encoding="utf-8")
             c.import_file(str(src))
             engine = QuizEngine()
-            topics = engine._get_all_topics("L1")
+            topics = engine._get_all_topics("L1")  # pyright: ignore[reportPrivateUsage]
             assert len(topics) > 0
             # Flat imports get wrapped under the default module "General"
             assert "[Economics > General] Demand and supply" in topics, \
                 "L1 topics should come from the imported curriculum"
             print(f"  ✅ Quiz engine uses curriculum ({len(topics)} L1 topics)")
         finally:
-            os.environ.pop("CFA_PREP_HOME", None)
+            _ = os.environ.pop("CFA_PREP_HOME", None)
 
 
 def test_data_root_env_override():
@@ -247,7 +291,7 @@ def test_data_root_env_override():
             assert root.exists(), "data root directory was not created"
             print(f"  ✅ Data root honors CFA_PREP_HOME: {root}")
         finally:
-            os.environ.pop("CFA_PREP_HOME", None)
+            _ = os.environ.pop("CFA_PREP_HOME", None)
 
 
 def run_all_tests():

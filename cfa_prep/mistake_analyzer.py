@@ -132,11 +132,15 @@ class MistakeAnalyzer:
             print("\n⚠️  Input cancelled.")
             return ""
 
-    def add_mistake_interactive(self) -> None:
+    def add_mistake_interactive(
+        self, curriculum=None, level: str = "L1"
+    ) -> None:
         """
         Interactively log a mistake.
         Guides the user through entering mistake details step by step.
         Exits gracefully if the user stops inputting (Ctrl+C / Ctrl+D).
+        If a Curriculum instance is provided, the subject is validated and
+        auto-corrected against the curriculum.
         """
         print("\n" + "=" * 50)
         print("  📝 Log a Mistake")
@@ -146,6 +150,15 @@ class MistakeAnalyzer:
         if not subject:
             print("❌ Subject cannot be empty")
             return
+
+        # Validate / auto-correct subject against curriculum
+        if curriculum:
+            resolved = curriculum.resolve_subject(subject, level)
+            if resolved and resolved.lower() != subject.lower():
+                print(f"     ↳ Corrected subject to: {resolved}")
+                subject = resolved
+            elif not resolved:
+                print(f"     ⚠️  Subject not found in curriculum, kept as-is.")
 
         print("\nEnter the question description (enter a blank line to finish):")
         question_lines = []
