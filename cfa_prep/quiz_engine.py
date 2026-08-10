@@ -7,7 +7,6 @@ Purpose: Provide quiz modes for the three CFA exam levels (L1/L2/L3),
 """
 
 import random
-from typing import List, Dict, Optional, Any
 
 from .mistake_analyzer import MistakeAnalyzer
 from .progress_tracker import ProgressTracker
@@ -22,34 +21,34 @@ class QuizEngine:
     """
 
     def __init__(self):
-        self.mistake_analyzer = MistakeAnalyzer()
-        self.progress_tracker = ProgressTracker()
-        self.curriculum = Curriculum()
-        self.score = 0
-        self.total = 0
+        self.mistake_analyzer: MistakeAnalyzer = MistakeAnalyzer()
+        self.progress_tracker: ProgressTracker = ProgressTracker()
+        self.curriculum: Curriculum = Curriculum()
+        self.score: int = 0
+        self.total: int = 0
 
-    def _get_all_topics(self, level: str = "L1") -> List[str]:
+    def _get_all_topics(self, level: str = "L1") -> list[str]:
         """
         Get all knowledge points across all subjects and modules for a level.
         Drawn from the imported curriculum; returns [] if the curriculum is empty.
         """
         return self.curriculum.all_topics(level.upper())
 
-    def _get_mistake_topics(self) -> List[str]:
+    def _get_mistake_topics(self) -> list[str]:
         """Extract knowledge points from the mistake log for priority question selection"""
         records = self.mistake_analyzer.get_recent_mistakes(limit=20)
-        topics = []
+        topics: list[str] = []
         for r in records:
             kp = r.get("key_point", "")
             if kp:
                 topics.append(kp)
         return topics
 
-    def _get_fuzzy_topics(self) -> List[str]:
+    def _get_fuzzy_topics(self) -> list[str]:
         """Extract fuzzy knowledge points from progress tracking"""
         return self.progress_tracker.get_key_points_to_review()
 
-    def _generate_l1_quiz(self, level: str = "L1") -> List[str]:
+    def _generate_l1_quiz(self, level: str = "L1") -> list[str]:
         """
         Generate L1 questions (10 mixed single-choice questions).
         40% from mistakes/fuzzy knowledge points, 60% random.
@@ -106,7 +105,7 @@ class QuizEngine:
         all_topics = self._get_all_topics(level)
         return [t for t in all_topics if t.startswith(f"[{subject} >")]
 
-    def _generate_l2_quiz(self, level: str = "L2") -> Dict[str, Any]:
+    def _generate_l2_quiz(self, level: str = "L2") -> dict[str, list[str] | str]:
         """
         Generate L2 questions (1 vignette + 3 sub-questions).
         A vignette is a case scenario accompanied by 3 related questions.
@@ -136,7 +135,7 @@ class QuizEngine:
             "format": "1 case scenario + 3 multiple-choice questions",
         }
 
-    def _generate_l3_quiz(self) -> Dict[str, Any]:
+    def _generate_l3_quiz(self) -> dict[str, str]:
         """
         Generate L3 questions (1 IPS scenario or behavioral finance scenario + essay questions).
         """
@@ -169,7 +168,7 @@ class QuizEngine:
         elif level == "L2":
             self._do_l2_quiz(level)
         elif level == "L3":
-            self._do_l3_quiz(level)
+            self._do_l3_quiz()
         else:
             print(f"❌ Unsupported level: {level}, please use L1/L2/L3")
 
@@ -186,7 +185,7 @@ class QuizEngine:
             print(f"{'─' * 50}")
 
             # Generate the question prompt
-            self._generate_question_prompt(topic, i)
+            self._generate_question_prompt(topic)
 
             # User answer
             print("\nPlease choose an answer (or enter 's' to skip, 'q' to quit):")
@@ -203,7 +202,7 @@ class QuizEngine:
                 self.total += 1
                 # Simulated scoring (in practice, compare with the correct answer)
                 print(f"\n  ✅ Answer recorded: {answer}")
-                print(f"  💡 Check against the standard answer; if wrong, use the 'add-mistake' command to log it.")
+                print(f"  💡 Check against the standard answer; if wrong, use the 'mistake -a' command to log it.")
                 self.score += 1  # Placeholder: should judge correctness in practice
             else:
                 print("⚠️ Invalid input, please choose A/B/C/D/S/Q")
@@ -236,7 +235,7 @@ class QuizEngine:
 
         self._show_quiz_summary()
 
-    def _do_l3_quiz(self, level: str = "L3") -> None:
+    def _do_l3_quiz(self) -> None:
         """Run the L3 quiz flow"""
         quiz = self._generate_l3_quiz()
         print(f"\n📋 Scenario type: {quiz['scenario']}")
@@ -254,18 +253,17 @@ class QuizEngine:
         self.total = 1
         self.score = 1  # Placeholder
         print("\n  ✅ Your response has been recorded.")
-        print("  💡 Self-assess against the standard answer; if improvement is needed, use 'add-mistake' to log weak points.")
+        print("  💡 Self-assess against the standard answer; if improvement is needed, use 'mistake -a' to log weak points.")
 
         self._show_quiz_summary()
 
-    def _generate_question_prompt(self, topic: str, question_num: int) -> None:
+    def _generate_question_prompt(self, topic: str) -> None:
         """
         Generate a question prompt based on the knowledge point.
         In practice, users should select the corresponding question from a question bank.
 
         Parameters:
             topic: knowledge point description
-            question_num: question number
         """
         # Provide direction hints for the question
         print(f"\n  📖 Please select a question related to「{topic}」from the question bank for practice.")
@@ -283,6 +281,6 @@ class QuizEngine:
         print(f"  Questions completed: {self.total}")
         print(f"  💡 Check your accuracy rate against the standard answers.")
         print(f"  📝 For any mistakes, log them with the following command:")
-        print(f"     python main.py add-mistake")
+        print(f"     python main.py mistake -a")
         print(f"  📊 View progress:")
         print(f"     python main.py recap")

@@ -3,7 +3,7 @@
 CFA Prep CLI - Main entry point (CLI)
 Author: CodeBuddy AI Assistant
 Purpose: Provide a command-line interface that orchestrates all submodule functionality.
-         Supports the search / quiz / add-mistake / recap / flashcard / ips / init commands.
+         Supports the search / quiz / mistake / recap / flashcard / ips / init commands.
 """
 
 import os
@@ -189,16 +189,29 @@ def cmd_quiz(args) -> None:
     engine.start_quiz(level=level)
 
 
-def cmd_add_mistake(_args) -> None:
+def cmd_mistake(args) -> None:
     """
-    Interactively log a mistake.
-    Subject input is validated against the curriculum when available.
+    Log and view mistakes.
+    With -a/--add, interactively log a new mistake.
+    Without flags, show recent mistakes.
     """
     analyzer = MistakeAnalyzer()
-    curriculum = Curriculum()
-    settings = load_settings()
-    level = settings.get("level", "L1")
-    analyzer.add_mistake_interactive(curriculum=curriculum, level=level)
+
+    if args.add:
+        curriculum = Curriculum()
+        settings = load_settings()
+        level = settings.get("level", "L1")
+        analyzer.add_mistake_interactive(curriculum=curriculum, level=level)
+        return
+
+    # Default: show recent mistakes
+    print_header("📝 Recent Mistakes")
+    recent = analyzer.get_recent_mistakes(limit=10)
+    if not recent:
+        print("  No mistakes logged yet.")
+        return
+    for m in recent:
+        print(f"  [{m['date']}] {m['subject']} — {m['key_point']}")
 
 
 def cmd_recap(args) -> None:
@@ -375,7 +388,7 @@ Examples:
   cfa-prep search "FCFE" --regex         Use regex search
   cfa-prep quiz --level L1               Start L1 quizzing
   cfa-prep quiz --level L2               Start L2 quizzing
-  cfa-prep add-mistake                   Log a mistake
+  cfa-prep mistake -a                    Log a mistake
   cfa-prep recap                         View progress
   cfa-prep recap --update                Update progress
   cfa-prep recap --remove                Remove progress entries
@@ -400,8 +413,9 @@ Data root (default ~/.cfa-prep) can be set via:
     _ = p_home.add_argument("--set", dest="set_path", metavar="PATH",
                             help="set the data root to an existing folder")
 
-    # add-mistake command
-    _ = subparsers.add_parser("add-mistake", help="Interactively log a mistake")
+    # mistake command
+    p_mistake = subparsers.add_parser("mistake", help="Log and view mistakes")
+    _ = p_mistake.add_argument("-a", "--add", action="store_true", help="interactively log a mistake")
 
     # search command
     p_search = subparsers.add_parser("search", help="Search the knowledge base")
@@ -454,7 +468,7 @@ Data root (default ~/.cfa-prep) can be set via:
         "home": cmd_home,
         "search": cmd_search,
         "quiz": cmd_quiz,
-        "add-mistake": cmd_add_mistake,
+        "mistake": cmd_mistake,
         "recap": cmd_recap,
         "flashcard": cmd_flashcard,
         "ips": cmd_ips,
