@@ -7,10 +7,21 @@ Purpose: Provide quiz modes for the three CFA exam levels (L1/L2/L3),
 """
 
 import random
+from typing import TypedDict
 
 from .mistake_analyzer import MistakeAnalyzer
 from .progress_tracker import ProgressTracker
 from .curriculum import Curriculum
+
+
+class MistakeQuestion(TypedDict):
+    """A logged L1 MCQ mistake, replayable as a quiz question."""
+    subject: str
+    module: str
+    key_point: str
+    question: str
+    options: list[str]
+    correct: str
 
 
 class QuizEngine:
@@ -43,6 +54,90 @@ class QuizEngine:
             if kp:
                 topics.append(kp)
         return topics
+
+    def _get_mistake_questions(self, limit: int = 10) -> list[MistakeQuestion]:
+        """
+        Fetch logged L1 MCQ mistakes that have full question/options data,
+        so the quiz can replay them as real, checkable questions.
+        """
+        records = self.mistake_analyzer.get_recent_mistakes(limit=50)
+        questions: list[MistakeQuestion] = []
+        for r in records:
+            options = r.get("options") or []
+            correct = r.get("correct_answer", "")
+            question = r.get("question", "")
+            if len(options) >= 2 and question and correct:
+                questions.append(MistakeQuestion(
+                    subject=str(r.get("subject", "")),
+                    module=str(r.get("module", "")),
+                    key_point=str(r.get("key_point", "")),
+                    question=question,
+                    options=[str(o) for o in options],
+                    correct=str(correct),
+                ))
+            if len(questions) >= limit:
+                break
+        return questions
+
+    def _run_mistake_mcq(self, item: MistakeQuestion) -> bool:
+        """
+        Replay a logged MCQ mistake with shuffled options and check the answer.
+        Returns True if the user answered correctly, False otherwise.
+        """
+        options = item["options"]
+        correct_text = item["correct"]
+        # Shuffle so the correct answer is not always at the same position
+        random.shuffle(options)
+        labels = "ABC"
+
+        print(f"{'─' * 50}")
+        print(f"  🔁 Mistake review")
+        subject = item.get("subject", "")
+        module = item.get("module", "")
+        label = f"{subject} > {module}" if subject and module else subject or "Mistake"
+        print(f"  Source: {label}")
+        print(f"  Topic: {item.get('key_point', '')}")
+        print(f"{'─' * 50}")
+        print(f"\n  {item['question']}")
+        for i, opt in enumerate(options):
+            print(f"    {labels[i]}. {opt}")
+
+        answer = input("\nYour answer (A/B/C): ").strip().upper()
+        if answer == "Q":
+            print("👋 Quiz exited")
+            raise KeyboardInterrupt
+
+        if answer in labels:
+            chosen = options[labels.index(answer)]
+            correct = chosen == correct_text
+            self.total += 1
+            if correct:
+                print(f"\n  ✅ Correct! ({labels[labels.index(answer)]}. {chosen})")
+                self.score += 1
+            else:
+                correct_label = labels[options.index(correct_text)]
+                print(f"\n  ❌ Incorrect. Correct answer: {correct_label}. {correct_text}")
+                # Auto-log the repeated mistake
+                self._auto_log_mistake(item)
+            return correct
+        print("⚠️ Invalid input, please choose A/B/C")
+        return False
+
+    def _auto_log_mistake(self, item: MistakeQuestion) -> None:
+        """Re-log a mistake that was answered incorrectly during review."""
+        _ = self.mistake_analyzer.add_mistake(
+            subject=item["subject"],
+            question=item["question"],
+            user_answer="",
+            correct_answer=item["correct"],
+            category="Concept confusion",
+            key_point=item["key_point"],
+            correct_conclusion="",
+            source=f"{item['subject']} > {item['module']}",
+            module_name=item["module"],
+            level="L1",
+            options=item["options"],
+        )
 
     def _get_fuzzy_topics(self) -> list[str]:
         """Extract fuzzy knowledge points from progress tracking"""
@@ -174,8 +269,21 @@ class QuizEngine:
 
     def _do_l1_quiz(self, level: str = "L1") -> None:
         """Run the L1 quiz flow"""
+        # First replay logged mistakes as real MCQ questions
+        mistake_questions = self._get_mistake_questions()
+        if mistake_questions:
+            print(f"\n🔁 {len(mistake_questions)} mistake review question(s) first\n")
+            for item in mistake_questions:
+                try:
+                    _ = self._run_mistake_mcq(item)
+                except KeyboardInterrupt:
+                    print("👋 Quiz exited")
+                    self._show_quiz_summary()
+                    return
+
+        # Then run the regular topic questions
         topics = self._generate_l1_quiz(level)
-        print(f"\n📋 {len(topics)} questions total (mixed knowledge points)")
+        print(f"\n📋 {len(topics)} regular questions")
         print("Answer each question based on the knowledge point; your responses will be recorded.\n")
 
         for i, topic in enumerate(topics, 1):
