@@ -144,7 +144,7 @@ def cmd_search(args) -> None:
     """
     if not args.keyword:
         print("❌ Please provide a search keyword")
-        print("Usage: python main.py search <keyword>")
+        print("Usage: cfa-prep search <keyword>")
         return
 
     print_header(f"🔍 Search: {args.keyword}")
@@ -266,7 +266,7 @@ def cmd_recap(args) -> None:
             for subj, count in sorted(subjects.items(), key=lambda x: x[1], reverse=True):
                 print(f"    {subj}: {count} questions")
 
-        print(f"\n💡 Use 'python main.py recap --update' to update progress")
+        print(f"\n💡 Use 'cfa-prep recap --update' to update progress")
 
 
 def cmd_flashcard(args) -> None:
@@ -314,7 +314,7 @@ def cmd_ips(args) -> None:
         type_name = "Personal" if ips_type in ("personal", "p") else "Institutional"
         print_header(f"📄 Generate {type_name} IPS Template")
         print(f"✅ Generated: {filepath}")
-        print(f"\n💡 Use 'python main.py ips {ips_type} --show' to view the template content")
+        print(f"\n💡 Use 'cfa-prep ips {ips_type} --show' to view the template content")
 
 
 def cmd_curriculum(args) -> None:

@@ -389,6 +389,6 @@ class QuizEngine:
         print(f"  Questions completed: {self.total}")
         print(f"  💡 Check your accuracy rate against the standard answers.")
         print(f"  📝 For any mistakes, log them with the following command:")
-        print(f"     python main.py mistake -a")
+        print(f"     cfa-prep mistake -a")
         print(f"  📊 View progress:")
-        print(f"     python main.py recap")
+        print(f"     cfa-prep recap")
