@@ -271,9 +271,15 @@ def cmd_recap(args) -> None:
 
 def cmd_flashcard(args) -> None:
     """
-    Generate flashcards.
+    Generate or add flashcards.
     """
     generator = FlashcardGenerator()
+
+    if args.add:
+        settings = load_settings()
+        level = settings.get("level", "L1")
+        generator.manual_flashcard(level=level)
+        return
 
     if args.interactive:
         generator.interactive_generate()
@@ -394,6 +400,7 @@ Examples:
   cfa-prep recap --remove                Remove progress entries
   cfa-prep flashcard --subject FRA       Generate FRA flashcards
   cfa-prep flashcard --anki              Export Anki CSV
+  cfa-prep flashcard --add               Manually add a flashcard (pick subject/module from curriculum)
   cfa-prep ips personal                  Generate a personal IPS template
   cfa-prep ips inst                      Generate an institutional IPS template
 
@@ -435,10 +442,11 @@ Data root (default ~/.cfa-prep) can be set via:
     _ = p_recap.add_argument("--remove", action="store_true", help="interactively remove progress entries")
 
     # flashcard command
-    p_flash = subparsers.add_parser("flashcard", help="Generate flashcards")
+    p_flash = subparsers.add_parser("flashcard", help="Generate or manually add flashcards")
     _ = p_flash.add_argument("--subject", help="subject filter (e.g., FRA, Equity)")
     _ = p_flash.add_argument("--anki", action="store_true", help="also export in Anki CSV format")
     _ = p_flash.add_argument("--interactive", "-i", action="store_true", help="interactive generation")
+    _ = p_flash.add_argument("--add", "-a", action="store_true", help="manually add a flashcard (select subject/module from curriculum)")
 
     # ips command
     p_ips = subparsers.add_parser("ips", help="Generate IPS templates")

@@ -14,8 +14,11 @@ from .utils import (
     get_data_dir,
     write_file_text,
     today_str,
+    load_json,
+    save_json,
 )
 from .knowledge_base import KnowledgeBase
+from .curriculum import Curriculum
 
 
 class FlashcardGenerator:
@@ -28,6 +31,162 @@ class FlashcardGenerator:
     def __init__(self):
         self.flashcards_dir: Path = get_data_dir("flashcards")
         self.kb: KnowledgeBase = KnowledgeBase()
+        self.manual_file: Path = self.flashcards_dir / "manual_flashcards.json"
+        self.curriculum: Curriculum = Curriculum()
+
+    # --- manual flashcards ------------------------------------------------
+
+    def _load_manual(self) -> list[dict[str, str]]:
+        """Load the manually-added flashcards."""
+        data = load_json(self.manual_file)
+        records = data.get("cards", [])
+        return records if isinstance(records, list) else []
+
+    def _save_manual(self, cards: list[dict[str, str]]) -> None:
+        """Save the manually-added flashcards."""
+        save_json(self.manual_file, {"cards": cards})
+
+    def add_manual(
+        self,
+        question: str,
+        answer: str,
+        level: str = "L1",
+        subject: str = "",
+        module: str = "",
+    ) -> str:
+        """
+        Add a manually-created flashcard and persist it to manual_flashcards.json.
+
+        Parameters:
+            question: the flashcard front (question)
+            answer: the flashcard back (answer)
+            level: exam level (L1/L2/L3)
+            subject: subject from the curriculum (optional)
+            module: module within the subject (optional)
+
+        Returns:
+            the path of the manual flashcard file
+        """
+        cards = self._load_manual()
+        cards.append({
+            "date": today_str(),
+            "level": level,
+            "subject": subject,
+            "module": module,
+            "question": question,
+            "answer": answer,
+        })
+        self._save_manual(cards)
+        return str(self.manual_file)
+
+    def export_manual_markdown(self) -> str:
+        """
+        Export the manually-added flashcards to a Markdown file in the flashcards dir.
+        """
+        cards = self._load_manual()
+        if not cards:
+            return ""
+        out_path = self.flashcards_dir / f"{today_str()}_manual_flashcards.md"
+        lines = [f"# Manual CFA Flashcards\n", f"> Generated: {today_str()}\n\n"]
+        for i, card in enumerate(cards, 1):
+            location = " / ".join(
+                part for part in (card.get("subject", ""), card.get("module", "")) if part
+            )
+            lines.append(f"## Flashcard {i}\n")
+            lines.append(f"**Q**: {card['question']}\n\n")
+            lines.append(f"**A**: {card['answer']}\n\n")
+            if location:
+                lines.append(f"*Location: {location}*\n\n")
+            lines.append("---\n\n")
+        write_file_text(out_path, "".join(lines))
+        return str(out_path)
+
+    @staticmethod
+    def _prompt(prompt: str = "") -> str:
+        """Read a line of input, raising on Ctrl+C / EOF so the caller can abort cleanly."""
+        try:
+            return input(prompt)
+        except (KeyboardInterrupt, EOFError):
+            print()
+            raise
+
+    def _pick_subject_and_module(
+        self, level: str = "L1"
+    ) -> tuple[str, str]:
+        """
+        Browse the curriculum to pick a subject and module.
+        Returns (subject, module) or ("", "") if the curriculum is empty / user aborts.
+        """
+        subjects = self.curriculum.all_subjects(level)
+        if not subjects:
+            print("\n  ℹ️  Curriculum is empty — skipping subject/module selection.")
+            return "", ""
+
+        print("\n  Pick a subject (blank to skip):")
+        for i, s in enumerate(subjects, 1):
+            print(f"    [{i}] {s}")
+        choice = self._prompt("  > ").strip()
+        if not choice.isdigit():
+            return "", ""
+        idx = int(choice) - 1
+        if idx < 0 or idx >= len(subjects):
+            return "", ""
+        subject = subjects[idx]
+
+        modules = self.curriculum.all_modules(level, subject)
+        if not modules:
+            print(f"\n  ℹ️  No modules in {subject}.")
+            return subject, ""
+
+        print(f"\n  {subject} — pick a module (blank to skip):")
+        for i, m in enumerate(modules, 1):
+            print(f"    [{i}] {m}")
+        choice = self._prompt("  > ").strip()
+        if not choice.isdigit():
+            return subject, ""
+        idx = int(choice) - 1
+        if idx < 0 or idx >= len(modules):
+            return subject, ""
+        return subject, modules[idx]
+
+    def manual_flashcard(self, level: str = "L1") -> None:
+        """
+        Interactively add one or more flashcards by hand, optionally selecting
+        the subject and module from the curriculum. Aborts cleanly on Ctrl+C/Ctrl+D.
+        """
+        try:
+            print("\n" + "=" * 50)
+            print("  🃏 Add Manual Flashcard")
+            print("=" * 50)
+
+            while True:
+                subject, module = self._pick_subject_and_module(level)
+                location = " / ".join(p for p in (subject, module) if p)
+
+                question = self._prompt(
+                    f"\nQuestion{(' [' + location + ']') if location else ''} (blank to finish): "
+                ).strip()
+                if not question:
+                    break
+
+                answer = self._prompt("Answer: ").strip()
+                if not answer:
+                    print("  ❌ Answer cannot be empty — skipping this card.")
+                    continue
+
+                filepath = self.add_manual(
+                    question=question,
+                    answer=answer,
+                    level=level,
+                    subject=subject,
+                    module=module,
+                )
+                print(f"  ✅ Saved to: {filepath}\n")
+
+            print("\n  ✅ Finished adding manual flashcards.")
+
+        except (KeyboardInterrupt, EOFError):
+            print("\n\n⚠️  Aborted — current flashcard was NOT saved.")
 
     def extract_concepts(self, text: str) -> list[dict[str, str]]:
         """
