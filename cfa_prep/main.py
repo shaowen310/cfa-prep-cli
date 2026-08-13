@@ -269,35 +269,14 @@ def cmd_recap(args) -> None:
         print(f"\n💡 Use 'cfa-prep recap --update' to update progress")
 
 
-def cmd_flashcard(args) -> None:
+def cmd_flashcard(_args) -> None:
     """
-    Generate or add flashcards.
+    Manually add flashcards (with optional subject/module selection from the curriculum).
     """
+    settings = load_settings()
+    level = settings.get("level", "L1")
     generator = FlashcardGenerator()
-
-    if args.add:
-        settings = load_settings()
-        level = settings.get("level", "L1")
-        generator.manual_flashcard(level=level)
-        return
-
-    if args.interactive:
-        generator.interactive_generate()
-    else:
-        subject = args.subject or ""
-        print_header(f"🃏 Generate Flashcards{' - ' + subject if subject else ''}")
-
-        md_path = generator.generate_by_subject(subject)
-        if md_path:
-            print(f"✅ Markdown flashcards: {md_path}")
-
-        if args.anki:
-            csv_path = generator.export_anki_csv(subject)
-            if csv_path:
-                print(f"✅ Anki CSV: {csv_path}")
-
-        if not md_path:
-            print("⚠️ Knowledge base is empty. Please place your materials into the data/kb/ directory first.")
+    generator.manual_flashcard(level=level)
 
 
 def cmd_ips(args) -> None:
@@ -398,8 +377,6 @@ Examples:
   cfa-prep recap                         View progress
   cfa-prep recap --update                Update progress
   cfa-prep recap --remove                Remove progress entries
-  cfa-prep flashcard --subject FRA       Generate FRA flashcards
-  cfa-prep flashcard --anki              Export Anki CSV
   cfa-prep flashcard --add               Manually add a flashcard (pick subject/module from curriculum)
   cfa-prep ips personal                  Generate a personal IPS template
   cfa-prep ips inst                      Generate an institutional IPS template
@@ -442,10 +419,7 @@ Data root (default ~/.cfa-prep) can be set via:
     _ = p_recap.add_argument("--remove", action="store_true", help="interactively remove progress entries")
 
     # flashcard command
-    p_flash = subparsers.add_parser("flashcard", help="Generate or manually add flashcards")
-    _ = p_flash.add_argument("--subject", help="subject filter (e.g., FRA, Equity)")
-    _ = p_flash.add_argument("--anki", action="store_true", help="also export in Anki CSV format")
-    _ = p_flash.add_argument("--interactive", "-i", action="store_true", help="interactive generation")
+    p_flash = subparsers.add_parser("flashcard", help="Manually add a flashcard (select subject/module from curriculum)")
     _ = p_flash.add_argument("--add", "-a", action="store_true", help="manually add a flashcard (select subject/module from curriculum)")
 
     # ips command

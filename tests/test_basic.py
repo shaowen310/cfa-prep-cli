@@ -143,17 +143,40 @@ def test_quiz_engine():
 
 
 def test_flashcard_generator():
-    """Test the flashcard generator"""
-    generator = FlashcardGenerator()
-    # Test concept extraction (with mock text)
-    sample_text = """
-    FCFE（Free Cash Flow to Equity）是指公司可分配给股东的现金流。
-    DDM 即股利折现模型，是一种股票估值方法。
-    FCFF = EBIT(1-T) + Depreciation - CapEx - ΔWC
-    """
-    concepts = generator.extract_concepts(sample_text)
-    assert len(concepts) > 0
-    print(f"  ✅ Flashcard generator is fine (concepts extracted: {len(concepts)})")
+    """Test manually adding a flashcard (with curriculum subject/module selection)"""
+    import tempfile
+    import json
+
+    with tempfile.TemporaryDirectory() as tmp:
+        os.environ["CFA_PREP_HOME"] = tmp
+        try:
+            # Populate a small curriculum so subject/module selection works
+            c = Curriculum()
+            src = Path(tmp) / "cur.json"
+            _ = src.write_text(
+                json.dumps({"L1": {"Economics": {"Module 1: Intro": ["Demand"]}}}),
+                encoding="utf-8",
+            )
+            c.import_file(str(src))
+
+            generator = FlashcardGenerator()
+            filepath = generator.add_manual(
+                question="What is demand?",
+                answer="Desire backed by ability",
+                level="L1",
+                subject="Economics",
+                module="Module 1: Intro",
+            )
+            assert Path(filepath).exists()
+            cards = generator._load_manual()  # pyright: ignore[reportPrivateUsage]
+            assert len(cards) == 1
+            assert cards[0]["question"] == "What is demand?"
+            assert cards[0]["answer"] == "Desire backed by ability"
+            assert cards[0]["subject"] == "Economics"
+            assert cards[0]["module"] == "Module 1: Intro"
+            print(f"  ✅ Flashcard generator is fine (manual cards: {len(cards)})")
+        finally:
+            _ = os.environ.pop("CFA_PREP_HOME", None)
 
 
 def test_settings():
