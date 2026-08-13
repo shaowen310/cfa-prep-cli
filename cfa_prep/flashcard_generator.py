@@ -189,3 +189,86 @@ class FlashcardGenerator:
 
         except (KeyboardInterrupt, EOFError):
             print("\n\n⚠️  Aborted — current flashcard was NOT saved.")
+
+    # --- viewing flashcards ------------------------------------------------
+
+    def _pick_subject_filter(self, level: str = "L1") -> str:
+        """
+        Optionally pick a subject to filter by (blank to show all).
+        Returns the subject name, or "" for all subjects.
+        """
+        subjects = self.curriculum.all_subjects(level)
+        if not subjects:
+            return ""
+        print("\n  Filter by subject (blank for all):")
+        for i, s in enumerate(subjects, 1):
+            print(f"    [{i}] {s}")
+        print("    [0] All")
+        choice = self._prompt("  > ").strip()
+        if not choice.isdigit():
+            return ""
+        idx = int(choice) - 1
+        if idx < 0 or idx >= len(subjects):
+            return ""
+        return subjects[idx]
+
+    def view_flashcards(self, level: str = "L1") -> None:
+        """
+        Interactively review flashcards: show each question, then reveal its
+        answer or skip to the next card. Optionally filter by subject.
+        Aborts cleanly on Ctrl+C/Ctrl+D.
+        """
+        try:
+            print("\n" + "=" * 50)
+            print("  🃏 Review Flashcards")
+            print("=" * 50)
+
+            cards = self._load_manual()
+            if not cards:
+                print("\n  No flashcards yet. Add some with 'cfa-prep flashcard --add'.")
+                return
+
+            subject = self._pick_subject_filter(level)
+            if subject:
+                filtered = [c for c in cards if c.get("subject") == subject]
+                if not filtered:
+                    print(f"\n  No flashcards for subject: {subject}")
+                    return
+                cards = filtered
+
+            total = len(cards)
+            print(f"\n  {total} flashcard(s). [Enter] to reveal answer, [n] next, [q] quit.\n")
+
+            i = 0
+            while i < total:
+                card = cards[i]
+                location = " / ".join(
+                    part for part in (card.get("subject", ""), card.get("module", "")) if part
+                )
+                print(f"{'─' * 50}")
+                print(f"  [{i + 1}/{total}] Q: {card['question']}")
+                if location:
+                    print(f"      ({location})")
+                action = self._prompt("  [Enter] reveal answer, [n] next, [q] quit: ").strip().lower()
+
+                if action == "q":
+                    break
+                if action == "n":
+                    i += 1
+                    continue
+
+                # Reveal the answer
+                print(f"  A: {card['answer']}\n")
+                action = self._prompt("  [Enter] next, [b] back, [q] quit: ").strip().lower()
+                if action == "q":
+                    break
+                if action == "b":
+                    if i > 0:
+                        i -= 1
+                    continue
+                i += 1
+
+            print("\n  ✅ Finished reviewing flashcards.")
+
+        except (KeyboardInterrupt, EOFError):
+            print("\n\n⚠️  Aborted.")

@@ -86,6 +86,8 @@ cfa-prep search "FCFE"
 | `recap --remove`             | Remove progress entries      | `cfa-prep recap --remove`                      |
 | `flashcard --add`            | Manually add a flashcard (select subject/module from the curriculum) | `cfa-prep flashcard --add` |
 | `flashcard -a`               | Shorthand for `--add`        | `cfa-prep flashcard -a`                       |
+| `flashcard --review`         | Review cards (reveal answer or skip) | `cfa-prep flashcard --review`           |
+| `flashcard -r`               | Shorthand for `--review`     | `cfa-prep flashcard -r`                       |
 | `ips personal`               | Generate personal IPS template | `cfa-prep ips personal`                       |
 | `ips inst`                   | Generate institutional IPS template | `cfa-prep ips inst`                     |
 | `curriculum seed`            | Create an empty curriculum    | `cfa-prep curriculum seed`                   |
@@ -162,6 +164,24 @@ cfa-prep flashcard --add    # or: cfa-prep flashcard -a
 
 Cards are stored at `<data_root>/flashcards/flashcards.json`. You can add several cards
 in one session — after saving one, the subject/module picker is shown again.
+
+### Reviewing flashcards
+
+Review the cards you've saved — see each question, reveal the answer, or skip to the
+next card. **Running `flashcard` with no argument defaults to review** (use `--add`
+to create cards instead):
+
+```bash
+cfa-prep flashcard             # review (default)
+cfa-prep flashcard --review    # or: cfa-prep flashcard -r
+```
+
+You can optionally filter by **subject** (blank reviews all). For each card:
+
+- `[Enter]` reveals the answer (then `[Enter]` moves on)
+- `[n]` skips to the next card without revealing the answer
+- `[b]` goes back to the previous card
+- `[q]` quits the review
 
 ## Repository Layout
 

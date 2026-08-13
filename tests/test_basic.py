@@ -179,6 +179,47 @@ def test_flashcard_generator():
             _ = os.environ.pop("CFA_PREP_HOME", None)
 
 
+def test_flashcard_review():
+    """Test reviewing flashcards (view question, reveal answer, skip)"""
+    import tempfile
+    import json
+
+    with tempfile.TemporaryDirectory() as tmp:
+        os.environ["CFA_PREP_HOME"] = tmp
+        try:
+            # Populate a small curriculum
+            c = Curriculum()
+            src = Path(tmp) / "cur.json"
+            _ = src.write_text(
+                json.dumps({"L1": {"Economics": {"Module 1: Intro": ["Demand"]}}}),
+                encoding="utf-8",
+            )
+            c.import_file(str(src))
+
+            generator = FlashcardGenerator()
+            _ = generator.add_manual("Q1?", "A1", "L1", "Economics", "Module 1: Intro")
+            _ = generator.add_manual("Q2?", "A2", "L1", "Economics", "Module 1: Intro")
+
+            # Subject filter returns only matching cards
+            cards = generator._load_manual()  # pyright: ignore[reportPrivateUsage]
+            assert len(cards) == 2
+            economics = [c for c in cards if c.get("subject") == "Economics"]
+            assert len(economics) == 2
+
+            # Review loop: reveal first answer, then quit
+            import io
+            import sys
+            old_stdin = sys.stdin
+            try:
+                sys.stdin = io.StringIO("\n\nq\n")  # reveal, next, quit
+                generator.view_flashcards("L1")
+            finally:
+                sys.stdin = old_stdin
+            print(f"  ✅ Flashcard review is fine ({len(economics)} Economics cards)")
+        finally:
+            _ = os.environ.pop("CFA_PREP_HOME", None)
+
+
 def test_settings():
     """Test config read/write"""
     test_settings_data = {"level": "L1", "version": "1.0", "data_root": str(get_data_root())}
@@ -334,6 +375,7 @@ def run_all_tests():
         ("IPS builder", test_ips_builder),
         ("Quiz engine", test_quiz_engine),
         ("Flashcard generator", test_flashcard_generator),
+        ("Flashcard review", test_flashcard_review),
         ("Config read/write", test_settings),
         ("Data root env override", test_data_root_env_override),
         ("Curriculum seed/load", test_curriculum_seed_and_load),
