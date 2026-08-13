@@ -21,8 +21,16 @@ classifiers = [
 ]
 dependencies = []
 
+[project.optional-dependencies]
+dev = ["pytest>=7.0"]
+
 [project.scripts]
 cfa-prep = "cfa_prep.main:main"
 
 [tool.setuptools]
 packages = ["cfa_prep"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-q"

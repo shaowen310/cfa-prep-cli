@@ -205,6 +205,18 @@ Content of page 2 here...
 
 ## Running Tests
 
+Install pytest (once), then run it from the project root:
+
+```bash
+pip install -e .[dev]   # installs pytest as a dev dependency
+pytest
+```
+
+Pytest discovers tests in `tests/` (configured via `[tool.pytest.ini_options]`
+in `pyproject.toml`, including the project-root `pythonpath` so imports resolve).
+This is also what the VS Code Python Test Explorer uses to discover and run the
+tests. Alternatively, run the standalone script:
+
 ```bash
 python -m tests.test_basic
 ```

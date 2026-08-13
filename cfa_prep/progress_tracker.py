@@ -125,15 +125,17 @@ class ProgressTracker:
         mastered = data.get("mastered", [])
         fuzzy = data.get("fuzzy", [])
         all_entries = [(True, e) for e in mastered] + [(False, e) for e in fuzzy]
-        keep_mastered = [
-            e for i, (is_m, e) in enumerate(all_entries)
-            if not (is_m and i in indices)
-        ]
-        keep_fuzzy = [
-            e for i, (is_m, e) in enumerate(all_entries)
-            if not (is_m or i in indices)
-        ]
-        removed = len(mastered) + len(fuzzy) - len(keep_mastered) - len(keep_fuzzy)
+
+        keep: list[tuple[bool, str]] = []
+        removed = 0
+        for i, item in enumerate(all_entries):
+            if i in indices:
+                removed += 1
+            else:
+                keep.append(item)
+
+        keep_mastered = [e for is_m, e in keep if is_m]
+        keep_fuzzy = [e for is_m, e in keep if not is_m]
         data["mastered"] = keep_mastered
         data["fuzzy"] = keep_fuzzy
         data["updated"] = today_iso()
