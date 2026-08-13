@@ -1,6 +1,6 @@
 # CFA Prep CLI
 
-> CFA exam prep CLI tool — knowledge base search · smart quizzing · mistake analysis · progress tracking · flashcard generation · IPS templates
+> CFA exam prep CLI tool — knowledge base search · smart quizzing · mistake analysis · progress tracking · flashcards · IPS templates
 
 ## Overview
 
@@ -14,7 +14,7 @@ CFA Prep CLI is a pure-Python command-line CFA study assistant covering all prep
 | **Smart Quiz**      | L1 mixed selection / L2 vignette / L3 scenario analysis, with mistake-priority questions |
 | **Mistake Analysis** | Auto-classifies error causes (concept confusion / calculation error / misreading), generates review suggestions |
 | **Progress Tracking** | Maintains a study progress file, tracks mastered and fuzzy knowledge points |
-| **Flashcard Generation** | Auto-extracts Q&A from the knowledge base, supports Anki CSV export |
+| **Flashcards** | Manually add Q&A flashcards, selecting the subject/module from the curriculum |
 | **IPS Templates**    | L3 personal and institutional IPS templates with full frameworks |
 
 ## Quick Start
@@ -84,8 +84,8 @@ cfa-prep search "FCFE"
 | `recap`                      | View study progress          | `cfa-prep recap`                               |
 | `recap --update`             | Update study progress        | `cfa-prep recap --update`                      |
 | `recap --remove`             | Remove progress entries      | `cfa-prep recap --remove`                      |
-| `flashcard --subject FRA`    | Generate flashcards for a subject | `cfa-prep flashcard --subject FRA`         |
-| `flashcard --anki`           | Export Anki CSV              | `cfa-prep flashcard --anki`                    |
+| `flashcard --add`            | Manually add a flashcard (select subject/module from the curriculum) | `cfa-prep flashcard --add` |
+| `flashcard -a`               | Shorthand for `--add`        | `cfa-prep flashcard -a`                       |
 | `ips personal`               | Generate personal IPS template | `cfa-prep ips personal`                       |
 | `ips inst`                   | Generate institutional IPS template | `cfa-prep ips inst`                     |
 | `curriculum seed`            | Create an empty curriculum    | `cfa-prep curriculum seed`                   |
@@ -146,6 +146,23 @@ cfa-prep curriculum import /path/to/my-curriculum.json
 The quiz engine draws its topic pool from the curriculum automatically — no other
 configuration needed.
 
+## Flashcards
+
+Flashcards are created **manually** — there is no automatic Q&A extraction. Run the
+interactive add flow, pick the **subject** and **module** from the curriculum, then
+enter the front (question) and back (answer):
+
+```bash
+cfa-prep flashcard --add    # or: cfa-prep flashcard -a
+```
+
+- Leaving the subject blank **finishes** the session.
+- After picking a subject you **must** pick a module to add a card (blank also finishes).
+- The session reports how many flashcards were added, e.g. `Finished adding 2 flashcards.`
+
+Cards are stored at `<data_root>/flashcards/flashcards.json`. You can add several cards
+in one session — after saving one, the subject/module picker is shown again.
+
 ## Repository Layout
 
 ```
@@ -163,7 +180,7 @@ cfa-prep-cli/
 │   ├── quiz_engine.py           # Quiz engine
 │   ├── mistake_analyzer.py      # Mistake analyzer
 │   ├── progress_tracker.py      # Progress tracking
-│   ├── flashcard_generator.py   # Flashcard generation
+│   ├── flashcard_generator.py   # Manual flashcard management
 │   ├── ips_builder.py           # IPS template building
 │   ├── curriculum.py            # Curriculum module (subjects + topics per level)
 │   └── utils.py                 # General utility functions (incl. data-root resolution)
@@ -180,7 +197,7 @@ Data files are stored under the configured data root (`~/.cfa-prep` by default):
 ├── kb/                       # Knowledge files (.txt) and curriculum.json
 ├── mistakes/                 # Mistake log (auto-generated)
 ├── progress/                 # Progress file (progress.json, auto-generated)
-├── flashcards/               # Flashcards (auto-generated)
+├── flashcards/               # Flashcards (flashcards.json, manually added)
 ├── templates/                # IPS templates
 └── config/
     └── settings.json         # Configuration (includes data_root)
@@ -224,7 +241,8 @@ python -m tests.test_basic
 ## Tech Stack
 
 - **Language**: Python 3.10+
-- **Dependencies**: zero external dependencies, Python standard library only
+- **Runtime dependencies**: zero external dependencies, Python standard library only
+- **Dev dependencies**: pytest (for running/discovering the test suite)
 - **Encoding**: UTF-8
 - **Compatibility**: Windows / macOS / Linux
 
