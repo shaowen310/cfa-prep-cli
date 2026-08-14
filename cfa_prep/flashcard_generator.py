@@ -246,9 +246,7 @@ class FlashcardGenerator:
                     part for part in (card.get("subject", ""), card.get("module", "")) if part
                 )
                 print(f"{'─' * 50}")
-                print(f"  [{i + 1}/{total}] Q: {card['question']}")
-                if location:
-                    print(f"      ({location})")
+                print(f"  [{i + 1}/{total}] Q: {card['question']}\n")
                 action = self._prompt("  [Enter] reveal answer, [n] next, [q] quit: ").strip().lower()
 
                 if action == "q":
@@ -257,8 +255,11 @@ class FlashcardGenerator:
                     i += 1
                     continue
 
-                # Reveal the answer
-                print(f"  A: {card['answer']}\n")
+                # Reveal the answer (and the card's subject/module location)
+                print(f"  A: {card['answer']}")
+                if location:
+                    print(f"      ({location})")
+                print()
                 action = self._prompt("  [Enter] next, [b] back, [q] quit: ").strip().lower()
                 if action == "q":
                     break
