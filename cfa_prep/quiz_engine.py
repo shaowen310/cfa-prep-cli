@@ -37,6 +37,7 @@ class QuizEngine:
         self.curriculum: Curriculum = Curriculum()
         self.score: int = 0
         self.total: int = 0
+        self.randomize: bool = True
 
     def _get_all_topics(self, level: str = "L1") -> list[str]:
         """
@@ -87,7 +88,8 @@ class QuizEngine:
         options = item["options"]
         correct_text = item["correct"]
         # Shuffle so the correct answer is not always at the same position
-        random.shuffle(options)
+        if self.randomize:
+            random.shuffle(options)
         labels = "ABC"
 
         print(f"{'─' * 50}")
@@ -175,7 +177,8 @@ class QuizEngine:
                 break
             selected.append(random.choice(remaining))
 
-        random.shuffle(selected)
+        if self.randomize:
+            random.shuffle(selected)
         return selected[:10]
 
     def _subject_from_label(self, label: str) -> str:
@@ -222,6 +225,8 @@ class QuizEngine:
         sub_questions = random.sample(related_topics, min(3, len(related_topics)))
         while len(sub_questions) < 3:
             sub_questions.append(random.choice(all_topics))
+        if self.randomize:
+            random.shuffle(sub_questions)
 
         return {
             "vignette_topic": vignette_topic,
@@ -242,14 +247,16 @@ class QuizEngine:
             "instructions": "Based on the scenario, write your analysis process and recommendation (suggest 18 minutes)",
         }
 
-    def start_quiz(self, level: str = "L1") -> None:
+    def start_quiz(self, level: str = "L1", randomize: bool = True) -> None:
         """
         Start the quiz.
 
         Parameters:
             level: exam level (L1, L2, L3)
+            randomize: whether to randomize question order and answer options
         """
         level = level.upper()
+        self.randomize = randomize
         self.score = 0
         self.total = 0
 
@@ -270,6 +277,8 @@ class QuizEngine:
         """Run the L1 quiz flow"""
         # First replay logged mistakes as real MCQ questions
         mistake_questions = self._get_mistake_questions()
+        if self.randomize:
+            random.shuffle(mistake_questions)
         if mistake_questions:
             print(f"\n🔁 {len(mistake_questions)} mistake review question(s) first\n")
             for item in mistake_questions:

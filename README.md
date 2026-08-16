@@ -80,6 +80,7 @@ cfa-prep search "FCFE"
 | `quiz --level L1`            | L1 quiz (10 mixed questions) | `cfa-prep quiz --level L1`                     |
 | `quiz --level L2`            | L2 quiz (vignette)           | `cfa-prep quiz --level L2`                     |
 | `quiz --level L3`            | L3 quiz (IPS scenario)       | `cfa-prep quiz --level L3`                     |
+| `quiz --no-randomize`        | Disable question/option shuffling | `cfa-prep quiz --no-randomize`             |
 | `mistake -a`                 | Interactive mistake entry    | `cfa-prep mistake -a`                          |
 | `recap`                      | View study progress          | `cfa-prep recap`                               |
 | `recap --update`             | Update study progress        | `cfa-prep recap --update`                      |

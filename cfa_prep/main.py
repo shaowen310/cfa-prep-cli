@@ -186,7 +186,7 @@ def cmd_quiz(args) -> None:
     """
     level = args.level.upper() if args.level else "L1"
     engine = QuizEngine()
-    engine.start_quiz(level=level)
+    engine.start_quiz(level=level, randomize=args.randomize)
 
 
 def cmd_mistake(args) -> None:
@@ -366,6 +366,7 @@ Examples:
   cfa-prep search "FCFE" --regex         Use regex search
   cfa-prep quiz --level L1               Start L1 quizzing
   cfa-prep quiz --level L2               Start L2 quizzing
+  cfa-prep quiz --no-randomize           Disable question/option shuffling
   cfa-prep mistake -a                    Log a mistake
   cfa-prep recap                         View progress
   cfa-prep recap --update                Update progress
@@ -406,6 +407,8 @@ Data root (default ~/.cfa-prep) can be set via:
     p_quiz = subparsers.add_parser("quiz", help="Start quizzing")
     _ = p_quiz.add_argument("--level", choices=["L1", "L2", "L3", "l1", "l2", "l3"],
                         default="L1", help="exam level (default L1)")
+    _ = p_quiz.add_argument("--no-randomize", dest="randomize", action="store_false", default=True,
+                        help="disable question/option shuffling (randomized by default)")
 
     # recap command
     p_recap = subparsers.add_parser("recap", help="View/update study progress")
