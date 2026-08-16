@@ -12,7 +12,7 @@ CFA Prep CLI is a pure-Python command-line CFA study assistant covering all prep
 | ------------------ | ----------------------------------------------------------------- |
 | **Knowledge Search** | Search keywords across textbook/Notes slices, with regex and fuzzy matching |
 | **Smart Quiz**      | L1 mixed selection / L2 vignette / L3 scenario analysis, with mistake-priority questions |
-| **Mistake Analysis** | Auto-classifies error causes (concept confusion / calculation error / misreading), generates review suggestions |
+| **Mistake Analysis** | Logs mistakes (MCQ or free-form), tracks subjects and key points, generates review suggestions |
 | **Progress Tracking** | Maintains a study progress file, tracks mastered and fuzzy knowledge points |
 | **Flashcards** | Manually add Q&A flashcards, selecting the subject/module from the curriculum |
 | **IPS Templates**    | L3 personal and institutional IPS templates with full frameworks |

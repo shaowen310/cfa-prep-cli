@@ -17,14 +17,6 @@ from .utils import (
 )
 
 
-# Mistake categories
-MISTAKE_CATEGORIES = {
-    "1": "Concept confusion",
-    "2": "Calculation error",
-    "3": "Misreading the question",
-}
-
-
 class MistakeRecord(TypedDict):
     date: str
     level: str
@@ -34,7 +26,6 @@ class MistakeRecord(TypedDict):
     options: list[str]  # [A text, B text, C text]
     user_answer: str     # the option text the user chose
     correct_answer: str  # the option text that is correct
-    category: str
     key_point: str
     correct_conclusion: str
     source: str
@@ -70,7 +61,6 @@ class MistakeAnalyzer:
         question: str,
         user_answer: str,
         correct_answer: str,
-        category: str,
         key_point: str,
         correct_conclusion: str,
         source: str = "",
@@ -86,7 +76,6 @@ class MistakeAnalyzer:
             question: question text (without options)
             user_answer: the user's incorrect answer
             correct_answer: the correct answer
-            category: mistake category
             key_point: knowledge point
             correct_conclusion: correct conclusion
             source: source reference
@@ -107,7 +96,6 @@ class MistakeAnalyzer:
             options=options or [],
             user_answer=user_answer,
             correct_answer=correct_answer,
-            category=category,
             key_point=key_point,
             correct_conclusion=correct_conclusion,
             source=source,
@@ -195,12 +183,6 @@ class MistakeAnalyzer:
         user_answer = letter_to_text.get(user_letter, user_letter)
         correct_answer = letter_to_text.get(correct_letter, correct_letter)
 
-        print("\nMistake category:")
-        for key, value in MISTAKE_CATEGORIES.items():
-            print(f"  [{key}] {value}")
-        cat_choice = self._prompt("Choose a mistake category (1/2/3): ").strip()
-        category = MISTAKE_CATEGORIES.get(cat_choice, "Concept confusion")
-
         # Pick the key point from the module's topics
         key_point = self._pick_key_point(curriculum, level, subject, module_name)
 
@@ -214,7 +196,6 @@ class MistakeAnalyzer:
             options=[option_a, option_b, option_c],
             user_answer=user_answer,
             correct_answer=correct_answer,
-            category=category,
             key_point=key_point,
             correct_conclusion=correct_conclusion,
             source=f"{subject} > {module_name}" if module_name else "",
@@ -241,12 +222,6 @@ class MistakeAnalyzer:
         user_answer = self._prompt("\nYour answer: ").strip()
         correct_answer = self._prompt("Correct answer: ").strip()
 
-        print("\nMistake category:")
-        for key, value in MISTAKE_CATEGORIES.items():
-            print(f"  [{key}] {value}")
-        cat_choice = self._prompt("Choose a mistake category (1/2/3): ").strip()
-        category = MISTAKE_CATEGORIES.get(cat_choice, "Concept confusion")
-
         key_point = self._prompt("\nKey point (one-sentence summary): ").strip()
         correct_conclusion = self._prompt("Correct conclusion (one-sentence summary): ").strip()
 
@@ -260,7 +235,6 @@ class MistakeAnalyzer:
             question=question,
             user_answer=user_answer,
             correct_answer=correct_answer,
-            category=category,
             key_point=key_point,
             correct_conclusion=correct_conclusion,
             source=source,
@@ -350,34 +324,28 @@ class MistakeAnalyzer:
     def get_mistake_stats(self) -> dict[str, object]:
         """
         Get mistake statistics.
-        Returns the count and percentage for each mistake category.
+        Returns the total count, per-subject counts, and key points.
         """
         records = self._load()
         total = len(records)
         if total == 0:
             return {
                 "total": 0,
-                "categories": {},
                 "subjects": {},
                 "key_points": [],
             }
 
-        cat_count: dict[str, int] = {}
         subj_count: dict[str, int] = {}
         key_points: list[str] = []
         for r in records:
-            cat = r.get("category", "Uncategorized")
-            cat_count[cat] = cat_count.get(cat, 0) + 1
             subj = r.get("subject", "Unknown")
             subj_count[subj] = subj_count.get(subj, 0) + 1
             kp = r.get("key_point", "")
             if kp:
                 key_points.append(kp)
 
-        cat_pct = {k: round(v / total * 100, 1) for k, v in cat_count.items()}
         return {
             "total": total,
-            "categories": cat_pct,
             "subjects": subj_count,
             "key_points": key_points,
         }

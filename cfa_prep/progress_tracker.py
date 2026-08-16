@@ -4,8 +4,7 @@ CFA Prep CLI - Progress tracking module
 Author: CodeBuddy AI Assistant
 Purpose: Store and display study progress as structured JSON at
          <data_root>/progress/progress.json.
-         Tracks mastered and fuzzy knowledge points, mistake distribution,
-         and next-day task suggestions.
+         Tracks mastered and fuzzy knowledge points and next-day task suggestions.
 """
 
 import json
@@ -26,7 +25,6 @@ class ProgressData(TypedDict):
     updated: str
     mastered: list[str]
     fuzzy: list[str]
-    mistake_distribution: dict[str, float]
 
 
 class ProgressTracker:
@@ -53,13 +51,11 @@ class ProgressTracker:
                 updated=today_iso(),
                 mastered=[],
                 fuzzy=[],
-                mistake_distribution={},
             )
         return ProgressData(
             updated=data.get("updated", today_iso()),
             mastered=data.get("mastered", []),
             fuzzy=data.get("fuzzy", []),
-            mistake_distribution=data.get("mistake_distribution", {}),
         )
 
     def save(self, data: ProgressData) -> None:
@@ -78,7 +74,6 @@ class ProgressTracker:
         self,
         mastered: list[str] | None = None,
         fuzzy: list[str] | None = None,
-        mistake_stats: dict[str, object] | None = None,
     ) -> None:
         """
         Update the progress file.
@@ -86,11 +81,9 @@ class ProgressTracker:
         Parameters:
             mastered: list of mastered knowledge point labels
             fuzzy: list of still-fuzzy knowledge point labels
-            mistake_stats: mistake statistics (from MistakeAnalyzer.get_mistake_stats())
         """
         mastered = mastered or []
         fuzzy = fuzzy or []
-        mistake_stats = mistake_stats or {}
 
         # Merge mastered: append new, deduplicate
         current = self.load()
@@ -105,14 +98,10 @@ class ProgressTracker:
             if item not in current_fuzzy:
                 current_fuzzy.append(item)
 
-        cats_value = mistake_stats.get("categories", {}) or {}
-        cats: dict[str, float] = cats_value if isinstance(cats_value, dict) else {}
-
         data = ProgressData(
             updated=today_iso(),
             mastered=current_mastered,
             fuzzy=current_fuzzy,
-            mistake_distribution=cats,
         )
         self.save(data)
 
@@ -290,7 +279,6 @@ class ProgressTracker:
 
     def interactive_update(
         self,
-        mistake_stats: dict[str, object] | None = None,
         curriculum=None,
         level: str = "L1",
     ) -> None:
@@ -316,7 +304,6 @@ class ProgressTracker:
             self.update(
                 mastered=mastered,
                 fuzzy=fuzzy,
-                mistake_stats=mistake_stats,
             )
             print(f"\n✅ Progress updated to: {self.progress_file}")
         except (KeyboardInterrupt, EOFError):

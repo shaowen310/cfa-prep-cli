@@ -130,7 +130,6 @@ class QuizEngine:
             question=item["question"],
             user_answer="",
             correct_answer=item["correct"],
-            category="Concept confusion",
             key_point=item["key_point"],
             correct_conclusion="",
             source=f"{item['subject']} > {item['module']}",

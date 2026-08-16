@@ -232,8 +232,7 @@ def cmd_recap(args) -> None:
         curriculum = Curriculum()
         settings = load_settings()
         level = settings.get("level", "L1")
-        stats = analyzer.get_mistake_stats()
-        tracker.interactive_update(mistake_stats=stats, curriculum=curriculum, level=level)
+        tracker.interactive_update(curriculum=curriculum, level=level)
     else:
         # Display only
         settings = load_settings()
@@ -248,15 +247,6 @@ def cmd_recap(args) -> None:
         total = total_value if isinstance(total_value, int) else 0
         print(f"  Total mistakes: {total}")
         if total > 0:
-            print(f"\n  Category distribution:")
-            categories_value = stats.get("categories")
-            categories: dict[str, float] = {
-                str(k): float(v)
-                for k, v in (categories_value.items() if isinstance(categories_value, dict) else {}.items())
-            }
-            for cat, pct in sorted(categories.items(), key=lambda x: x[1], reverse=True):
-                bar = "█" * int(pct / 5)
-                print(f"    {cat}: {pct}% {bar}")
             print(f"\n  Subject distribution:")
             subjects_value = stats.get("subjects")
             subjects: dict[str, int] = {
