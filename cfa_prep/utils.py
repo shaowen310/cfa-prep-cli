@@ -9,7 +9,7 @@ import os
 import json
 from pathlib import Path
 from datetime import datetime
-from typing import Any
+from typing import cast
 
 
 def get_project_root() -> Path:
@@ -30,7 +30,7 @@ def _candidate_data_root() -> Path:
     default_root = Path.home() / ".cfa-prep"
     settings = load_json(default_root / "config" / "settings.json")
     configured = settings.get("data_root")
-    if configured:
+    if isinstance(configured, str) and configured:
         return Path(configured).expanduser()
     return default_root
 
@@ -74,27 +74,27 @@ def set_data_root(new_root: str | Path) -> Path:
     return resolved
 
 
-def load_json(filepath: Path) -> dict[str, Any]:
+def load_json(filepath: Path) -> dict[str, object]:
     """Safely load a JSON file, returning an empty dict if the file does not exist"""
     if filepath.exists():
         with open(filepath, "r", encoding="utf-8") as f:
-            return json.load(f)
+            return cast(dict[str, object], json.load(f))
     return {}
 
 
-def save_json(filepath: Path, data: dict[str, Any]) -> None:
+def save_json(filepath: Path, data: dict[str, object]) -> None:
     """Save data as a JSON file (UTF-8, 2-space indent)"""
     filepath.parent.mkdir(parents=True, exist_ok=True)
     with open(filepath, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
 
-def load_settings() -> dict[str, Any]:
+def load_settings() -> dict[str, object]:
     """Load the config/settings.json config"""
     return load_json(get_config_dir() / "settings.json")
 
 
-def save_settings(settings: dict[str, Any]) -> None:
+def save_settings(settings: dict[str, object]) -> None:
     """Save config to config/settings.json"""
     save_json(get_config_dir() / "settings.json", settings)
 

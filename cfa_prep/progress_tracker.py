@@ -10,7 +10,7 @@ Purpose: Store and display study progress as structured JSON at
 import json
 import re
 from pathlib import Path
-from typing import TypedDict
+from typing import TypedDict, cast
 
 from .utils import (
     get_data_dir,
@@ -18,6 +18,7 @@ from .utils import (
     save_json,
     today_iso,
 )
+from .curriculum import Curriculum
 
 
 class ProgressData(TypedDict):
@@ -53,9 +54,9 @@ class ProgressTracker:
                 fuzzy=[],
             )
         return ProgressData(
-            updated=data.get("updated", today_iso()),
-            mastered=data.get("mastered", []),
-            fuzzy=data.get("fuzzy", []),
+            updated=cast(str, data.get("updated", today_iso())),
+            mastered=cast(list[str], data.get("mastered", [])),
+            fuzzy=cast(list[str], data.get("fuzzy", [])),
         )
 
     def save(self, data: ProgressData) -> None:
@@ -138,7 +139,7 @@ class ProgressTracker:
         data = self.load()
         print(json.dumps(data, indent=2, ensure_ascii=False))
 
-    def display_structured(self, level: str = "L1", curriculum=None) -> None:
+    def display_structured(self, level: str = "L1", curriculum: Curriculum | None = None) -> None:
         """
         Display the current progress grouped by subject (chapter) and module,
         using the curriculum data model for the grouping hierarchy and topic lookup.
@@ -168,7 +169,7 @@ class ProgressTracker:
 
     @classmethod
     def _print_grouped(
-        cls, title: str, entries: list[str], curriculum, level: str
+        cls, title: str, entries: list[str], curriculum: Curriculum | None, level: str
     ) -> None:
         """Print entries grouped by subject → module, using the curriculum's data model."""
         print(f"\n  {title} ({len(entries)}):")
@@ -183,7 +184,7 @@ class ProgressTracker:
 
     @classmethod
     def _print_grouped_from_curriculum(
-        cls, entries: list[str], curriculum, level: str
+        cls, entries: list[str], curriculum: Curriculum, level: str
     ) -> None:
         """
         Group progress entries using the curriculum's data model and print
@@ -192,7 +193,10 @@ class ProgressTracker:
         """
         # Build {topic_str: (subject, module)} lookup from curriculum
         topic_to_meta: dict[str, tuple[str, str]] = {}
-        for subject, modules in curriculum.subject_modules(level).items():
+        level_subjects = cast(
+            dict[str, dict[str, list[str]]], curriculum.subject_modules(level)
+        )
+        for subject, modules in level_subjects.items():
             for module, topics in modules.items():
                 for t in topics:
                     topic_to_meta[t.lower()] = (subject, module)
@@ -211,7 +215,9 @@ class ProgressTracker:
         # Print the full curriculum hierarchy, with progress counts per module.
         # Auto-collapse: if all topics in a module are in the list, hide the
         # topic details and show a ✓ marker.  Same for subjects.
-        all_subjects = curriculum.subject_modules(level)
+        all_subjects = cast(
+            dict[str, dict[str, list[str]]], curriculum.subject_modules(level)
+        )
         for subject in sorted(all_subjects):
             curriculum_modules = all_subjects[subject]
             progress_modules = entry_by_subject_module.get(subject, {})
@@ -279,7 +285,7 @@ class ProgressTracker:
 
     def interactive_update(
         self,
-        curriculum=None,
+        curriculum: Curriculum | None = None,
         level: str = "L1",
     ) -> None:
         """
@@ -309,7 +315,7 @@ class ProgressTracker:
         except (KeyboardInterrupt, EOFError):
             print("\n\n⚠️  Aborted — progress was NOT saved.")
 
-    def _collect_entries(self, curriculum, level: str) -> list[str]:
+    def _collect_entries(self, curriculum: Curriculum | None, level: str) -> list[str]:
         """Collect progress entries line by line; `?` enters curriculum browse mode."""
         entries: list[str] = []
         while True:
@@ -325,7 +331,7 @@ class ProgressTracker:
         return entries
 
     @staticmethod
-    def _browse_curriculum(curriculum, level: str) -> list[str]:
+    def _browse_curriculum(curriculum: Curriculum, level: str) -> list[str]:
         """
         Interactive curriculum browser: pick subject → module → topics.
         Returns a list of "[Subject > Module] Topic" labels for selected topics.
@@ -367,7 +373,9 @@ class ProgressTracker:
 
         # 3. For each selected module, ask: all topics or pick individually?
         results: list[str] = []
-        data = curriculum.subject_modules(level)
+        data = cast(
+            dict[str, dict[str, list[str]]], curriculum.subject_modules(level)
+        )
         subject_modules = data.get(subject, {})
         for mi in picked_modules:
             if mi < 0 or mi >= len(modules):
@@ -414,7 +422,7 @@ class ProgressTracker:
         return results
 
     @staticmethod
-    def _validate_entry(text: str, curriculum, level: str) -> list[str]:
+    def _validate_entry(text: str, curriculum: Curriculum | None, level: str) -> list[str]:
         """
         Validate a free-text progress entry against the curriculum.
 

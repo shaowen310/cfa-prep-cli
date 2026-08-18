@@ -13,6 +13,7 @@ copyright of its source (e.g. the CFA Institute).
 
 import json
 from pathlib import Path
+from typing import cast
 
 from .utils import get_data_dir, load_json, save_json, fuzzy_match
 
@@ -109,11 +110,11 @@ class Curriculum:
         data = load_json(self.path)
         if not data:
             return {}
-        return data
+        return cast(dict[str, dict[str, dict[str, list[str]]]], data)
 
     def save(self, data: dict[str, dict[str, dict[str, list[str]]]]) -> None:
         """Write the curriculum data to curriculum.json."""
-        save_json(self.path, data)
+        save_json(self.path, cast(dict[str, object], data))
 
     def seed(self) -> bool:
         """
@@ -138,25 +139,30 @@ class Curriculum:
         if not path.exists():
             raise FileNotFoundError(f"Curriculum file not found: {path}")
         with open(path, "r", encoding="utf-8") as f:
-            data = json.load(f)
+            raw = cast(object, json.load(f))
 
-        if not isinstance(data, dict):
+        if not isinstance(raw, dict):
             raise ValueError("Curriculum file must be a JSON object mapping level -> subject -> topics")
+
+        data = cast(dict[str, object], raw)
 
         # Normalize / validate structure
         cleaned: dict[str, dict[str, dict[str, list[str]]]] = {}
-        for level, subjects in data.items():
-            if not isinstance(subjects, dict):
+        for level, subjects_raw in data.items():
+            if not isinstance(subjects_raw, dict):
                 raise ValueError(f"Level {level!r} must map to a dictionary of subjects")
+            subjects = cast(dict[str, object], subjects_raw)
             level_key = str(level).upper()
             cleaned[level_key] = {}
             for subject, value in subjects.items():
-                cleaned[level_key][str(subject)] = self._normalize_modules(value, subject, level_key)
+                cleaned[level_key][str(subject)] = self._normalize_modules(
+                    value, str(subject), level_key
+                )
 
         self.save(cleaned)
 
     @staticmethod
-    def _normalize_modules(value, subject: str, level_key: str) -> dict[str, list[str]]:
+    def _normalize_modules(value: object, subject: str, level_key: str) -> dict[str, list[str]]:
         """
         Normalize a subject's topic definition into the nested "module -> [topics]" form.
 
@@ -165,16 +171,19 @@ class Curriculum:
           * a dict of modules         -> kept as-is, each module validated as a list of topics
         """
         if isinstance(value, list):
-            return {Curriculum.DEFAULT_MODULE: [str(t) for t in value]}
+            topics = cast(list[object], value)
+            return {Curriculum.DEFAULT_MODULE: [str(t) for t in topics]}
 
         if isinstance(value, dict):
+            modules_map = cast(dict[str, object], value)
             modules: dict[str, list[str]] = {}
-            for module, items in value.items():
+            for module, items in modules_map.items():
                 if not isinstance(items, list):
                     raise ValueError(
                         f"Module {module!r} in {level_key} / {subject!r} must map to a list of topics"
                     )
-                modules[str(module)] = [str(item) for item in items]
+                module_topics = cast(list[object], items)
+                modules[str(module)] = [str(item) for item in module_topics]
             return modules
 
         raise ValueError(
