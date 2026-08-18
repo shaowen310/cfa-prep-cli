@@ -10,6 +10,28 @@ import os
 import json
 import argparse
 from pathlib import Path
+from typing import Protocol, cast
+
+
+class CLIArgs(Protocol):
+    """Typed view of the parsed argparse namespace shared by the command handlers."""
+
+    command: str | None
+    home: str | None
+    set_path: str | None
+    keyword: str | None
+    regex: bool
+    no_fuzzy: bool
+    max_results: int
+    level: str | None
+    randomize: bool
+    add: bool
+    remove: bool
+    update: bool
+    type: str | None
+    show: bool
+    action: str | None
+    file: str | None
 
 from .knowledge_base import KnowledgeBase
 from .quiz_engine import QuizEngine
@@ -30,7 +52,7 @@ from .utils import (
 )
 
 
-def cmd_init(_args) -> None:
+def cmd_init(_args: CLIArgs) -> None:
     """
     Initialize the project: create all necessary directories and default config files
     under the resolved data root (~/.cfa-prep by default, or CFA_PREP_HOME / --home).
@@ -65,7 +87,7 @@ def cmd_init(_args) -> None:
         "flashcards_dir": "flashcards",
         "templates_dir": "templates",
     }
-    save_settings(settings)
+    save_settings(cast(dict[str, object], settings))
     print(f"  ✅ Created config: config/settings.json")
 
     # Create the initial progress file
@@ -103,7 +125,7 @@ def cmd_init(_args) -> None:
     print()
 
 
-def cmd_home(args) -> None:
+def cmd_home(args: CLIArgs) -> None:
     """
     Show the resolved data root (home) directory path, or set it to a new path.
 
@@ -138,7 +160,7 @@ def cmd_home(args) -> None:
     print(root)
 
 
-def cmd_search(args) -> None:
+def cmd_search(args: CLIArgs) -> None:
     """
     Search the knowledge base: search for keywords across all files under data/kb/.
     """
@@ -180,7 +202,7 @@ def cmd_search(args) -> None:
         print()
 
 
-def cmd_quiz(args) -> None:
+def cmd_quiz(args: CLIArgs) -> None:
     """
     Start the quiz mode.
     """
@@ -189,7 +211,7 @@ def cmd_quiz(args) -> None:
     engine.start_quiz(level=level, randomize=args.randomize)
 
 
-def cmd_mistake(args) -> None:
+def cmd_mistake(args: CLIArgs) -> None:
     """
     Log and view mistakes.
     With -a/--add, interactively log a new mistake.
@@ -200,7 +222,7 @@ def cmd_mistake(args) -> None:
     if args.add:
         curriculum = Curriculum()
         settings = load_settings()
-        level = settings.get("level", "L1")
+        level = cast(str, settings.get("level", "L1"))
         analyzer.add_mistake_interactive(curriculum=curriculum, level=level)
         return
 
@@ -214,7 +236,7 @@ def cmd_mistake(args) -> None:
         print(f"  [{m['date']}] {m['subject']} — {m['key_point']}")
 
 
-def cmd_recap(args) -> None:
+def cmd_recap(args: CLIArgs) -> None:
     """
     View and update study progress.
     """
@@ -231,12 +253,12 @@ def cmd_recap(args) -> None:
         # Interactive update with curriculum validation
         curriculum = Curriculum()
         settings = load_settings()
-        level = settings.get("level", "L1")
+        level = cast(str, settings.get("level", "L1"))
         tracker.interactive_update(curriculum=curriculum, level=level)
     else:
         # Display only
         settings = load_settings()
-        level = settings.get("level", "L1")
+        level = cast(str, settings.get("level", "L1"))
         curriculum = Curriculum()
         print_header("📊 Study Progress Overview")
         tracker.display_structured(level=level, curriculum=curriculum)
@@ -249,9 +271,12 @@ def cmd_recap(args) -> None:
         if total > 0:
             print(f"\n  Subject distribution:")
             subjects_value = stats.get("subjects")
+            if isinstance(subjects_value, dict):
+                subjects_map = cast(dict[str, object], subjects_value)
+            else:
+                subjects_map = {}
             subjects: dict[str, int] = {
-                str(k): int(v)
-                for k, v in (subjects_value.items() if isinstance(subjects_value, dict) else {}.items())
+                k: cast(int, v) for k, v in subjects_map.items()
             }
             for subj, count in sorted(subjects.items(), key=lambda x: x[1], reverse=True):
                 print(f"    {subj}: {count} questions")
@@ -259,12 +284,12 @@ def cmd_recap(args) -> None:
         print(f"\n💡 Use 'cfa-prep recap --update' to update progress")
 
 
-def cmd_flashcard(args) -> None:
+def cmd_flashcard(args: CLIArgs) -> None:
     """
     Add or review flashcards.
     """
     settings = load_settings()
-    level = settings.get("level", "L1")
+    level = cast(str, settings.get("level", "L1"))
     generator = FlashcardGenerator()
     if args.add:
         generator.manual_flashcard(level=level)
@@ -272,7 +297,7 @@ def cmd_flashcard(args) -> None:
         generator.view_flashcards(level=level)
 
 
-def cmd_ips(args) -> None:
+def cmd_ips(args: CLIArgs) -> None:
     """
     Generate IPS templates.
     """
@@ -295,7 +320,7 @@ def cmd_ips(args) -> None:
         print(f"\n💡 Use 'cfa-prep ips {ips_type} --show' to view the template content")
 
 
-def cmd_curriculum(args) -> None:
+def cmd_curriculum(args: CLIArgs) -> None:
     """
     Manage the curriculum (single source of truth for subjects + topics).
     Actions: seed / import / show.
@@ -325,7 +350,7 @@ def cmd_curriculum(args) -> None:
             return
         print(f"✅ Curriculum imported from: {args.file}")
         print(f"   Saved to: {curriculum.path}")
-        cmd_curriculum(argparse.Namespace(action="show"))
+        cmd_curriculum(cast(CLIArgs, cast(object, argparse.Namespace(action="show"))))
         return
 
     # Default: show
@@ -433,13 +458,14 @@ Data root (default ~/.cfa-prep) can be set via:
     _ = p_curriculum.add_argument("file", nargs="?", help="JSON file to import (for 'import' action)")
 
     args = parser.parse_args()
+    args = cast(CLIArgs, cast(object, args))
 
     if not args.command:
         parser.print_help()
         return
 
     # Apply --home override before dispatching so all modules resolve the data root consistently
-    if getattr(args, "home", None):
+    if args.home:
         os.environ["CFA_PREP_HOME"] = args.home
 
     # Dispatch commands

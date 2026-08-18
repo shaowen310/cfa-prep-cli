@@ -7,7 +7,7 @@ Purpose: Log and analyze mistakes, stored as JSON at <data_root>/mistakes/mistak
 """
 
 from pathlib import Path
-from typing import TypedDict
+from typing import TypedDict, cast
 
 from .utils import (
     get_data_dir,
@@ -15,6 +15,7 @@ from .utils import (
     load_json,
     save_json,
 )
+from .curriculum import Curriculum
 
 
 class MistakeRecord(TypedDict):
@@ -48,8 +49,8 @@ class MistakeAnalyzer:
         records = data.get("records", [])
         if not isinstance(records, list):
             return []
-        # At runtime these are dicts matching the MistakeRecord shape.
-        return records  # type: ignore[return-value]
+        records_typed = cast(list[MistakeRecord], records)
+        return list(records_typed)
 
     def _save(self, records: list[MistakeRecord]) -> None:
         """Save all mistake records."""
@@ -116,7 +117,7 @@ class MistakeAnalyzer:
             raise
 
     def add_mistake_interactive(
-        self, curriculum=None, level: str = "L1"
+        self, curriculum: Curriculum | None = None, level: str = "L1"
     ) -> None:
         """
         Interactively log a mistake.
@@ -156,7 +157,7 @@ class MistakeAnalyzer:
             print("\n\n⚠️  Aborted — mistake was NOT saved.")
 
     def _log_mcq(
-        self, subject: str, module_name: str, curriculum, level: str
+        self, subject: str, module_name: str, curriculum: Curriculum | None, level: str
     ) -> bool:
         """
         Log an L1 MCQ mistake with 3-option input.
@@ -208,7 +209,7 @@ class MistakeAnalyzer:
     def _log_freeform(self, subject: str, module_name: str, level: str = "L1") -> None:
         """Log an L2/L3 free-form mistake."""
         print("\nEnter the question description (enter a blank line to finish):")
-        question_lines = []
+        question_lines: list[str] = []
         while True:
             line = self._prompt()
             if line == "":
@@ -244,7 +245,9 @@ class MistakeAnalyzer:
         print(f"\n✅ Mistake saved to: {filepath}")
 
     @staticmethod
-    def _pick_key_point(curriculum, level: str, subject: str, module_name: str) -> str:
+    def _pick_key_point(
+        curriculum: Curriculum | None, level: str, subject: str, module_name: str
+    ) -> str:
         """
         Let the user pick the key point (topic) from the selected module's topics.
         Falls back to free-text if curriculum is unavailable or module has no topics.
@@ -252,7 +255,9 @@ class MistakeAnalyzer:
         if not curriculum or not module_name:
             return input("Key point (one-sentence summary): ").strip()
 
-        modules = curriculum.subject_modules(level)
+        modules = cast(
+            dict[str, dict[str, list[str]]], curriculum.subject_modules(level)
+        )
         topics = modules.get(subject, {}).get(module_name, [])
         if not topics:
             return input("Key point (one-sentence summary): ").strip()
@@ -271,7 +276,7 @@ class MistakeAnalyzer:
         return input("Key point (one-sentence summary): ").strip()
 
     @staticmethod
-    def _pick_subject_and_module(curriculum, level: str) -> tuple[str, str]:
+    def _pick_subject_and_module(curriculum: Curriculum, level: str) -> tuple[str, str]:
         """
         Browse the curriculum to pick a subject and module.
         Returns (subject, module_name) or ("", "") if the user aborts.
