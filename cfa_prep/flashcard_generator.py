@@ -7,6 +7,7 @@ Purpose: Manually add Q&A flashcards, optionally selecting the subject/module
 """
 
 from pathlib import Path
+from typing import cast
 
 from .utils import (
     get_data_dir,
@@ -34,8 +35,7 @@ class FlashcardGenerator:
     def _load_manual(self) -> list[dict[str, str]]:
         """Load the manually-added flashcards."""
         data = load_json(self.manual_file)
-        records = data.get("cards", [])
-        return records if isinstance(records, list) else []
+        return cast(list[dict[str, str]], data.get("cards", []))
 
     def _save_manual(self, cards: list[dict[str, str]]) -> None:
         """Save the manually-added flashcards."""
