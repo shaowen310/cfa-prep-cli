@@ -182,6 +182,26 @@ class ProgressTracker:
         else:
             cls._print_grouped_from_labels(entries)
 
+    @staticmethod
+    def _progress_bar(done: int, total: int, width: int = 20) -> str:
+        """
+        Render a textual progress bar, e.g. "█████░░░░░░░░░░░░░░░ 25%".
+
+        Parameters:
+            done: number of completed topics
+            total: total number of topics in the book
+            width: bar width in characters
+
+        Returns:
+            a formatted progress bar string (empty when total <= 0)
+        """
+        if total <= 0:
+            return ""
+        pct = int(round(done / total * 100))
+        filled = int(round(width * done / total))
+        bar = "█" * filled + "░" * (width - filled)
+        return f"  {bar} {pct}%"
+
     @classmethod
     def _print_grouped_from_curriculum(
         cls, entries: list[str], curriculum: Curriculum, level: str
@@ -232,7 +252,9 @@ class ProgressTracker:
                 )
             )
             marker = " ✅" if subject_complete else ""
+            bar = cls._progress_bar(done_count, total_count)
             print(f"    📖 {subject} ({done_count}/{total_count}){marker}")
+            print(f"        {bar}")
             if subject_complete:
                 continue
             for module in sorted(curriculum_modules):
