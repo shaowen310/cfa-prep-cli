@@ -104,7 +104,7 @@ class QuizEngine:
         for i, opt in enumerate(options):
             print(f"    {labels[i]}. {opt}")
 
-        answer = input("\nYour answer (A/B/C): ").strip().upper()
+        answer = input("\nYour wrong answer (A/B/C): ").strip().upper()
         if answer == "Q":
             print("👋 Quiz exited")
             raise KeyboardInterrupt
@@ -342,7 +342,7 @@ class QuizEngine:
             print(f"\n{'─' * 50}")
             print(f"  📌 Sub-question {i}/3: {q}")
             print(f"{'─' * 50}")
-            answer = input("Your answer (A/B/C): ").strip().upper()
+            answer = input("Your wrong answer (A/B/C): ").strip().upper()
             if answer == "Q":
                 print("👋 Quiz exited")
                 break

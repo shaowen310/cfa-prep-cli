@@ -175,7 +175,7 @@ class MistakeAnalyzer:
         option_b = self._prompt("    B: ").strip()
         option_c = self._prompt("    C: ").strip()
 
-        user_letter = self._prompt("\nYour answer (A/B/C): ").strip().upper()
+        user_letter = self._prompt("\nYour wrong answer (A/B/C): ").strip().upper()
         correct_letter = self._prompt("Correct answer (A/B/C): ").strip().upper()
 
         # Map letters to option text so the machine can identify the answer
@@ -220,7 +220,7 @@ class MistakeAnalyzer:
             print("  Cancelled.")
             return
 
-        user_answer = self._prompt("\nYour answer: ").strip()
+        user_answer = self._prompt("\nYour wrong answer: ").strip()
         correct_answer = self._prompt("Correct answer: ").strip()
 
         key_point = self._prompt("\nKey point (one-sentence summary): ").strip()
