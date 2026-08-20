@@ -386,7 +386,7 @@ def main():
 Examples:
   cfa-prep init                          Initialize the project
   cfa-prep home                          Show the data root (home) path
-  cfa-prep home --set /path/to/folder     Set the data root to an existing folder
+  cfa-prep home --set /path/to/folder    Set the data root to an existing folder
   cfa-prep search "FCFE"                 Search the knowledge base
   cfa-prep search "FCFE" --regex         Use regex search
   cfa-prep quiz --level L1               Start L1 quizzing
@@ -396,7 +396,7 @@ Examples:
   cfa-prep recap                         View progress
   cfa-prep recap --update                Update progress
   cfa-prep recap --remove                Remove progress entries
-  cfa-prep flashcard --add               Manually add a flashcard (pick subject/module from curriculum)
+  cfa-prep flashcard -a                  Manually add a flashcard (pick subject/module from curriculum)
   cfa-prep flashcard --review            Review flashcards (reveal answer or skip to next)
   cfa-prep ips personal                  Generate a personal IPS template
   cfa-prep ips inst                      Generate an institutional IPS template

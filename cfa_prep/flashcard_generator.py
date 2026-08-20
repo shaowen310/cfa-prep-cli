@@ -228,7 +228,7 @@ class FlashcardGenerator:
 
             cards = self._load_manual()
             if not cards:
-                print("\n  No flashcards yet. Add some with 'cfa-prep flashcard --add'.")
+                print("\n  No flashcards yet. Add some with 'cfa-prep flashcard -a'.")
                 return
 
             subject = self._pick_subject_filter(level)

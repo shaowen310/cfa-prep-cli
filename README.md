@@ -85,7 +85,7 @@ cfa-prep search "FCFE"
 | `recap`                      | View study progress          | `cfa-prep recap`                               |
 | `recap --update`             | Update study progress        | `cfa-prep recap --update`                      |
 | `recap --remove`             | Remove progress entries      | `cfa-prep recap --remove`                      |
-| `flashcard --add`            | Manually add a flashcard (select subject/module from the curriculum) | `cfa-prep flashcard --add` |
+| `flashcard -a`               | Manually add a flashcard (select subject/module from the curriculum) | `cfa-prep flashcard -a` |
 | `flashcard -a`               | Shorthand for `--add`        | `cfa-prep flashcard -a`                       |
 | `flashcard --review`         | Review cards (reveal answer or skip) | `cfa-prep flashcard --review`           |
 | `flashcard -r`               | Shorthand for `--review`     | `cfa-prep flashcard -r`                       |
@@ -156,7 +156,7 @@ interactive add flow, pick the **subject** and **module** from the curriculum, t
 enter the front (question) and back (answer):
 
 ```bash
-cfa-prep flashcard --add    # or: cfa-prep flashcard -a
+cfa-prep flashcard -a    # or: cfa-prep flashcard -a
 ```
 
 - Leaving the subject blank **finishes** the session.
