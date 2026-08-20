@@ -126,6 +126,7 @@ class MistakeAnalyzer:
         For L2/L3: free-text question description, answers, key point, conclusion.
         Exits gracefully if the user stops inputting (Ctrl+C / Ctrl+D).
         """
+        saved = 0
         try:
             print("\n" + "=" * 50)
             is_mcq = level.upper() == "L1"
@@ -150,11 +151,16 @@ class MistakeAnalyzer:
                 while True:
                     if not self._log_mcq(subject, module_name, curriculum, level):
                         break
+                    saved += 1
             else:
-                self._log_freeform(subject, module_name, level)
+                if self._log_freeform(subject, module_name, level):
+                    saved += 1
 
         except (KeyboardInterrupt, EOFError):
-            print("\n\n⚠️  Aborted — mistake was NOT saved.")
+            print("\n\n⚠️  Aborted — current mistake was NOT saved.")
+            if saved > 0:
+                noun = "mistake" if saved == 1 else "mistakes"
+                print(f"  ℹ️  {saved} {noun} were saved before aborting.")
 
     def _log_mcq(
         self, subject: str, module_name: str, curriculum: Curriculum | None, level: str
@@ -206,8 +212,8 @@ class MistakeAnalyzer:
         print(f"\n✅ Mistake saved to: {filepath}")
         return True
 
-    def _log_freeform(self, subject: str, module_name: str, level: str = "L1") -> None:
-        """Log an L2/L3 free-form mistake."""
+    def _log_freeform(self, subject: str, module_name: str, level: str = "L1") -> bool:
+        """Log an L2/L3 free-form mistake. Returns True if a mistake was saved."""
         print("\nEnter the question description (enter a blank line to finish):")
         question_lines: list[str] = []
         while True:
@@ -218,7 +224,7 @@ class MistakeAnalyzer:
         question = "\n".join(question_lines)
         if not question.strip():
             print("  Cancelled.")
-            return
+            return False
 
         user_answer = self._prompt("\nYour wrong answer: ").strip()
         correct_answer = self._prompt("Correct answer: ").strip()
@@ -243,6 +249,7 @@ class MistakeAnalyzer:
             level=level,
         )
         print(f"\n✅ Mistake saved to: {filepath}")
+        return True
 
     @staticmethod
     def _pick_key_point(
