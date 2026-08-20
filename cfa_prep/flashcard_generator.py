@@ -150,12 +150,12 @@ class FlashcardGenerator:
         Interactively add one or more flashcards by hand, optionally selecting
         the subject and module from the curriculum. Aborts cleanly on Ctrl+C/Ctrl+D.
         """
+        added = 0
         try:
             print("\n" + "=" * 50)
             print("  🃏 Add Manual Flashcard")
             print("=" * 50)
 
-            added = 0
             while True:
                 picked = self._pick_subject_and_module(level)
                 if picked is None:
@@ -189,6 +189,9 @@ class FlashcardGenerator:
 
         except (KeyboardInterrupt, EOFError):
             print("\n\n⚠️  Aborted — current flashcard was NOT saved.")
+            if added > 0:
+                noun = "flashcard" if added == 1 else "flashcards"
+                print(f"  ℹ️  {added} {noun} were added before aborting.")
 
     # --- viewing flashcards ------------------------------------------------
 
