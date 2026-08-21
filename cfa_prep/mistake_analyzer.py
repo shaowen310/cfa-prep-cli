@@ -56,6 +56,42 @@ class MistakeAnalyzer:
         """Save all mistake records."""
         save_json(self.data_file, {"records": list(records)})
 
+    def _find_duplicates(self, question: str) -> list[MistakeRecord]:
+        """
+        Find previously logged mistakes whose question text matches the given one
+        (case-insensitive). Used to warn the user before re-adding a question,
+        since the same title may have different options.
+        """
+        q = question.strip().lower()
+        if not q:
+            return []
+        return [r for r in self._load() if r.get("question", "").strip().lower() == q]
+
+    def _confirm_duplicate(self, question: str) -> bool:
+        """
+        If the question was already logged, show the full previous record(s) and
+        ask whether to continue adding anyway. Returns True to proceed, False to skip.
+        """
+        dups = self._find_duplicates(question)
+        if not dups:
+            return True
+        print("\n  ⚠️  This question was already logged before:")
+        for i, r in enumerate(dups, 1):
+            print(f"  {'─' * 46}")
+            print(f"  [{i}] {r.get('question', '')}")
+            options = r.get("options") or []
+            if options:
+                for letter, opt in zip("ABC", options):
+                    print(f"      {letter}. {opt}")
+            if r.get("correct_answer"):
+                print(f"      ✅ Correct: {r['correct_answer']}")
+            if r.get("key_point"):
+                print(f"      📌 Key point: {r['key_point']}")
+            if r.get("date"):
+                print(f"      🗓 Date: {r['date']}")
+        choice = self._prompt("\nAdd it again anyway? [y/N]: ").strip().lower()
+        return choice in ("y", "yes")
+
     def add_mistake(
         self,
         subject: str,
@@ -175,6 +211,11 @@ class MistakeAnalyzer:
         if not question:
             return False
 
+        # Warn if this question was logged before, and let the user opt out
+        if not self._confirm_duplicate(question):
+            print("  ⏭️ Skipped — already logged.")
+            return False
+
         # Collect the 3 options
         print("\n  Enter the 3 answer options:")
         option_a = self._prompt("    A: ").strip()
@@ -224,6 +265,11 @@ class MistakeAnalyzer:
         question = "\n".join(question_lines)
         if not question.strip():
             print("  Cancelled.")
+            return False
+
+        # Warn if this question was logged before, and let the user opt out
+        if not self._confirm_duplicate(question):
+            print("  ⏭️ Skipped — already logged.")
             return False
 
         user_answer = self._prompt("\nYour wrong answer: ").strip()
