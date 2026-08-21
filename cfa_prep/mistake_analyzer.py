@@ -184,8 +184,12 @@ class MistakeAnalyzer:
                     return
 
             if is_mcq:
+                first = True
                 while True:
-                    result = self._log_mcq(subject, module_name, curriculum, level)
+                    result = self._log_mcq(
+                        subject, module_name, curriculum, level, show_hint=first
+                    )
+                    first = False
                     if result == "finished":
                         break
                     if result == "saved":
@@ -201,18 +205,27 @@ class MistakeAnalyzer:
                 print(f"  ℹ️  {saved} {noun} were saved before aborting.")
 
     def _log_mcq(
-        self, subject: str, module_name: str, curriculum: Curriculum | None, level: str
+        self,
+        subject: str,
+        module_name: str,
+        curriculum: Curriculum | None,
+        level: str,
+        show_hint: bool = True,
     ) -> str:
         """
         Log an L1 MCQ mistake with 3-option input.
         Enter `\\b` on any field to go back and re-enter the previous field.
+
+        Parameters:
+            show_hint: print the \\b navigation hint (only on the first entry)
 
         Returns one of:
             "finished" — user entered a blank question (stop the session)
             "skipped"  — question already logged, user chose not to re-add
             "saved"    — a mistake was saved
         """
-        print("\n  (Enter \\b on any field to go back and edit the previous one)")
+        if show_hint:
+            print("\n  (Enter \\b on any field to go back and edit the previous one)")
         module_label = f" [{module_name}]" if module_name else ""
         data: dict[str, str] = {}
 
