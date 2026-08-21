@@ -19,6 +19,7 @@ from cfa_prep.flashcard_generator import FlashcardGenerator
 from cfa_prep.ips_builder import IPSBuilder
 from cfa_prep.quiz_engine import QuizEngine
 from cfa_prep.curriculum import Curriculum
+from cfa_prep.baii_calculator import BAIIPlus
 from cfa_prep.utils import (
     get_project_root,
     get_data_root,
@@ -142,6 +143,62 @@ def test_quiz_engine():
     print(f"  ✅ Quiz engine is fine (L1 question count: {len(topics)})")
 
 
+def test_baii_calculator():
+    """Test the BA II Plus calculator emulator's TVM, NPV/IRR, and stats."""
+    calc = BAIIPlus()
+
+    # TVM: FV of 1000 at 5% for 10 years (compounded annually).
+    # BA II Plus sign convention: an inflow today (+PV) implies an outflow later (-FV).
+    calc.n, calc.iy, calc.pv, calc.pmt, calc.fv = 10, 5, 1000, 0, 0
+    fv = calc.compute_tvm("FV")
+    assert abs(fv + 1000 * 1.05**10) < 0.01, f"FV mismatch: {fv}"
+
+    # Solve PV back: FV is now negative, so PV returns to +1000
+    calc.fv = fv
+    pv = calc.compute_tvm("PV")
+    assert abs(pv - 1000) < 0.01, f"PV mismatch: {pv}"
+
+    # PMT of an annuity: PV=1000, N=5, I/Y=10 -> PMT (negative cash outflow)
+    calc.n, calc.iy, calc.pv, calc.fv = 5, 10, 1000, 0
+    pmt = calc.compute_tvm("PMT")
+    expected_pmt = 1000 * 0.10 / (1 - 1.10**-5)
+    assert abs(pmt + expected_pmt) < 0.01, f"PMT mismatch: {pmt}"
+
+    # Solve I/Y from the annuity values
+    calc.n, calc.pv, calc.pmt, calc.fv = 5, 1000, -expected_pmt, 0
+    iy = calc.compute_tvm("IY")
+    assert abs(iy - 10) < 0.01, f"IY mismatch: {iy}"
+
+    # NPV / IRR: invest 1000, receive 300 x4
+    calc.clear_cashflows()
+    for amt in (-1000, 300, 300, 300, 300):
+        calc.add_cashflow(amt)
+    npv = calc.npv(10)
+    assert npv < 0, "NPV at 10% should be negative for this cash-flow series"
+    irr = calc.irr()
+    assert abs(irr - 7.71) < 0.1, f"IRR mismatch: {irr}"
+
+    # One-variable stats
+    calc.clear_data()
+    for x in (1, 2, 3, 4, 5):
+        calc.add_data(x)
+    s = calc.one_var_stats()
+    assert abs(s["mean"] - 3.0) < 1e-9
+
+    # Two-variable regression slope for y = 2x + 1
+    calc.clear_data()
+    for x in (1, 2, 3):
+        calc.add_data(x, 2 * x + 1)
+    s2 = calc.two_var_stats()
+    assert abs(s2["slope"] - 2.0) < 1e-9
+    assert abs(s2["intercept"] - 1.0) < 1e-9
+    assert abs(s2["correlation"] - 1.0) < 1e-9
+
+    # Percent change
+    assert abs(calc.percent_change(50, 75) - 50.0) < 1e-9
+    print("  ✅ BA II Plus calculator is fine")
+
+
 def test_flashcard_generator():
     """Test manually adding a flashcard (with curriculum subject/module selection)"""
     import tempfile
@@ -222,7 +279,9 @@ def test_flashcard_review():
 
 def test_settings():
     """Test config read/write"""
-    test_settings_data = {"level": "L1", "version": "1.0", "data_root": str(get_data_root())}
+    test_settings_data: dict[str, object] = {
+        "level": "L1", "version": "1.0", "data_root": str(get_data_root())
+    }
     save_settings(test_settings_data)
     settings = load_settings()
     assert settings.get("level") == "L1"
@@ -374,6 +433,7 @@ def run_all_tests():
         ("Progress tracker", test_progress_tracker),
         ("IPS builder", test_ips_builder),
         ("Quiz engine", test_quiz_engine),
+        ("BA II Plus calculator", test_baii_calculator),
         ("Flashcard generator", test_flashcard_generator),
         ("Flashcard review", test_flashcard_review),
         ("Config read/write", test_settings),

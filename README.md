@@ -91,6 +91,7 @@ cfa-prep search "FCFE"
 | `flashcard -r`               | Shorthand for `--review`     | `cfa-prep flashcard -r`                       |
 | `ips personal`               | Generate personal IPS template | `cfa-prep ips personal`                       |
 | `ips inst`                   | Generate institutional IPS template | `cfa-prep ips inst`                     |
+| `baii`                       | Interactive BA II Plus financial calculator | `cfa-prep baii`                 |
 | `curriculum seed`            | Create an empty curriculum    | `cfa-prep curriculum seed`                   |
 | `curriculum import <file>`   | Replace curriculum from a JSON file | `cfa-prep curriculum import my.json`   |
 | `curriculum show`            | Display the current curriculum | `cfa-prep curriculum show`                   |
@@ -184,6 +185,41 @@ You can optionally filter by **subject** (blank reviews all). For each card:
 - `[b]` goes back to the previous card
 - `[q]` quits the review
 
+## BA II Plus Calculator
+
+Launch an interactive emulator of the Texas Instruments **BA II Plus** financial
+calculator used in the CFA exams:
+
+```bash
+cfa-prep baii
+```
+
+Type a command and optionally a value; use `HELP` for the command list and
+`QUIT` to exit. Commands are kept short (no `/`) for fast entry:
+
+| Command              | Description                                        |
+| -------------------- | -------------------------------------------------- |
+| `N` `IY` `PV` `PMT` `FV` `<v>` | Set a TVM register                     |
+| `CPT <N\|IY\|PV\|PMT\|FV>`   | Solve a TVM register                  |
+| `CF <amount> [freq]` | Add a cash flow (`CF0` is the first entry)          |
+| `NPV <rate%>`        | Net present value at an annual rate                 |
+| `IRR`                | Internal rate of return (annual %)                  |
+| `STAT <x...>`        | One-variable statistics (mean, population SD)       |
+| `STAT2 <x y...>`     | Two-variable statistics (slope, intercept, corr)    |
+| `CHG <old> <new>`    | Percent change                                      |
+| `RESET`              | Clear all registers                                 |
+| `HELP` / `QUIT`      | Help / exit                                         |
+
+Example session:
+
+```
+baii> PV 1000
+baii> IY 5
+baii> N 10
+baii> PMT 0
+baii> CPT FV          → FV = -1628.8946   (BA II Plus sign convention)
+```
+
 ## Repository Layout
 
 ```
@@ -204,6 +240,7 @@ cfa-prep-cli/
 │   ├── flashcard_generator.py   # Manual flashcard management
 │   ├── ips_builder.py           # IPS template building
 │   ├── curriculum.py            # Curriculum module (subjects + topics per level)
+│   ├── baii_calculator.py       # BA II Plus financial calculator emulator
 │   └── utils.py                 # General utility functions (incl. data-root resolution)
 └── tests/
     └── test_basic.py            # Basic tests

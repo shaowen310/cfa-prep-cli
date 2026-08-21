@@ -40,6 +40,7 @@ from .progress_tracker import ProgressTracker
 from .flashcard_generator import FlashcardGenerator
 from .ips_builder import IPSBuilder
 from .curriculum import Curriculum
+from .baii_calculator import run_repl as run_baii_repl
 from .utils import (
     get_data_root,
     get_data_dir,
@@ -320,6 +321,13 @@ def cmd_ips(args: CLIArgs) -> None:
         print(f"\n💡 Use 'cfa-prep ips {ips_type} --show' to view the template content")
 
 
+def cmd_baii(_args: CLIArgs) -> None:
+    """
+    Launch an interactive BA II Plus financial calculator emulator.
+    """
+    run_baii_repl()
+
+
 def cmd_curriculum(args: CLIArgs) -> None:
     """
     Manage the curriculum (single source of truth for subjects + topics).
@@ -400,6 +408,7 @@ Examples:
   cfa-prep flashcard --review            Review flashcards (reveal answer or skip to next)
   cfa-prep ips personal                  Generate a personal IPS template
   cfa-prep ips inst                      Generate an institutional IPS template
+  cfa-prep baii                          Launch the BA II Plus financial calculator
 
 Data root (default ~/.cfa-prep) can be set via:
   --home /path/to/data, or the CFA_PREP_HOME environment variable.
@@ -451,6 +460,9 @@ Data root (default ~/.cfa-prep) can be set via:
                        help="IPS type: personal or inst/institutional")
     _ = p_ips.add_argument("--show", action="store_true", help="display the template content in the terminal")
 
+    # baii command
+    _ = subparsers.add_parser("baii", help="Interactive BA II Plus financial calculator")
+
     # curriculum command
     p_curriculum = subparsers.add_parser("curriculum", help="Manage the study curriculum (subjects + topics)")
     _ = p_curriculum.add_argument("action", nargs="?", choices=["seed", "import", "show"],
@@ -478,6 +490,7 @@ Data root (default ~/.cfa-prep) can be set via:
         "recap": cmd_recap,
         "flashcard": cmd_flashcard,
         "ips": cmd_ips,
+        "baii": cmd_baii,
         "curriculum": cmd_curriculum,
     }
 
