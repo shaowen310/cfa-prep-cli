@@ -231,6 +231,19 @@ class MistakeAnalyzer:
         i = 0
         while i < len(fields):
             key, prompt, upper = fields[i]
+
+            # Key point is picked from the curriculum menu (with \b handled inside)
+            if key == "key_point":
+                picked = self._pick_key_point(curriculum, level, subject, module_name)
+                if picked == "__back__":
+                    if i > 0:
+                        i -= 1
+                        print(f"  ⬅️ Back to: {fields[i][0]}")
+                    continue
+                data["key_point"] = picked
+                i += 1
+                continue
+
             raw = self._prompt(prompt).strip()
             # Back command: return to the previous field (no-op on the first)
             if raw == r"\b":
@@ -251,12 +264,6 @@ class MistakeAnalyzer:
                         print("  ⏭️ Skipped — already logged.")
                         return "skipped"
                 data["question"] = raw
-                i += 1
-                continue
-
-            # Key point is picked from the curriculum menu (no \b inside the menu)
-            if key == "key_point":
-                data["key_point"] = self._pick_key_point(curriculum, level, subject, module_name)
                 i += 1
                 continue
 
@@ -373,36 +380,39 @@ class MistakeAnalyzer:
         print(f"\n✅ Mistake saved to: {filepath}")
         return True
 
-    @staticmethod
     def _pick_key_point(
-        curriculum: Curriculum | None, level: str, subject: str, module_name: str
+        self, curriculum: Curriculum | None, level: str, subject: str, module_name: str
     ) -> str:
         """
         Let the user pick the key point (topic) from the selected module's topics.
         Falls back to free-text if curriculum is unavailable or module has no topics.
+        Returns "__back__" if the user enters `\\b` to go back to the previous field.
         """
         if not curriculum or not module_name:
-            return input("Key point (one-sentence summary): ").strip()
+            return self._prompt("Key point (one-sentence summary): ").strip()
 
         modules = cast(
             dict[str, dict[str, list[str]]], curriculum.subject_modules(level)
         )
         topics = modules.get(subject, {}).get(module_name, [])
         if not topics:
-            return input("Key point (one-sentence summary): ").strip()
+            return self._prompt("Key point (one-sentence summary): ").strip()
 
         print(f"\n  Pick the key point tested by this question:")
         for i, t in enumerate(topics, 1):
             print(f"    [{i}] {t}")
         print(f"    [0] Type a custom key point")
-        choice = input("  > ").strip()
+        print(f"    [\\b] Back to the previous field")
+        choice = self._prompt("  > ").strip()
+        if choice == r"\b":
+            return "__back__"
         if choice == "0" or not choice.isdigit():
-            return input("Key point (one-sentence summary): ").strip()
+            return self._prompt("Key point (one-sentence summary): ").strip()
 
         idx = int(choice) - 1
         if 0 <= idx < len(topics):
             return topics[idx]
-        return input("Key point (one-sentence summary): ").strip()
+        return self._prompt("Key point (one-sentence summary): ").strip()
 
     @staticmethod
     def _pick_subject_and_module(curriculum: Curriculum, level: str) -> tuple[str, str]:
