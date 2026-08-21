@@ -8,10 +8,56 @@ Purpose: Mimic the functionality of the Texas Instruments BA II Plus financial
 
 from __future__ import annotations
 
+import ast
 import math
+import operator as op
 from typing import Callable
 
 NPV_TOL = 1e-6
+
+# Supported binary operators for the expression evaluator (BA II Plus style).
+_OPS: dict[type[ast.operator], Callable[[float, float], float]] = {
+    ast.Add: op.add,
+    ast.Sub: op.sub,
+    ast.Mult: op.mul,
+    ast.Div: op.truediv,
+    ast.FloorDiv: op.floordiv,
+    ast.Pow: op.pow,
+    ast.Mod: op.mod,
+}
+
+
+def _eval_expr(expr: str) -> float:
+    """
+    Safely evaluate a simple arithmetic expression such as "1+2" or "3*(4-1)^2".
+    Supports + - * / // % **, parentheses, and unary +/-. Uses the AST so only
+    numeric literals and arithmetic are allowed (no arbitrary code execution).
+    """
+    # BA II Plus users expect '^' for exponentiation; map it to Python '**'.
+    expr = expr.replace("^", "**")
+    tree = ast.parse(expr, mode="eval")
+
+    def walk(node: ast.AST) -> float:
+        if isinstance(node, ast.Expression):
+            return walk(node.body)
+        if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)):
+            return float(node.value)
+        if isinstance(node, ast.UnaryOp) and isinstance(node.op, (ast.UAdd, ast.USub)):
+            v = walk(node.operand)
+            return v if isinstance(node.op, ast.UAdd) else -v
+        if isinstance(node, ast.BinOp) and type(node.op) in _OPS:
+            return _OPS[type(node.op)](walk(node.left), walk(node.right))
+        raise ValueError(f"Unsupported expression element: {type(node).__name__}")
+
+    result = walk(tree)
+    if math.isnan(result):
+        raise ValueError("Expression did not evaluate to a number")
+    return float(result)
+
+
+def _is_expression(line: str) -> bool:
+    """Heuristic: a line is a raw arithmetic expression if it contains an operator."""
+    return any(ch in line for ch in "+-*/%^(") and not line.split()[0].isalpha()
 
 
 def _solve_rate(
@@ -229,6 +275,8 @@ def _print_help() -> None:
     RESET                                    clear all registers
     HELP                                     this help
     QUIT / EXIT                              leave the calculator
+
+  Or type a raw arithmetic expression, e.g.:  1+2   3*(4-1)^2   100/3   2^10
 """)
 
 
@@ -251,6 +299,15 @@ def run_repl() -> None:
 
         parts = line.split()
         cmd = parts[0].upper()
+
+        # Raw arithmetic expression (e.g. 1+2, 3*(4-1)^2) → evaluate directly.
+        if _is_expression(line):
+            try:
+                print(f"  = {_fmt(_eval_expr(line))}")
+            except (ValueError, SyntaxError, ZeroDivisionError) as e:
+                print(f"  ❌ {e}")
+            continue
+
         try:
             if cmd in ("HELP", "?"):
                 _print_help()

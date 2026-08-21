@@ -210,6 +210,16 @@ Type a command and optionally a value; use `HELP` for the command list and
 | `RESET`              | Clear all registers                                 |
 | `HELP` / `QUIT`      | Help / exit                                         |
 
+You can also type a raw arithmetic expression for quick calculations
+(`+ - * / // % **`, parentheses, and `^` for exponentiation are supported):
+
+```
+baii> 1+2             → = 3
+baii> 2^10            → = 1,024
+baii> 3*(4-1)^2       → = 27
+baii> 100/3           → = 33.3333
+```
+
 Example session:
 
 ```

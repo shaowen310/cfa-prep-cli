@@ -20,6 +20,7 @@ from cfa_prep.ips_builder import IPSBuilder
 from cfa_prep.quiz_engine import QuizEngine
 from cfa_prep.curriculum import Curriculum
 from cfa_prep.baii_calculator import BAIIPlus
+from cfa_prep.baii_calculator import _eval_expr  # pyright: ignore[reportPrivateUsage]
 from cfa_prep.utils import (
     get_project_root,
     get_data_root,
@@ -196,6 +197,14 @@ def test_baii_calculator():
 
     # Percent change
     assert abs(calc.percent_change(50, 75) - 50.0) < 1e-9
+
+    # Raw arithmetic expressions
+    assert abs(_eval_expr("1+2") - 3) < 1e-9
+    assert abs(_eval_expr("10*5") - 50) < 1e-9
+    assert abs(_eval_expr("2^10") - 1024) < 1e-9
+    assert abs(_eval_expr("3*(4-1)^2") - 27) < 1e-9
+    assert abs(_eval_expr("100/3") - 100 / 3) < 1e-9
+    assert abs(_eval_expr("-5+2") - (-3)) < 1e-9
     print("  ✅ BA II Plus calculator is fine")
 
 
