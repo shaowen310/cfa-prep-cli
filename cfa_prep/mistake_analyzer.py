@@ -205,30 +205,67 @@ class MistakeAnalyzer:
     ) -> str:
         """
         Log an L1 MCQ mistake with 3-option input.
+        Enter `\\b` on any field to go back and re-enter the previous field.
 
         Returns one of:
             "finished" — user entered a blank question (stop the session)
             "skipped"  — question already logged, user chose not to re-add
             "saved"    — a mistake was saved
         """
+        print("\n  (Enter \\b on any field to go back and edit the previous one)")
         module_label = f" [{module_name}]" if module_name else ""
-        question = self._prompt(f"\nQuestion text{module_label} (blank to finish): ").strip()
-        if not question:
-            return "finished"
+        data: dict[str, str] = {}
 
-        # Warn if this question was logged before, and let the user opt out
-        if not self._confirm_duplicate(question):
-            print("  ⏭️ Skipped — already logged.")
-            return "skipped"
+        fields: list[tuple[str, str, bool]] = [
+            # (key, prompt, uppercase?)
+            ("question", f"Question text{module_label} (blank to finish): ", False),
+            ("option_a", "  Enter the 3 answer options:\n    A: ", False),
+            ("option_b", "    B: ", False),
+            ("option_c", "    C: ", False),
+            ("user_letter", "\nYour wrong answer (A/B/C): ", True),
+            ("correct_letter", "Correct answer (A/B/C): ", True),
+            ("key_point", "Key point (one-sentence summary): ", False),
+            ("correct_conclusion", "Correct conclusion / explanation (optional): ", False),
+        ]
 
-        # Collect the 3 options
-        print("\n  Enter the 3 answer options:")
-        option_a = self._prompt("    A: ").strip()
-        option_b = self._prompt("    B: ").strip()
-        option_c = self._prompt("    C: ").strip()
+        i = 0
+        while i < len(fields):
+            key, prompt, upper = fields[i]
+            raw = self._prompt(prompt).strip()
+            # Back command: return to the previous field (no-op on the first)
+            if raw == r"\b":
+                if i > 0:
+                    i -= 1
+                    print(f"  ⬅️ Back to: {fields[i][0]}")
+                else:
+                    print("  ⚠️ Already at the first field.")
+                continue
 
-        user_letter = self._prompt("\nYour wrong answer (A/B/C): ").strip().upper()
-        correct_letter = self._prompt("Correct answer (A/B/C): ").strip().upper()
+            # Question field has special handling: blank = finish, plus duplicate check
+            if key == "question":
+                if not raw:
+                    return "finished"
+                if raw != data.get("question"):
+                    # Re-enter duplicate check whenever the question text changes
+                    if not self._confirm_duplicate(raw):
+                        print("  ⏭️ Skipped — already logged.")
+                        return "skipped"
+                data["question"] = raw
+                i += 1
+                continue
+
+            # Key point is picked from the curriculum menu (no \b inside the menu)
+            if key == "key_point":
+                data["key_point"] = self._pick_key_point(curriculum, level, subject, module_name)
+                i += 1
+                continue
+
+            data[key] = raw.upper() if upper else raw
+            i += 1
+
+        question = data["question"]
+        option_a, option_b, option_c = data["option_a"], data["option_b"], data["option_c"]
+        user_letter, correct_letter = data["user_letter"], data["correct_letter"]
 
         # Map letters to option text so the machine can identify the answer
         # regardless of display order (quiz can shuffle options later).
@@ -236,12 +273,8 @@ class MistakeAnalyzer:
         user_answer = letter_to_text.get(user_letter, user_letter)
         correct_answer = letter_to_text.get(correct_letter, correct_letter)
 
-        # Pick the key point from the module's topics
-        key_point = self._pick_key_point(curriculum, level, subject, module_name)
-
-        correct_conclusion = self._prompt(
-            "Correct conclusion / explanation (optional): "
-        ).strip()
+        key_point = data["key_point"]
+        correct_conclusion = data["correct_conclusion"]
 
         filepath = self.add_mistake(
             subject=subject,
@@ -259,42 +292,80 @@ class MistakeAnalyzer:
         return "saved"
 
     def _log_freeform(self, subject: str, module_name: str, level: str = "L1") -> bool:
-        """Log an L2/L3 free-form mistake. Returns True if a mistake was saved."""
+        """
+        Log an L2/L3 free-form mistake. Enter `\\b` on any single-line field to go
+        back and re-enter the previous field. Returns True if a mistake was saved.
+        """
+        print("\n  (Enter \\b on any field to go back and edit the previous one)")
+        data: dict[str, str] = {}
+
+        # Question is multi-line (blank line to finish); other fields are single-line.
+        fields: list[str] = [
+            "user_answer",
+            "correct_answer",
+            "key_point",
+            "correct_conclusion",
+            "source",
+        ]
+
+        # 1. Multi-line question (first field; blank finishes the session)
         print("\nEnter the question description (enter a blank line to finish):")
-        question_lines: list[str] = []
         while True:
-            line = self._prompt()
-            if line == "":
+            lines = [self._prompt()]
+            if lines[0] == "":
+                print("  Cancelled.")
+                return False
+            while True:
+                line = self._prompt()
+                if line == "":
+                    break
+                lines.append(line)
+            question = "\n".join(lines).strip()
+            if not question:
+                print("  Cancelled.")
+                return False
+            # Warn if this question was logged before, and let the user opt out
+            if self._confirm_duplicate(question):
+                data["question"] = question
                 break
-            question_lines.append(line)
-        question = "\n".join(question_lines)
-        if not question.strip():
-            print("  Cancelled.")
-            return False
+            print("  ⏭️ Skipped — already logged. Enter a different question.")
 
-        # Warn if this question was logged before, and let the user opt out
-        if not self._confirm_duplicate(question):
-            print("  ⏭️ Skipped — already logged.")
-            return False
-
-        user_answer = self._prompt("\nYour wrong answer: ").strip()
-        correct_answer = self._prompt("Correct answer: ").strip()
-
-        key_point = self._prompt("\nKey point (one-sentence summary): ").strip()
-        correct_conclusion = self._prompt("Correct conclusion (one-sentence summary): ").strip()
-
+        # 2. Remaining single-line fields, with \b back navigation
         default_source = f"{subject} > {module_name}" if module_name else ""
-        source = self._prompt(f"Source [{default_source}]: ").strip()
-        if not source:
-            source = default_source
+        i = 0
+        while i < len(fields):
+            key = fields[i]
+            if key == "user_answer":
+                prompt = "\nYour wrong answer: "
+            elif key == "correct_answer":
+                prompt = "Correct answer: "
+            elif key == "key_point":
+                prompt = "\nKey point (one-sentence summary): "
+            elif key == "correct_conclusion":
+                prompt = "Correct conclusion (one-sentence summary): "
+            else:  # source
+                prompt = f"Source [{default_source}]: "
+
+            raw = self._prompt(prompt).strip()
+            if raw == r"\b":
+                if i > 0:
+                    i -= 1
+                    print(f"  ⬅️ Back to: {fields[i]}")
+                else:
+                    print("  ⚠️ Already at the first field.")
+                continue
+            data[key] = raw
+            i += 1
+
+        source = data["source"] or default_source
 
         filepath = self.add_mistake(
             subject=subject,
-            question=question,
-            user_answer=user_answer,
-            correct_answer=correct_answer,
-            key_point=key_point,
-            correct_conclusion=correct_conclusion,
+            question=data["question"],
+            user_answer=data["user_answer"],
+            correct_answer=data["correct_answer"],
+            key_point=data["key_point"],
+            correct_conclusion=data["correct_conclusion"],
             source=source,
             module_name=module_name,
             level=level,
