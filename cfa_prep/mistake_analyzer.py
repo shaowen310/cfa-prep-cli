@@ -185,9 +185,11 @@ class MistakeAnalyzer:
 
             if is_mcq:
                 while True:
-                    if not self._log_mcq(subject, module_name, curriculum, level):
+                    result = self._log_mcq(subject, module_name, curriculum, level)
+                    if result == "finished":
                         break
-                    saved += 1
+                    if result == "saved":
+                        saved += 1
             else:
                 if self._log_freeform(subject, module_name, level):
                     saved += 1
@@ -200,21 +202,24 @@ class MistakeAnalyzer:
 
     def _log_mcq(
         self, subject: str, module_name: str, curriculum: Curriculum | None, level: str
-    ) -> bool:
+    ) -> str:
         """
         Log an L1 MCQ mistake with 3-option input.
-        Returns True if a mistake was saved, False if the user cancelled
-        (blank question) so the caller can loop or stop.
+
+        Returns one of:
+            "finished" — user entered a blank question (stop the session)
+            "skipped"  — question already logged, user chose not to re-add
+            "saved"    — a mistake was saved
         """
         module_label = f" [{module_name}]" if module_name else ""
         question = self._prompt(f"\nQuestion text{module_label} (blank to finish): ").strip()
         if not question:
-            return False
+            return "finished"
 
         # Warn if this question was logged before, and let the user opt out
         if not self._confirm_duplicate(question):
             print("  ⏭️ Skipped — already logged.")
-            return False
+            return "skipped"
 
         # Collect the 3 options
         print("\n  Enter the 3 answer options:")
@@ -251,7 +256,7 @@ class MistakeAnalyzer:
             level=level,
         )
         print(f"\n✅ Mistake saved to: {filepath}")
-        return True
+        return "saved"
 
     def _log_freeform(self, subject: str, module_name: str, level: str = "L1") -> bool:
         """Log an L2/L3 free-form mistake. Returns True if a mistake was saved."""
