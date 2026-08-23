@@ -118,12 +118,12 @@ maps to one or more **modules**, and each module maps to a list of topics:
   "L1": {
     "Financial Statement Analysis": {
       "Module 1: Analysis Framework": [
-        "Introduction to financial statement analysis",
-        "Financial reporting standards"
+        "1.01 Introduction to financial statement analysis",
+        "1.02 Financial reporting standards"
       ],
       "Module 2: The Financial Statements": [
-        "Understanding the income statement",
-        "Understanding the balance sheet"
+        "2.01 Understanding the income statement",
+        "2.02 Understanding the balance sheet"
       ]
     }
   }
