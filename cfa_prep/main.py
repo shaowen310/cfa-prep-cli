@@ -23,7 +23,6 @@ class CLIArgs(Protocol):
     regex: bool
     no_fuzzy: bool
     max_results: int
-    level: str | None
     randomize: bool
     add: bool
     remove: bool
@@ -123,7 +122,7 @@ def cmd_init(_args: CLIArgs) -> None:
     print()
     print("  2. Start using:")
     print("     cfa-prep search \"FCFE\"        # Search the knowledge base")
-    print("     cfa-prep quiz --level L1       # Start quizzing")
+    print("     cfa-prep quiz                  # Start quizzing (configured level)")
     print("     cfa-prep recap                 # View progress")
     print()
 
@@ -232,7 +231,8 @@ def cmd_quiz(args: CLIArgs) -> None:
     """
     Start the quiz mode.
     """
-    level = args.level.upper() if args.level else "L1"
+    settings = load_settings()
+    level = cast(str, settings.get("level", "L1"))
     engine = QuizEngine()
     engine.start_quiz(level=level, randomize=args.randomize)
 
@@ -424,8 +424,7 @@ Examples:
   cfa-prep config home --set /path/folder  Persist the data root to an existing folder
   cfa-prep search "FCFE"                 Search the knowledge base
   cfa-prep search "FCFE" --regex         Use regex search
-  cfa-prep quiz --level L1               Start L1 quizzing
-  cfa-prep quiz --level L2               Start L2 quizzing
+  cfa-prep quiz                          Start quizzing at the configured level (config level)
   cfa-prep quiz --no-randomize           Disable question/option shuffling
   cfa-prep mistake -a                    Log a mistake
   cfa-prep recap                         View progress
@@ -468,9 +467,7 @@ Data root (default ~/.cfa-prep) can be set via:
     _ = p_search.add_argument("--max-results", type=int, default=10, help="maximum number of results (default 10)")
 
     # quiz command
-    p_quiz = subparsers.add_parser("quiz", help="Start quizzing")
-    _ = p_quiz.add_argument("--level", choices=["L1", "L2", "L3", "l1", "l2", "l3"],
-                        default="L1", help="exam level (default L1)")
+    p_quiz = subparsers.add_parser("quiz", help="Start quizzing (uses the configured level)")
     _ = p_quiz.add_argument("--no-randomize", dest="randomize", action="store_false", default=True,
                         help="disable question/option shuffling (randomized by default)")
 

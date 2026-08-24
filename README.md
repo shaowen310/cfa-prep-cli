@@ -78,9 +78,7 @@ cfa-prep search "FCFE"
 | `config home --set <path>`   | Set the data root to an existing folder | `cfa-prep config home --set D:\cfa\data` |
 | `search <keyword>`           | Search the knowledge base    | `cfa-prep search "FCFE"`                       |
 | `search --regex`             | Regex search                 | `cfa-prep search "FCF[EF]" --regex`            |
-| `quiz --level L1`            | L1 quiz (10 mixed questions) | `cfa-prep quiz --level L1`                     |
-| `quiz --level L2`            | L2 quiz (vignette)           | `cfa-prep quiz --level L2`                     |
-| `quiz --level L3`            | L3 quiz (IPS scenario)       | `cfa-prep quiz --level L3`                     |
+| `quiz`                       | Quiz at the configured level (set via `config level`) | `cfa-prep quiz`                          |
 | `quiz --no-randomize`        | Disable question/option shuffling | `cfa-prep quiz --no-randomize`             |
 | `mistake -a`                 | Interactive mistake entry    | `cfa-prep mistake -a`                          |
 | `recap`                      | View study progress          | `cfa-prep recap`                               |
