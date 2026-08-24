@@ -17,22 +17,49 @@ def get_project_root() -> Path:
     return Path(__file__).resolve().parent.parent
 
 
+def _default_config_dir() -> Path:
+    """Stable anchor config dir under the default ~/.cfa-prep, independent of the
+    currently-resolved data root. home.env lives here so it can redirect resolution."""
+    return Path.home() / ".cfa-prep" / "config"
+
+
 def _candidate_data_root() -> Path:
     """
     Determine the data root path WITHOUT creating anything, with this priority:
       1. CFA_PREP_HOME environment variable
-      2. `data_root` in <default_root>/config/settings.json
+      2. ~/.cfa-prep/config/home.env (written by `cfa-prep config home --set`)
       3. ~/.cfa-prep (user home default)
     """
     env = os.environ.get("CFA_PREP_HOME")
     if env:
         return Path(env).expanduser()
-    default_root = Path.home() / ".cfa-prep"
-    settings = load_json(default_root / "config" / "settings.json")
-    configured = settings.get("data_root")
-    if isinstance(configured, str) and configured:
-        return Path(configured).expanduser()
-    return default_root
+    home_env_file = _default_config_dir() / "home.env"
+    if home_env_file.exists():
+        for line in home_env_file.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                k, v = line.split("=", 1)
+                if k.strip() == "CFA_PREP_HOME":
+                    return Path(v.strip()).expanduser()
+    return Path.home() / ".cfa-prep"
+
+
+def load_home_env() -> None:
+    """
+    Source config/home.env to set CFA_PREP_HOME if it is not already set in the
+    process environment. This lets `cfa-prep config home --set` persist the data
+    root without storing it inside settings.json.
+    """
+    if os.environ.get("CFA_PREP_HOME"):
+        return
+    home_env_file = _default_config_dir() / "home.env"
+    if not home_env_file.exists():
+        return
+    for line in home_env_file.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if line and not line.startswith("#") and "=" in line:
+            k, v = line.split("=", 1)
+            _ = os.environ.setdefault(k.strip(), v.strip())
 
 
 def get_data_root() -> Path:
@@ -56,22 +83,25 @@ def get_config_dir() -> Path:
     return p
 
 
-def set_data_root(new_root: str | Path) -> Path:
+def set_home_env(new_root: str | Path) -> Path:
     """
-    Persist the data root to the default config (config/settings.json under ~/.cfa-prep),
-    so future runs resolve the same folder. Returns the resolved path.
-
-    NOTE: If CFA_PREP_HOME is set, the env var takes precedence at resolution time and
-    cannot be overridden from here; this only writes the config fallback.
+    Persist the data root to config/home.env so future runs resolve the same folder.
+    Returns the resolved path. This is honored by load_home_env() at startup and never
+    stored inside settings.json (the data root is controlled via the CFA_PREP_HOME env var).
     """
     resolved = Path(new_root).expanduser().resolve()
-    default_root = Path.home() / ".cfa-prep"
-    config_dir = default_root / "config"
+    config_dir = _default_config_dir()
     config_dir.mkdir(parents=True, exist_ok=True)
-    settings = load_json(config_dir / "settings.json")
-    settings["data_root"] = str(resolved)
-    save_json(config_dir / "settings.json", settings)
+    home_env_file = config_dir / "home.env"
+    write_file_text(home_env_file, f"CFA_PREP_HOME={resolved}\n")
     return resolved
+
+
+def set_setting(key: str, value: object) -> None:
+    """Merge a single key/value into config/settings.json."""
+    settings = load_settings()
+    settings[key] = value
+    save_settings(settings)
 
 
 def load_json(filepath: Path) -> dict[str, object]:

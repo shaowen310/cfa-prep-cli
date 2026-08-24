@@ -54,9 +54,8 @@ By default, all data is stored under `~/.cfa-prep`. You can relocate it in three
 
 | Method | Example |
 | ------ | ------- |
-| **`--home` flag** (per command) | `cfa-prep --home /path/to/data init` |
 | **`CFA_PREP_HOME` env var** | `export CFA_PREP_HOME=/path/to/data` |
-| **`data_root` in `settings.json`** | written automatically by `init` under `<data_root>/config/settings.json` |
+| **`config home --set`** | `cfa-prep config home --set D:\cfa\data` (persisted in `<data_root>/config/home.env`) |
 
 The knowledge files live in the `kb/` subfolder of the data root:
 - File name format: `l1_vol1_p1-60.txt`
@@ -73,8 +72,10 @@ cfa-prep search "FCFE"
 | Command                      | Description                  | Example                                        |
 | ---------------------------- | ---------------------------- | ---------------------------------------------- |
 | `init`                       | Initialize data root dirs and config | `cfa-prep init`                          |
-| `home`                       | Show the data root directory path | `cfa-prep home`                    |
-| `home --set <path>`          | Set the data root to an existing folder | `cfa-prep home --set D:\cfa\data` |
+| `config level`               | Show the current default level | `cfa-prep config level`                  |
+| `config level L2`            | Set the default level (L1/L2/L3) | `cfa-prep config level L2`               |
+| `config home`                | Show the data root directory path | `cfa-prep config home`                  |
+| `config home --set <path>`   | Set the data root to an existing folder | `cfa-prep config home --set D:\cfa\data` |
 | `search <keyword>`           | Search the knowledge base    | `cfa-prep search "FCFE"`                       |
 | `search --regex`             | Regex search                 | `cfa-prep search "FCF[EF]" --regex`            |
 | `quiz --level L1`            | L1 quiz (10 mixed questions) | `cfa-prep quiz --level L1`                     |
@@ -96,7 +97,7 @@ cfa-prep search "FCFE"
 | `curriculum import <file>`   | Replace curriculum from a JSON file | `cfa-prep curriculum import my.json`   |
 | `curriculum show`            | Display the current curriculum | `cfa-prep curriculum show`                   |
 
-> All commands accept the global `--home PATH` flag, e.g. `cfa-prep --home ./my-data search "FCFE"`.
+> The data root can be set persistently with `cfa-prep config home --set ./my-data` or via the `CFA_PREP_HOME` environment variable, e.g. `cfa-prep config home --set ./my-data` or `export CFA_PREP_HOME=./my-data`.
 
 ## Curriculum
 

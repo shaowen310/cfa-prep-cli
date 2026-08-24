@@ -6,7 +6,6 @@ Purpose: Provide a command-line interface that orchestrates all submodule functi
          Supports the search / quiz / mistake / recap / flashcard / ips / init commands.
 """
 
-import os
 import json
 import argparse
 from pathlib import Path
@@ -17,7 +16,8 @@ class CLIArgs(Protocol):
     """Typed view of the parsed argparse namespace shared by the command handlers."""
 
     command: str | None
-    home: str | None
+    config_key: str | None
+    config_value: str | None
     set_path: str | None
     keyword: str | None
     regex: bool
@@ -44,9 +44,11 @@ from .baii_calculator import run_repl as run_baii_repl
 from .utils import (
     get_data_root,
     get_data_dir,
-    set_data_root,
     load_settings,
     save_settings,
+    set_setting,
+    set_home_env,
+    load_home_env,
     print_header,
     print_section,
     today_iso,
@@ -56,7 +58,7 @@ from .utils import (
 def cmd_init(_args: CLIArgs) -> None:
     """
     Initialize the project: create all necessary directories and default config files
-    under the resolved data root (~/.cfa-prep by default, or CFA_PREP_HOME / --home).
+    under the resolved data root (~/.cfa-prep by default, or CFA_PREP_HOME / home.env).
     """
     print_header("🚀 CFA Prep CLI - Project Initialization")
 
@@ -77,11 +79,11 @@ def cmd_init(_args: CLIArgs) -> None:
         p.mkdir(parents=True, exist_ok=True)
         print(f"  ✅ Created directory: {d}")
 
-    # Create the default settings.json (remember the data_root so future runs resolve the same folder)
+    # Create the default settings.json. The data root is NOT stored here; it is
+    # resolved via CFA_PREP_HOME / config/home.env / ~/.cfa-prep at runtime.
     settings = {
         "level": "L1",
         "version": "1.0",
-        "data_root": str(root),
         "kb_dir": "kb",
         "mistakes_dir": "mistakes",
         "progress_dir": "progress",
@@ -126,39 +128,62 @@ def cmd_init(_args: CLIArgs) -> None:
     print()
 
 
-def cmd_home(args: CLIArgs) -> None:
+def cmd_config(args: CLIArgs) -> None:
     """
-    Show the resolved data root (home) directory path, or set it to a new path.
+    View or set configuration values.
 
     Usage:
-        cfa-prep home              # show current home
-        cfa-prep home --set <path> # set home to an existing folder
+        cfa-prep config level              # show the current level
+        cfa-prep config level L2           # set the default level (L1/L2/L3)
+        cfa-prep config home               # show the resolved data root (home)
+        cfa-prep config home --set <path>  # persist the data root to an existing folder
     """
-    if args.set_path:
-        target = Path(args.set_path).expanduser()
-        if not target.exists():
-            print(f"❌ Path does not exist: {target}")
-            print("   Use 'cfa-prep init' to create a fresh data root, or point to an existing folder.")
-            return
-        if not target.is_dir():
-            print(f"❌ Not a directory: {target}")
-            return
+    key = (args.config_key or "").lower()
 
-        expected = ["kb", "mistakes", "progress", "flashcards", "templates", "config"]
-        has_subdirs = any((target / d).is_dir() for d in expected)
-
-        resolved = set_data_root(target)
-        print(f"✅ Data root (home) set to: {resolved}")
-        print(f"   Persisted in: {Path.home() / '.cfa-prep' / 'config' / 'settings.json'}")
-        if not has_subdirs:
-            print("   ℹ️  This folder doesn't look like a cfa-prep data root yet.")
-            print("      Run 'cfa-prep init' (with this home) to create the standard structure.")
-        else:
-            print("   ℹ️  Existing cfa-prep structure detected; the folder is ready to use.")
+    if key == "level":
+        if args.config_value:
+            value = args.config_value.upper()
+            if value not in ("L1", "L2", "L3"):
+                print("❌ Invalid level. Choose one of: L1, L2, L3")
+                return
+            set_setting("level", value)
+            print(f"✅ Default level set to: {value}")
+            return
+        settings = load_settings()
+        level = cast(str, settings.get("level", "L1"))
+        print(level)
         return
 
-    root = get_data_root()
-    print(root)
+    if key == "home":
+        if args.set_path:
+            target = Path(args.set_path).expanduser()
+            if not target.exists():
+                print(f"❌ Path does not exist: {target}")
+                print("   Use 'cfa-prep init' to create a fresh data root, or point to an existing folder.")
+                return
+            if not target.is_dir():
+                print(f"❌ Not a directory: {target}")
+                return
+
+            expected = ["kb", "mistakes", "progress", "flashcards", "templates", "config"]
+            has_subdirs = any((target / d).is_dir() for d in expected)
+
+            resolved = set_home_env(target)
+            print(f"✅ Data root (home) set to: {resolved}")
+            print(f"   Persisted in: {get_data_root() / 'config' / 'home.env'}")
+            if not has_subdirs:
+                print("   ℹ️  This folder doesn't look like a cfa-prep data root yet.")
+                print("      Run 'cfa-prep init' to create the standard structure here.")
+            else:
+                print("   ℹ️  Existing cfa-prep structure detected; the folder is ready to use.")
+            return
+
+        root = get_data_root()
+        print(root)
+        return
+
+    print("❌ Unknown config key. Choose one of: level, home")
+    print("   Usage: cfa-prep config <level|home> [value] [--set PATH]")
 
 
 def cmd_search(args: CLIArgs) -> None:
@@ -393,8 +418,10 @@ def main():
         epilog="""
 Examples:
   cfa-prep init                          Initialize the project
-  cfa-prep home                          Show the data root (home) path
-  cfa-prep home --set /path/to/folder    Set the data root to an existing folder
+  cfa-prep config level                  Show the current default level
+  cfa-prep config level L2               Set the default level to L2
+  cfa-prep config home                   Show the data root (home) path
+  cfa-prep config home --set /path/folder  Persist the data root to an existing folder
   cfa-prep search "FCFE"                 Search the knowledge base
   cfa-prep search "FCFE" --regex         Use regex search
   cfa-prep quiz --level L1               Start L1 quizzing
@@ -411,20 +438,23 @@ Examples:
   cfa-prep baii                          Launch the BA II Plus financial calculator
 
 Data root (default ~/.cfa-prep) can be set via:
-  --home /path/to/data, or the CFA_PREP_HOME environment variable.
+  cfa-prep config home --set /path/to/data, or the CFA_PREP_HOME environment variable.
         """,
     )
-    _ = parser.add_argument("--home", metavar="PATH", help="override the data root directory (also honored via CFA_PREP_HOME env var)")
 
     subparsers = parser.add_subparsers(dest="command", help="available commands")
 
     # init command
     _ = subparsers.add_parser("init", help="Initialize the data root directories and config")
 
-    # home command
-    p_home = subparsers.add_parser("home", help="Show or set the data root (home) directory")
-    _ = p_home.add_argument("--set", dest="set_path", metavar="PATH",
-                            help="set the data root to an existing folder")
+    # config command
+    p_config = subparsers.add_parser("config", help="View or set config (level, home)")
+    _ = p_config.add_argument("config_key", choices=["level", "home"],
+                              help="config key to view/set: level or home")
+    _ = p_config.add_argument("config_value", nargs="?", default=None,
+                              help="new value for 'level' (L1/L2/L3)")
+    _ = p_config.add_argument("--set", dest="set_path", metavar="PATH",
+                              help="set the data root to an existing folder (for 'home')")
 
     # mistake command
     p_mistake = subparsers.add_parser("mistake", help="Log and view mistakes")
@@ -472,18 +502,17 @@ Data root (default ~/.cfa-prep) can be set via:
     args = parser.parse_args()
     args = cast(CLIArgs, cast(object, args))
 
+    # Resolve the data root from config/home.env (or CFA_PREP_HOME) before dispatch
+    load_home_env()
+
     if not args.command:
         parser.print_help()
         return
 
-    # Apply --home override before dispatching so all modules resolve the data root consistently
-    if args.home:
-        os.environ["CFA_PREP_HOME"] = args.home
-
     # Dispatch commands
     commands = {
         "init": cmd_init,
-        "home": cmd_home,
+        "config": cmd_config,
         "search": cmd_search,
         "quiz": cmd_quiz,
         "mistake": cmd_mistake,
