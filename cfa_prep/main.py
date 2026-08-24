@@ -490,8 +490,8 @@ Data root (default ~/.cfa-prep) can be set via:
     # baii command
     _ = subparsers.add_parser("baii", help="Interactive BA II Plus financial calculator")
 
-    # curriculum command
-    p_curriculum = subparsers.add_parser("curriculum", help="Manage the study curriculum (subjects + topics)")
+    # curriculum command (alias: curri)
+    p_curriculum = subparsers.add_parser("curriculum", aliases=["curri"], help="Manage the study curriculum (subjects + topics)")
     _ = p_curriculum.add_argument("action", nargs="?", choices=["seed", "import", "show"],
                               default="show", help="action: seed / import / show (default show)")
     _ = p_curriculum.add_argument("file", nargs="?", help="JSON file to import (for 'import' action)")
