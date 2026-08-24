@@ -455,8 +455,8 @@ Data root (default ~/.cfa-prep) can be set via:
     _ = p_config.add_argument("--set", dest="set_path", metavar="PATH",
                               help="set the data root to an existing folder (for 'home')")
 
-    # mistake command
-    p_mistake = subparsers.add_parser("mistake", help="Log and view mistakes")
+    # mistake command (alias: mis)
+    p_mistake = subparsers.add_parser("mistake", aliases=["mis"], help="Log and view mistakes")
     _ = p_mistake.add_argument("-a", "--add", action="store_true", help="interactively log a mistake")
 
     # search command
@@ -476,8 +476,8 @@ Data root (default ~/.cfa-prep) can be set via:
     _ = p_recap.add_argument("--update", action="store_true", help="interactively update progress")
     _ = p_recap.add_argument("--remove", action="store_true", help="interactively remove progress entries")
 
-    # flashcard command
-    p_flash = subparsers.add_parser("flashcard", help="Add or review flashcards")
+    # flashcard command (alias: flash)
+    p_flash = subparsers.add_parser("flashcard", aliases=["flash"], help="Add or review flashcards")
     _ = p_flash.add_argument("--add", "-a", action="store_true", help="manually add a flashcard (select subject/module from curriculum)")
     _ = p_flash.add_argument("--review", "-r", action="store_true", help="review flashcards (reveal answer or skip to next)")
 
@@ -505,6 +505,10 @@ Data root (default ~/.cfa-prep) can be set via:
     if not args.command:
         parser.print_help()
         return
+
+    # Normalize subcommand aliases before dispatch
+    command_aliases = {"curri": "curriculum", "mis": "mistake", "flash": "flashcard"}
+    args.command = command_aliases.get(args.command, args.command)
 
     # Dispatch commands
     commands = {
