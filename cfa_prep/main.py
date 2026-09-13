@@ -441,7 +441,9 @@ Data root (default ~/.cfa-prep) can be set via:
         """,
     )
 
-    subparsers = parser.add_subparsers(dest="command", help="available commands")
+    # metavar keeps the usage line short; the full command list (with aliases) is still
+    # shown in the "positional arguments" section below it.
+    subparsers = parser.add_subparsers(dest="command", metavar="COMMAND", help="available commands")
 
     # init command
     _ = subparsers.add_parser("init", help="Initialize the data root directories and config")
