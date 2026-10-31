@@ -237,13 +237,17 @@ class BAIIPlus:
         n = len(vals)
         if n == 0:
             raise ValueError("No data entered")
+        if n < 2:
+            raise ValueError("Need at least 2 data points for statistics")
         mean = sum(vals) / n
-        var = sum((v - mean) ** 2 for v in vals) / n  # population variance
+        # The BA II Plus reports Sx as the *sample* standard deviation (n-1
+        # denominator), consistent with the 2-variable Sx / Sy below.
+        var = sum((v - mean) ** 2 for v in vals) / (n - 1)
         return mean, math.sqrt(var)
 
     def one_var_stats(self) -> dict[str, float]:
         mean, sd = self._moments(0)
-        return {"n": float(len(self.data)), "mean": mean, "pop_sd": sd}
+        return {"n": float(len(self.data)), "mean": mean, "s_x": sd}
 
     def two_var_stats(self) -> dict[str, float]:
         if len(self.data) < 2:
@@ -361,7 +365,7 @@ def run_repl() -> None:
                 for x in xs:
                     calc.add_data(x)
                 s = calc.one_var_stats()
-                print(f"  n={s['n']:g}  mean={_fmt(s['mean'])}  pop sd={_fmt(s['pop_sd'])}")
+                print(f"  n={s['n']:g}  mean={_fmt(s['mean'])}  Sx={_fmt(s['s_x'])}")
             elif cmd == "STAT2":
                 nums = [float(p) for p in parts[1:]]
                 if len(nums) % 2 != 0:

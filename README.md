@@ -203,7 +203,7 @@ Type a command and optionally a value; use `HELP` for the command list and
 | `CF <amount> [freq]` | Add a cash flow (`CF0` is the first entry)          |
 | `NPV <rate%>`        | Net present value at an annual rate                 |
 | `IRR`                | Internal rate of return (annual %)                  |
-| `STAT <x...>`        | One-variable statistics (mean, population SD)       |
+| `STAT <x...>`        | One-variable statistics (mean, sample SD `Sx`)      |
 | `STAT2 <x y...>`     | Two-variable statistics (slope, intercept, corr)    |
 | `CHG <old> <new>`    | Percent change                                      |
 | `RESET`              | Clear all registers                                 |

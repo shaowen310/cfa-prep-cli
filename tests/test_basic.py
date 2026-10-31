@@ -5,6 +5,7 @@ Author: CodeBuddy AI Assistant
 Purpose: Run basic functional tests on the core modules to ensure each module can be initialized and run correctly.
 """
 
+import math
 import sys
 import os
 from pathlib import Path
@@ -189,6 +190,8 @@ def test_baii_calculator():
         calc.add_data(x)
     s = calc.one_var_stats()
     assert abs(s["mean"] - 3.0) < 1e-9
+    # BA II Plus reports Sx as the sample standard deviation (n-1 denominator).
+    assert abs(s["s_x"] - math.sqrt(2.5)) < 1e-9, f"Sx mismatch: {s['s_x']}"
 
     # Two-variable regression slope for y = 2x + 1
     calc.clear_data()
