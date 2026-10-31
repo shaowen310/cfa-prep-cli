@@ -10,20 +10,29 @@ from __future__ import annotations
 
 import ast
 import math
-import operator as op
 from typing import Callable
 
 NPV_TOL = 1e-6
 
+# Upper bound on the number of periods a single cash-flow entry may expand to.
+# `npv`/`irr` expand each entry into `int(freq)` periods, so an unbounded
+# frequency would hang the calculator.
+MAX_CF_FREQUENCY = 1000
+
 # Supported binary operators for the expression evaluator (BA II Plus style).
+# The `operator` module helpers are not used directly: typeshed types
+# operator.truediv / floordiv / pow as (Unknown, Unknown) -> Unknown, which would
+# leak untyped values into the evaluator and into every downstream expression.
 _OPS: dict[type[ast.operator], Callable[[float, float], float]] = {
-    ast.Add: op.add,
-    ast.Sub: op.sub,
-    ast.Mult: op.mul,
-    ast.Div: op.truediv,
-    ast.FloorDiv: op.floordiv,
-    ast.Pow: op.pow,
-    ast.Mod: op.mod,
+    ast.Add: lambda a, b: a + b,
+    ast.Sub: lambda a, b: a - b,
+    ast.Mult: lambda a, b: a * b,
+    ast.Div: lambda a, b: a / b,
+    ast.FloorDiv: lambda a, b: a // b,
+    # math.pow keeps the result a float; `a ** b` may produce a complex number
+    # for a negative base with a fractional exponent.
+    ast.Pow: lambda a, b: math.pow(a, b),
+    ast.Mod: lambda a, b: a % b,
 }
 
 
@@ -57,7 +66,10 @@ def _eval_expr(expr: str) -> float:
 
 def _is_expression(line: str) -> bool:
     """Heuristic: a line is a raw arithmetic expression if it contains an operator."""
-    return any(ch in line for ch in "+-*/%^(") and not line.split()[0].isalpha()
+    tokens = line.split()
+    if not tokens:
+        return False
+    return any(ch in line for ch in "+-*/%^(") and not tokens[0].isalpha()
 
 
 def _solve_rate(
@@ -138,7 +150,9 @@ class BAIIPlus:
                 return -(self.pv + self.fv) / n
             raise ValueError(f"Unknown TVM register: {t}")
 
-        discount = (1 + i_rate) ** -n
+        # math.pow is used instead of `**`: typeshed types `float ** float` as
+        # Any, which would silently degrade every downstream computation.
+        discount = math.pow(1 + i_rate, -n)
         annuity = (1 - discount) / i_rate
         if t == "PV":
             return -(self.pmt * annuity + self.fv * discount)
@@ -157,7 +171,7 @@ class BAIIPlus:
         def f(rp: float) -> float:
             if abs(rp) < 1e-12:
                 return self.pv + self.pmt * n + self.fv
-            discount = (1 + rp) ** -n
+            discount = math.pow(1 + rp, -n)
             annuity = (1 - discount) / rp
             return self.pv + self.pmt * annuity + self.fv * discount
 
@@ -171,6 +185,8 @@ class BAIIPlus:
     def add_cashflow(self, amount: float, frequency: float = 1.0) -> None:
         if frequency <= 0:
             raise ValueError("Frequency must be > 0")
+        if frequency > MAX_CF_FREQUENCY:
+            raise ValueError(f"Frequency must be <= {MAX_CF_FREQUENCY}")
         if not self.cf:
             self.cf.append((amount, 1.0))
         else:
@@ -184,7 +200,7 @@ class BAIIPlus:
         value, period = 0.0, 0.0
         for amount, freq in self.cf:
             for _ in range(int(freq)):
-                value += amount / (1 + r) ** period
+                value += amount / math.pow(1 + r, period)
                 period += 1.0
         return value
 
@@ -199,7 +215,7 @@ class BAIIPlus:
             value, period = 0.0, 0.0
             for amount, freq in self.cf:
                 for _ in range(int(freq)):
-                    value += amount / (1 + r) ** period
+                    value += amount / math.pow(1 + r, period)
                     period += 1.0
             return value
 
@@ -304,7 +320,13 @@ def run_repl() -> None:
         if _is_expression(line):
             try:
                 print(f"  = {_fmt(_eval_expr(line))}")
-            except (ValueError, SyntaxError, ZeroDivisionError) as e:
+            except (
+                ValueError,
+                SyntaxError,
+                ZeroDivisionError,
+                OverflowError,
+                RecursionError,
+            ) as e:
                 print(f"  ❌ {e}")
             continue
 
@@ -349,8 +371,10 @@ def run_repl() -> None:
                 for i in range(0, len(nums), 2):
                     calc.add_data(nums[i], nums[i + 1])
                 s = calc.two_var_stats()
-                print(f"  slope={_fmt(s['slope'])}  intercept={_fmt(s['intercept'])}"
-                      f"  corr={_fmt(s['correlation'])}")
+                print(
+                    f"  slope={_fmt(s['slope'])}  intercept={_fmt(s['intercept'])}"
+                    + f"  corr={_fmt(s['correlation'])}"
+                )
             elif cmd == "CHG":
                 print(f"  CHG = {_fmt(calc.percent_change(float(parts[1]), float(parts[2])))}%")
             else:
