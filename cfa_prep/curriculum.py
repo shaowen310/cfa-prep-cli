@@ -17,6 +17,32 @@ from typing import cast
 
 from .utils import get_data_dir, load_json, save_json, fuzzy_match
 
+
+def subject_of(label: str) -> str:
+    """
+    Extract the subject from a "[Subject > Module] Topic" label.
+
+    Returns "" when the label does not follow that shape.
+    """
+    bracket = label.find("]")
+    if bracket == -1:
+        return ""
+    inner = label[1:bracket]
+    if ">" in inner:
+        return inner.split(">", 1)[0].strip()
+    return inner.strip()
+
+
+def topic_of(label: str) -> str:
+    """
+    Extract the plain topic text from a "[Subject > Module] Topic" label.
+
+    Returns the label unchanged when it does not follow that shape.
+    """
+    idx = label.rfind("] ")
+    return label[idx + 2:] if idx != -1 else label
+
+
 # Official CFA topic area names (public, non-copyrighted structure)
 CANONICAL_SUBJECTS = [
     "Ethical & Professional Standards",

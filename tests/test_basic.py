@@ -516,13 +516,13 @@ def test_quiz_stats_scheduling_and_selection():
     import tempfile
     from datetime import date, timedelta
 
+    from cfa_prep.quiz_engine import curriculum_question_id
     from cfa_prep.quiz_stats import (
         RESULT_CORRECT,
         RESULT_SKIPPED,
         RESULT_WRONG,
         QuizStats,
         next_due_of,
-        topic_id,
     )
 
     with tempfile.TemporaryDirectory() as tmp:
@@ -535,18 +535,21 @@ def test_quiz_stats_scheduling_and_selection():
             unseen_topic = "[Economics > General] Inflation"
 
             # A wrong answer keeps the question due immediately
-            stats.record_topic_result(wrong_topic, RESULT_WRONG, today=today)
+            wrong_id = curriculum_question_id(wrong_topic)
+            stats.record_question(wrong_id, RESULT_WRONG, question=wrong_topic, today=today)
             data = stats.load()
-            stat = data["questions"][topic_id(wrong_topic)]
+            stat = data["questions"][wrong_id]
             assert stat["times_wrong"] == 1
             assert stat["streak"] == 0
             assert stat["interval_days"] == 0
             assert next_due_of(stat) == today, "a wrong answer must be due again now"
             assert "next_due" not in stat, "the due date must be derived, not stored"
+            assert "topic" not in stat, "the topic is not stored with the question"
 
             # A correct answer pushes the question into the future
-            stats.record_topic_result(good_topic, RESULT_CORRECT, today=today)
-            stat = stats.load()["questions"][topic_id(good_topic)]
+            good_id = curriculum_question_id(good_topic)
+            stats.record_question(good_id, RESULT_CORRECT, question=good_topic, today=today)
+            stat = stats.load()["questions"][good_id]
             assert stat["times_correct"] == 1
             assert stat["streak"] == 1
             assert stat["interval_days"] == 1
@@ -554,37 +557,47 @@ def test_quiz_stats_scheduling_and_selection():
 
             # Consecutive correct answers lengthen the interval (spaced repetition)
             for day_offset in range(1, 4):
-                stats.record_topic_result(
-                    good_topic, RESULT_CORRECT, today=today + timedelta(days=day_offset)
+                stats.record_question(
+                    good_id,
+                    RESULT_CORRECT,
+                    question=good_topic,
+                    today=today + timedelta(days=day_offset),
                 )
-            stat = stats.load()["questions"][topic_id(good_topic)]
+            stat = stats.load()["questions"][good_id]
             assert stat["streak"] == 4
             assert stat["interval_days"] == 14, "the interval ladder should reach 14 days"
 
-            # Priority: the wrong topic outranks the mastered one; unseen topics rank high
-            p_wrong = stats.priority(wrong_topic, today=today)
-            p_good = stats.priority(good_topic, today=today)
-            p_unseen = stats.priority(unseen_topic, today=today)
-            assert p_wrong > p_good, "repeatedly wrong topics must have a higher priority"
-            assert p_unseen > p_wrong, "never tested topics must have a high priority"
-            assert p_good < 0, "a mastered topic must be pushed back by the mastery discount"
+            # Priority: the wrong question outranks the mastered one; unseen ones rank high
+            p_wrong = stats.priority_of(wrong_id, today=today)
+            p_good = stats.priority_of(good_id, today=today)
+            p_unseen = stats.priority_of(curriculum_question_id(unseen_topic), today=today)
+            assert p_wrong > p_good, "repeatedly wrong questions must have a higher priority"
+            assert p_unseen > p_wrong, "never tested questions must have a high priority"
+            assert p_good < 0, "a mastered question must be pushed back by the mastery discount"
 
-            # Selection must favour the weak topics over the mastered one
+            # Selection must favour the weak questions over the mastered one
             candidates = [wrong_topic, good_topic, unseen_topic]
             import random as _random
             _random.seed(42)
-            selected = stats.select_topics(candidates, 2, today=today)
+            scored = [
+                (stats.priority_of(curriculum_question_id(t), today=today), t)
+                for t in candidates
+            ]
+            selected = stats.select_scored(scored, 2)
             assert len(selected) == 2
-            assert unseen_topic in selected, "unseen topics should be selected first"
-            assert wrong_topic in selected, "repeatedly wrong topics should be selected"
-            assert good_topic not in selected, "a mastered topic should be pushed back"
+            assert unseen_topic in selected, "unseen questions should be selected first"
+            assert wrong_topic in selected, "repeatedly wrong questions should be selected"
+            assert good_topic not in selected, "a mastered question should be pushed back"
 
             # A skipped question was never really tested, so it must stay due
             skipped_topic = "[Economics > General] Yield curve"
-            stats.record_topic_result(skipped_topic, RESULT_SKIPPED, today=today)
-            stat = stats.load()["questions"][topic_id(skipped_topic)]
+            skipped_id = curriculum_question_id(skipped_topic)
+            stats.record_question(
+                skipped_id, RESULT_SKIPPED, question=skipped_topic, today=today
+            )
+            stat = stats.load()["questions"][skipped_id]
             assert stat["interval_days"] == 0, "a skipped question must be due again immediately"
-            assert stats.priority(skipped_topic, today=today) > 0, (
+            assert stats.priority_of(skipped_id, today=today) > 0, (
                 "a skipped question must keep some priority"
             )
 
@@ -599,11 +612,11 @@ def test_question_identity():
     from datetime import date
 
     from cfa_prep.mistake_analyzer import question_id
+    from cfa_prep.quiz_engine import curriculum_question_id
     from cfa_prep.quiz_stats import (
         RESULT_CORRECT,
         RESULT_WRONG,
         QuizStats,
-        topic_id,
     )
 
     stem = "Which of the following best describes a callable bond?"
@@ -621,25 +634,24 @@ def test_question_identity():
     qid = question_id(stem, options)
     assert len(qid) == 18, f"unexpected id length: {qid}"
     assert stem not in qid
-    # Topic prompts live in their own namespace
-    assert topic_id("[Economics > General] Inflation") != qid
-    assert topic_id("[Economics > General] Inflation") != topic_id(
-        "[Economics > General] Inflation", "Q12"
-    )
+    # A curriculum question has its own identity, derived from its label
+    curriculum_id = curriculum_question_id("[Economics > General] Inflation")
+    assert curriculum_id != qid
+    # The book reference tells two questions of the same topic apart
+    assert curriculum_id != curriculum_question_id("[Economics > General] Inflation", "Q12")
 
     with tempfile.TemporaryDirectory() as tmp:
         os.environ["CFA_PREP_HOME"] = tmp
         try:
             stats = QuizStats()
             today = date(2026, 1, 1)
-            topic = "[Economics > General] Interest Rates"
             stats.record_question(
-                qid, RESULT_WRONG, question=stem, topic=topic, level="L1",
+                qid, RESULT_WRONG, question=stem, level="L1",
                 source="mistake", today=today,
             )
             # The same question asked again updates the same entry
             stats.record_question(
-                qid, RESULT_CORRECT, question=stem, topic=topic, level="L1",
+                qid, RESULT_CORRECT, question=stem, level="L1",
                 source="mistake", today=today,
             )
             questions = stats.load()["questions"]
@@ -649,7 +661,7 @@ def test_question_identity():
             assert stat["times_wrong"] == 1
             assert stat["times_correct"] == 1
             assert stat["question"] == stem
-            assert stat["topic"] == topic
+            assert "topic" not in stat, "the topic is not stored with the question"
 
             print("  ✅ Quiz stats question identity works")
         finally:
@@ -749,7 +761,12 @@ def test_quiz_stats_file_split():
         try:
             stats = QuizStats()
             today = date(2026, 1, 1)
-            stats.record_topic_result("[Economics > General] Topic X", RESULT_CORRECT, today=today)
+            stats.record_question(
+                "q:test_topic_x",
+                RESULT_CORRECT,
+                question="[Economics > General] Topic X",
+                today=today,
+            )
             stats.record_session("L1", total=10, correct=7, wrong=2, skipped=1)
 
             # The two files are separate

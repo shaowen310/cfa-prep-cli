@@ -18,7 +18,7 @@ from .knowledge_base import KnowledgeBase
 from .mistake_analyzer import MistakeAnalyzer
 from .progress_tracker import ProgressTracker
 from .quiz_engine import QuizEngine
-from .quiz_stats import QuizStats, describe, next_due_of, topic_of
+from .quiz_stats import QuizStats, describe, next_due_of
 from .utils import (
     get_data_dir,
     get_data_root,
@@ -271,7 +271,14 @@ def cmd_stats(args: CLIArgs) -> None:
     print(f"  ⏭️  Skipped: {overall['skipped']}")
     print(f"  🎯 Accuracy: {accuracy:.1f}%")
 
-    subjects = stats.by_subject()
+    # The subject of a logged mistake lives in the mistake log, not in the stats.
+    analyzer = MistakeAnalyzer()
+    subject_by_id = {
+        str(r.get("question_id", "")): str(r.get("subject", ""))
+        for r in analyzer.get_recent_mistakes(limit=1000)
+        if r.get("question_id")
+    }
+    subjects = stats.by_subject(subject_by_id)
     if subjects:
         print_section("Accuracy by Subject (weakest first)")
         for subject, seen, correct, wrong in subjects:
@@ -292,9 +299,6 @@ def cmd_stats(args: CLIArgs) -> None:
                 f" — {stat['times_wrong']} wrong / {stat['times_seen']} seen"
                 f" (streak {stat['streak']}, due {due.isoformat() if due else 'n/a'})"
             )
-            topic = topic_of(stat.get("topic", ""))
-            if topic and stat.get("question"):
-                print(f"      topic: {topic}")
 
     due = stats.due_questions(limit=10)
     if due:

@@ -9,18 +9,23 @@ Purpose: Provide quiz modes for the three CFA exam levels (L1/L2/L3),
 import random
 from typing import TypedDict
 
-from .mistake_analyzer import MistakeAnalyzer
+from .mistake_analyzer import MistakeAnalyzer, question_id
 from .progress_tracker import ProgressTracker
-from .curriculum import Curriculum
+from .curriculum import Curriculum, subject_of, topic_of
 from .quiz_stats import (
     RESULT_CORRECT,
     RESULT_SKIPPED,
     RESULT_WRONG,
-    SOURCE_MISTAKE,
     QuizStats,
     describe,
-    topic_of,
 )
+
+# Where a recorded question came from.
+SOURCE_MISTAKE = "mistake"   # a logged mistake, replayed from the mistake log
+SOURCE_TOPIC = "topic"       # a curriculum question answered from the book
+SOURCE_BOOK = "book"         # a curriculum question with a book reference
+
+BOOST_AMOUNT = 1.5    # extra priority for topics in the mistake/fuzzy lists
 
 
 def read_input(prompt: str = "") -> str:
@@ -32,6 +37,18 @@ def read_input(prompt: str = "") -> str:
     first answer look invalid.
     """
     return input(prompt).strip().lstrip("\ufeff").strip()
+
+
+def curriculum_question_id(label: str, ref: str = "") -> str:
+    """
+    Return the stable id of a curriculum question.
+
+    A curriculum question is answered from the book, so its identity is the
+    curriculum topic it belongs to plus the optional book reference.  The
+    curriculum is the source of truth for that identity - the statistics file
+    only stores the id.
+    """
+    return question_id(f"{label}\n{ref}" if ref else label)
 
 
 class MistakeQuestion(TypedDict):
@@ -152,7 +169,6 @@ class QuizEngine:
                     qid,
                     RESULT_SKIPPED,
                     question=item["question"],
-                    topic=self._topic_label(item),
                     level="L1",
                     source=SOURCE_MISTAKE,
                 )
@@ -177,21 +193,10 @@ class QuizEngine:
                 qid,
                 RESULT_CORRECT if correct else RESULT_WRONG,
                 question=item["question"],
-                topic=self._topic_label(item),
                 level="L1",
                 source=SOURCE_MISTAKE,
             )
         return correct
-
-    @staticmethod
-    def _topic_label(item: MistakeQuestion) -> str:
-        """Build a curriculum-style label for a mistake item."""
-        subject = item.get("subject", "")
-        module = item.get("module", "")
-        key_point = item.get("key_point", "")
-        if subject and module:
-            return f"[{subject} > {module}] {key_point}"
-        return key_point or subject
 
     def _auto_log_mistake(self, item: MistakeQuestion) -> None:
         """Re-log a mistake that was answered incorrectly during review."""
@@ -231,6 +236,31 @@ class QuizEngine:
             boosts.add(by_text.get(key, raw))
         return boosts
 
+    def _topic_question_ids(self, all_topics: list[str]) -> dict[str, list[str]]:
+        """
+        Map every curriculum topic to the question ids that belong to it.
+
+        A topic owns its own curriculum question, plus every logged mistake
+        whose key point matches the topic.  The mistake log is the source of
+        truth for the ids of the mistakes, so they are read from there.
+        """
+        mapping: dict[str, list[str]] = {
+            topic: [curriculum_question_id(topic)] for topic in all_topics
+        }
+        by_text: dict[str, str] = {}
+        for label in all_topics:
+            _ = by_text.setdefault(topic_of(label).strip().lower(), label)
+
+        for record in self.mistake_analyzer.get_recent_mistakes(limit=200):
+            qid = str(record.get("question_id", ""))
+            if not qid:
+                continue
+            key_point = str(record.get("key_point", "")).strip().lower()
+            label = by_text.get(key_point)
+            if label is not None:
+                mapping[label].append(qid)
+        return mapping
+
     def _generate_l1_quiz(self, level: str = "L1") -> list[str]:
         """
         Generate L1 questions (10 mixed single-choice questions).
@@ -246,21 +276,20 @@ class QuizEngine:
         priority_pool = self._boost_set(
             all_topics, self._get_mistake_topics() + self._get_fuzzy_topics()
         )
-        return self.stats.select_topics(all_topics, 10, boosted=priority_pool)
+        question_ids = self._topic_question_ids(all_topics)
 
-    def _subject_from_label(self, label: str) -> str:
-        """
-        Extract the subject name from a curriculum topic label of the form
-        "[Subject > Module] Topic". Returns the subject portion, or "" if unparseable.
-        """
-        bracket = label.find("]")
-        if bracket == -1:
-            return ""
-        inner = label[1:bracket]
-        # Inner is "Subject > Module"; subject is the part before the module separator.
-        if ">" in inner:
-            return inner.split(">", 1)[0].strip()
-        return inner.strip()
+        # A topic is as urgent as its most urgent question, so a single badly
+        # known question lifts the whole topic, while a topic whose questions
+        # are all mastered is pushed back.
+        scored: list[tuple[float, str]] = []
+        for topic in all_topics:
+            ids = question_ids.get(topic) or [curriculum_question_id(topic)]
+            score = max(self.stats.priority_of(qid) for qid in ids)
+            if topic in priority_pool:
+                score += BOOST_AMOUNT
+            scored.append((score, topic))
+
+        return self.stats.select_scored(scored, 10)
 
     def _subject_topics(self, level: str, subject: str) -> list[str]:
         """Return all "[Subject > Module] Topic" labels for a subject, across its modules."""
@@ -284,7 +313,7 @@ class QuizEngine:
             vignette_topic = random.choice(all_topics)
 
         # Generate 3 related questions (selected from the relevant subject's modules)
-        subject = self._subject_from_label(vignette_topic)
+        subject = subject_of(vignette_topic)
         related_topics = self._subject_topics(level, subject)
         if not related_topics:
             related_topics = [vignette_topic]
@@ -421,7 +450,13 @@ class QuizEngine:
                 self.wrong += 1
             else:
                 self.skipped += 1
-            self.stats.record_topic_result(topic, outcome, ref=ref, level=level)
+            self.stats.record_question(
+                curriculum_question_id(topic, ref),
+                outcome,
+                question=topic,
+                level=level,
+                source=SOURCE_BOOK if ref else SOURCE_TOPIC,
+            )
             print(f"  💡 For any mistake, log it with the 'mistake -a' command.")
 
         self._show_quiz_summary(level)
@@ -462,7 +497,13 @@ class QuizEngine:
             else:
                 self.skipped += 1
             self.total += 1
-            self.stats.record_topic_result(q, outcome, level=level)
+            self.stats.record_question(
+                curriculum_question_id(q),
+                outcome,
+                question=q,
+                level=level,
+                source=SOURCE_TOPIC,
+            )
             print(f"  💡 Check against the standard answer.")
 
         self._show_quiz_summary(level)
@@ -511,7 +552,13 @@ class QuizEngine:
         """
         self.total += 1
         self.skipped += 1
-        self.stats.record_topic_result(topic, RESULT_SKIPPED, level=level)
+        self.stats.record_question(
+            curriculum_question_id(topic),
+            RESULT_SKIPPED,
+            question=topic,
+            level=level,
+            source=SOURCE_TOPIC,
+        )
 
     def _ask_outcome(self) -> str:
         """

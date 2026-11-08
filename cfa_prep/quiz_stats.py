@@ -5,6 +5,10 @@ Purpose: Persist per-question quiz statistics at <data_root>/progress/quiz_stats
          and provide a spaced-repetition style selection strategy that favours
          stale questions and repeatedly-wrong questions while reducing the frequency
          of questions the user has already learned.
+
+         Every entry is a question, keyed by the hash of its identity.  The topic a
+         question belongs to is deliberately not stored here: the curriculum and the
+         mistake log own that mapping.
 """
 
 import random
@@ -12,7 +16,8 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import TypedDict, cast
 
-from .utils import get_data_dir, hash_text, load_json, save_json, today_iso
+from .curriculum import subject_of, topic_of
+from .utils import get_data_dir, load_json, save_json, today_iso
 
 
 def local_today() -> date:
@@ -26,20 +31,11 @@ def local_today() -> date:
 
 
 # --- question identity ------------------------------------------------------
-
-TOPIC_PREFIX = "t:"     # identity derived from the topic (self-assessed prompt)
-
-
-def topic_id(topic: str, ref: str = "") -> str:
-    """
-    Return the stable id of a topic prompt.
-
-    Used for the questions the user answers against a topic without handing in
-    the question text (the regular curriculum questions).  An optional ``ref``
-    (for example a book question number) tells two questions of the same topic
-    apart.
-    """
-    return TOPIC_PREFIX + hash_text(topic, ref)
+#
+# Questions are keyed by the hash of their identity text (see :func:`question_id`
+# in the mistake analyzer for the question scheme).  A curriculum question is
+# identified by its curriculum label, so its id is derived there - this module
+# only stores and schedules the ids it is given.
 
 
 # --- scheduling constants ---------------------------------------------------
@@ -57,21 +53,15 @@ WRONG_RATIO_WEIGHT = 4.0   # weight of the wrong-answer ratio
 WRONG_COUNT_WEIGHT = 0.8   # weight per repeat mistake (capped at 5)
 SKIP_WEIGHT = 1.5          # bonus for questions that were skipped (never answered)
 MASTERY_DISCOUNT = 2.0     # max discount for a streak of correct answers
-BOOST_AMOUNT = 1.5         # extra priority for topics in the mistake/fuzzy lists
 
 RESULT_CORRECT = "correct"
 RESULT_WRONG = "wrong"
 RESULT_SKIPPED = "skipped"
 
-SOURCE_MISTAKE = "mistake"
-SOURCE_TOPIC = "topic"
-SOURCE_BOOK = "book"
-
 
 class QuestionStat(TypedDict):
-    """Statistics kept for a single question (or topic prompt)."""
-    question: str          # question text ("" when only the topic is known)
-    topic: str             # curriculum label "[Subject > Module] Topic"
+    """Statistics kept for a single question."""
+    question: str          # the question text (or the prompt that was answered)
     level: str             # "L1" | "L2" | "L3"
     source: str            # "mistake" | "topic" | "book"
     times_seen: int
@@ -133,26 +123,12 @@ def parse_date(value: str) -> date | None:
         return None
 
 
-def subject_of(label: str) -> str:
-    """Extract the subject from a "[Subject > Module] Topic" label."""
-    bracket = label.find("]")
-    if bracket == -1:
-        return ""
-    inner = label[1:bracket]
-    if ">" in inner:
-        return inner.split(">", 1)[0].strip()
-    return inner.strip()
-
-
-def topic_of(label: str) -> str:
-    """Extract the plain topic text from a "[Subject > Module] Topic" label."""
-    idx = label.rfind("] ")
-    return label[idx + 2:] if idx != -1 else label
-
-
 def describe(stat: QuestionStat, max_len: int = 60) -> str:
     """Return a short human-readable label for a statistics entry."""
-    text = stat.get("question", "").strip() or topic_of(stat.get("topic", ""))
+    text = stat.get("question", "").strip()
+    if text.startswith("["):
+        # A curriculum question carries its label as the prompt that was answered.
+        text = topic_of(text)
     if len(text) > max_len:
         text = text[: max_len - 3] + "..."
     return text
@@ -277,7 +253,6 @@ class QuizStats:
     def _normalize_question(raw: dict[str, object]) -> QuestionStat:
         return QuestionStat(
             question=_as_str(raw.get("question")),
-            topic=_as_str(raw.get("topic")),
             level=_as_str(raw.get("level")),
             source=_as_str(raw.get("source")),
             times_seen=_as_int(raw.get("times_seen")),
@@ -306,7 +281,6 @@ class QuizStats:
     def _new_stat() -> QuestionStat:
         return QuestionStat(
             question="",
-            topic="",
             level="",
             source="",
             times_seen=0,
@@ -336,7 +310,6 @@ class QuizStats:
         key: str,
         result: str,
         question: str = "",
-        topic: str = "",
         level: str = "",
         source: str = "",
         today: date | None = None,
@@ -345,10 +318,9 @@ class QuizStats:
         Record the outcome of one answered question and reschedule it.
 
         Parameters:
-            key: question identity (see :func:`question_id` / :func:`topic_id`)
+            key: question identity (see :func:`question_id` in the mistake analyzer)
             result: "correct" | "wrong" | "skipped"
             question: the question text (kept for reporting)
-            topic: curriculum label the question belongs to
             level: exam level the question was asked at
             source: "mistake" | "topic" | "book"
             today: override for the current date (testing)
@@ -362,8 +334,6 @@ class QuizStats:
 
         if question:
             stat["question"] = question
-        if topic:
-            stat["topic"] = topic
         if level:
             stat["level"] = level
         if source:
@@ -399,32 +369,6 @@ class QuizStats:
         self._dirty = True
         if self.autosave:
             self.save(data)
-
-    def record_topic_result(
-        self,
-        topic: str,
-        result: str,
-        ref: str = "",
-        level: str = "",
-        today: date | None = None,
-    ) -> None:
-        """
-        Record the outcome of a question answered against a topic.
-
-        Used for the regular curriculum questions, where the user works from
-        the book and only the topic (plus an optional book reference) is known.
-        """
-        if not topic:
-            return
-        self.record_question(
-            topic_id(topic, ref),
-            result,
-            question="",
-            topic=topic,
-            level=level,
-            source=SOURCE_BOOK if ref else SOURCE_TOPIC,
-            today=today,
-        )
 
     def record_session(
         self,
@@ -493,77 +437,49 @@ class QuizStats:
 
         return priority
 
-    def topic_scores(self, today: date | None = None) -> dict[str, float]:
+    def priority_of(self, key: str, today: date | None = None) -> float:
         """
-        Urgency score per topic, derived from the questions of that topic.
+        Return the urgency score of a single question.
 
-        A topic is as urgent as its most urgent question, so a single badly
-        known question lifts the whole topic, while a topic whose questions are
-        all mastered is pushed back.
+        A question that was never seen gets a flat high score, so new material
+        is still covered; a known question is scored from how overdue it is, how
+        often it was answered wrongly and how stale it is, minus a discount for
+        consecutive correct answers.
         """
         day = today or local_today()
-        data = self.load()
-        scores: dict[str, float] = {}
-        for stat in data["questions"].values():
-            topic = stat.get("topic") or ""
-            if not topic:
-                continue
-            score = self._priority_of(stat, day)
-            if score > scores.get(topic, float("-inf")):
-                scores[topic] = score
-        return scores
+        stat = self.load()["questions"].get(key)
+        if stat is None:
+            return UNSEEN_PRIORITY
+        return self._priority_of(stat, day)
 
-    def priority(self, topic: str, today: date | None = None) -> float:
-        """Public accessor for the urgency score of a single topic."""
-        return self.topic_scores(today).get(topic, UNSEEN_PRIORITY)
-
-    def select_topics(
-        self,
-        candidates: list[str],
-        count: int,
-        boosted: set[str] | None = None,
-        today: date | None = None,
-    ) -> list[str]:
+    def select_scored(self, scored: list[tuple[float, str]], count: int) -> list[str]:
         """
-        Select the topics to quiz.
+        Pick the items to quiz from a list of scored candidates.
 
-        A fixed share (40%) of the quiz is filled with the highest-priority
-        topics (stale / repeatedly wrong), and the rest is drawn at random from
-        the remaining topics, weighted by priority so that moderately urgent
-        topics still show up regularly.
+        A fixed share (40%) is filled with the highest-priority items (stale /
+        repeatedly wrong), and the rest is drawn at random from the remaining
+        ones, weighted by priority so that moderately urgent items still show
+        up regularly.
 
         Parameters:
-            candidates: all topics available for the level
-            count: number of topics to select
-            boosted: extra-priority topics (e.g. logged mistakes, fuzzy points)
-            today: override for the current date (testing)
+            scored: the candidates as (priority, key) pairs
+            count: number of items to select
 
         Returns:
-            The selected topics, in quiz order.
+            The selected keys, in quiz order.
         """
-        if not candidates or count <= 0:
+        if not scored or count <= 0:
             return []
 
-        day = today or local_today()
-        scores = self.topic_scores(day)
-        boost_set = boosted or set()
-
-        scored: list[tuple[float, str]] = []
-        for topic in candidates:
-            score = scores.get(topic, UNSEEN_PRIORITY)
-            if topic in boost_set:
-                score += BOOST_AMOUNT
-            scored.append((score, topic))
-
-        total = min(count, len(candidates))
+        total = min(count, len(scored))
         num_priority = min(total, max(1, round(total * 0.4)))
 
         # Highest priority first, random tie-break so the order is not fixed.
         ordered = sorted(scored, key=lambda pair: (-pair[0], random.random()))
-        selected: list[str] = [topic for _, topic in ordered[:num_priority]]
+        selected: list[str] = [key for _, key in ordered[:num_priority]]
 
         # The rest is a weighted random draw (without replacement) so the quiz
-        # keeps some variety while still favouring urgent topics.
+        # keeps some variety while still favouring urgent items.
         remaining = total - len(selected)
         pool: list[tuple[float, str]] = ordered[num_priority:]
         while remaining > 0 and pool:
@@ -595,16 +511,25 @@ class QuizStats:
             "skipped": skipped,
         }
 
-    def by_subject(self) -> list[tuple[str, int, int, int]]:
+    def by_subject(
+        self, subject_by_id: dict[str, str] | None = None
+    ) -> list[tuple[str, int, int, int]]:
         """
         Per-subject breakdown as (subject, seen, correct, wrong) tuples,
         sorted by accuracy ascending (weakest subject first).
+
+        The subject is not stored with the question, so it is resolved in two
+        ways: a curriculum question carries its label in the prompt text, and a
+        logged mistake carries its subject in the mistake log - which the caller
+        passes in as ``subject_by_id``.
         """
         data = self.load()
+        mapping = subject_by_id or {}
         agg: dict[str, list[int]] = {}
-        for stat in data["questions"].values():
-            subject = subject_of(stat.get("topic", "")) or "(unclassified)"
-            row = agg.setdefault(subject, [0, 0, 0])
+        for key, stat in data["questions"].items():
+            text = stat.get("question", "")
+            subject = mapping.get(key) or (subject_of(text) if text.startswith("[") else "")
+            row = agg.setdefault(subject or "(unclassified)", [0, 0, 0])
             row[0] += stat["times_seen"]
             row[1] += stat["times_correct"]
             row[2] += stat["times_wrong"]

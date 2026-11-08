@@ -174,8 +174,8 @@ short hash of the question's identity instead of its full text:
 
 | Entry | Key | Example |
 | --- | --- | --- |
-| Logged mistake / book question | `q:` + hash(question text + options) | `q:9d5498fe9b6bfe5f` |
-| Topic prompt (no question text) | `t:` + hash(topic + optional book reference) | `t:c75404ed9502e198` |
+| Logged mistake | `q:` + hash(question text + options) | `q:9d5498fe9b6bfe5f` |
+| Curriculum question | `q:` + hash(curriculum label + optional book reference) | `q:c75404ed9502e198` |
 
 The options are part of the identity because two different questions can share the same
 stem, but the **correct answer is not** — re-logging a question with a fixed answer keeps
@@ -201,8 +201,10 @@ The id is created **once**, when the mistake is logged, and stored with the reco
 there instead of deriving it again, and a mistake that is re-logged after a wrong answer
 carries the id of the original question. The statistics file only refers to that id.
 
-The topic stays on the entry as metadata, which is what the topic selection and the
-subject breakdown are built from.
+The topic is **not** stored with the entry. A question belongs to a topic, but that link
+lives where the truth is: the curriculum owns the curriculum questions, and the mistake
+log owns the logged mistakes. The quiz engine joins the two when it selects what to
+ask, so the statistics file stays a pure question store.
 
 ### How it works
 
