@@ -62,7 +62,6 @@ class QuestionStat(TypedDict):
     """Statistics kept for a single question."""
     question: str          # the question text
     level: str             # "L1" | "L2" | "L3"
-    source: str            # "mistake"
     times_seen: int
     times_correct: int
     times_wrong: int
@@ -250,7 +249,6 @@ class QuizStats:
         return QuestionStat(
             question=_as_str(raw.get("question")),
             level=_as_str(raw.get("level")),
-            source=_as_str(raw.get("source")),
             times_seen=_as_int(raw.get("times_seen")),
             times_correct=_as_int(raw.get("times_correct")),
             times_wrong=_as_int(raw.get("times_wrong")),
@@ -278,7 +276,6 @@ class QuizStats:
         return QuestionStat(
             question="",
             level="",
-            source="",
             times_seen=0,
             times_correct=0,
             times_wrong=0,
@@ -307,7 +304,6 @@ class QuizStats:
         result: str,
         question: str = "",
         level: str = "",
-        source: str = "",
         today: date | None = None,
     ) -> None:
         """
@@ -318,7 +314,6 @@ class QuizStats:
             result: "correct" | "wrong" | "skipped"
             question: the question text (kept for reporting)
             level: exam level the question was asked at
-            source: "mistake" | "topic" | "book"
             today: override for the current date (testing)
         """
         if not key:
@@ -332,8 +327,6 @@ class QuizStats:
             stat["question"] = question
         if level:
             stat["level"] = level
-        if source:
-            stat["source"] = source
 
         stat["times_seen"] += 1
         stat["last_seen"] = day.isoformat()

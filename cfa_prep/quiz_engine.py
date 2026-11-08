@@ -28,9 +28,6 @@ from .quiz_stats import (
     describe,
 )
 
-# Where a recorded question came from.
-SOURCE_MISTAKE = "mistake"   # a logged mistake, replayed from the mistake log
-
 BOOST_AMOUNT = 1.5    # extra priority for topics in the mistake/fuzzy lists
 
 
@@ -217,8 +214,7 @@ class QuizEngine:
         subject = item.get("subject", "")
         module = item.get("module", "")
         label = f"{subject} > {module}" if subject and module else subject or "Mistake"
-        print(f"  Source: {label}")
-        print(f"  Module: {item.get('module', '')}")
+        print(f"  Module: {label}")
         print(f"{'─' * 50}")
         print(f"\n  {item['question']}")
         for i, opt in enumerate(options):
@@ -240,7 +236,6 @@ class QuizEngine:
                     RESULT_SKIPPED,
                     question=item["question"],
                     level="L1",
-                    source=SOURCE_MISTAKE,
                 )
             return False
 
@@ -264,7 +259,6 @@ class QuizEngine:
                 RESULT_CORRECT if correct else RESULT_WRONG,
                 question=item["question"],
                 level="L1",
-                source=SOURCE_MISTAKE,
             )
         return correct
 

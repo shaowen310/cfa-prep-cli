@@ -862,12 +862,12 @@ def test_question_identity():
             today = date(2026, 1, 1)
             stats.record_question(
                 qid, RESULT_WRONG, question=stem, level="L1",
-                source="mistake", today=today,
+                today=today,
             )
             # The same question asked again updates the same entry
             stats.record_question(
                 qid, RESULT_CORRECT, question=stem, level="L1",
-                source="mistake", today=today,
+                today=today,
             )
             questions = stats.load()["questions"]
             assert len(questions) == 1, "the same question must not create a second entry"
