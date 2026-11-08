@@ -23,6 +23,11 @@ def _default_config_dir() -> Path:
     return Path.home() / ".cfa-prep" / "config"
 
 
+def get_home_env_file() -> Path:
+    """Path of the file that persists the data root override (home.env)."""
+    return _default_config_dir() / "home.env"
+
+
 def _candidate_data_root() -> Path:
     """
     Determine the data root path WITHOUT creating anything, with this priority:
@@ -90,9 +95,8 @@ def set_home_env(new_root: str | Path) -> Path:
     stored inside settings.json (the data root is controlled via the CFA_PREP_HOME env var).
     """
     resolved = Path(new_root).expanduser().resolve()
-    config_dir = _default_config_dir()
-    config_dir.mkdir(parents=True, exist_ok=True)
-    home_env_file = config_dir / "home.env"
+    home_env_file = get_home_env_file()
+    home_env_file.parent.mkdir(parents=True, exist_ok=True)
     write_file_text(home_env_file, f"CFA_PREP_HOME={resolved}\n")
     return resolved
 

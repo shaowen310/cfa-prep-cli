@@ -502,6 +502,49 @@ def test_quiz_stats_scheduling_and_selection():
             _ = os.environ.pop("CFA_PREP_HOME", None)
 
 
+def test_quiz_stats_file_split():
+    """Test that topics and sessions live in separate files."""
+    import tempfile
+    import json
+    from datetime import date
+    from cfa_prep.quiz_stats import QuizStats, RESULT_CORRECT
+
+    with tempfile.TemporaryDirectory() as tmp:
+        os.environ["CFA_PREP_HOME"] = tmp
+        try:
+            stats = QuizStats()
+            today = date(2026, 1, 1)
+            stats.record("[Economics > General] Topic X", RESULT_CORRECT, today=today)
+            stats.record_session("L1", total=10, correct=7, wrong=2, skipped=1)
+
+            # The two files are separate
+            assert stats.stats_file.exists(), "the topics file must exist"
+            assert stats.sessions_file.exists(), "the sessions file must exist"
+            assert stats.stats_file != stats.sessions_file
+
+            topics_raw = json.loads(stats.stats_file.read_text(encoding="utf-8"))
+            sessions_raw = json.loads(stats.sessions_file.read_text(encoding="utf-8"))
+            assert "topics" in topics_raw, "the topics file holds the per-topic stats"
+            assert "sessions" not in topics_raw, "sessions must not live in the topics file"
+            assert "sessions" in sessions_raw, "the sessions file holds the history"
+            assert "topics" not in sessions_raw, "topics must not live in the sessions file"
+
+            # The aggregate report still reads the session history
+            overall = stats.overall()
+            assert overall["sessions"] == 1
+            assert overall["total"] == 10
+            assert overall["correct"] == 7
+
+            # Reset clears both files
+            stats.reset()
+            assert stats.overall()["sessions"] == 0
+            assert stats.load()["topics"] == {}
+
+            print(f"  ✅ Quiz stats file split works")
+        finally:
+            _ = os.environ.pop("CFA_PREP_HOME", None)
+
+
 def test_data_root_env_override():
     """Test that get_data_root() honors the CFA_PREP_HOME env var"""
     import tempfile
@@ -582,6 +625,7 @@ def run_all_tests():
         ("Curriculum subject normalization", test_curriculum_normalize_subject),
         ("Quiz uses curriculum", test_quiz_uses_curriculum),
         ("Quiz stats scheduling/selection", test_quiz_stats_scheduling_and_selection),
+        ("Quiz stats file split", test_quiz_stats_file_split),
     ]
 
     passed = 0

@@ -70,11 +70,17 @@ class SessionRecord(TypedDict):
 
 
 class QuizStatsData(TypedDict):
-    """JSON shape of the statistics file."""
+    """JSON shape of the per-topic statistics file (quiz_stats.json)."""
+    version: int
+    updated: str
+    topics: dict[str, TopicStat]
+
+
+class QuizSessionsData(TypedDict):
+    """JSON shape of the session history file (quiz_sessions.json)."""
     version: int
     updated: str
     sessions: list[SessionRecord]
-    topics: dict[str, TopicStat]
 
 
 def _as_int(value: object, default: int = 0) -> int:
@@ -151,15 +157,18 @@ class QuizStats:
     def __init__(self, autosave: bool = True) -> None:
         self.stats_dir: Path = get_data_dir("progress")
         self.stats_file: Path = self.stats_dir / "quiz_stats.json"
+        self.sessions_file: Path = self.stats_dir / "quiz_sessions.json"
         self.autosave: bool = autosave
         self._cache: QuizStatsData | None = None
+        self._sessions_cache: QuizSessionsData | None = None
         self._dirty: bool = False
+        self._sessions_dirty: bool = False
 
     # --- persistence -------------------------------------------------------
 
     def load(self, refresh: bool = False) -> QuizStatsData:
         """
-        Load the statistics file, returning an empty structure if absent.
+        Load the per-topic statistics, returning an empty structure if absent.
 
         The result is cached; pass ``refresh=True`` to force a re-read from disk.
         """
@@ -173,6 +182,25 @@ class QuizStats:
                 if isinstance(value, dict):
                     topics[key] = self._normalize_topic(cast(dict[str, object], value))
 
+        data = QuizStatsData(
+            version=_as_int(raw.get("version"), 1),
+            updated=_as_str(raw.get("updated"), today_iso()),
+            topics=topics,
+        )
+        self._cache = data
+        return data
+
+    def load_sessions(self, refresh: bool = False) -> QuizSessionsData:
+        """
+        Load the session history, returning an empty structure if absent.
+
+        The result is cached; pass ``refresh=True`` to force a re-read from disk.
+        """
+        if self._sessions_cache is not None and not refresh:
+            return self._sessions_cache
+
+        raw = load_json(self.sessions_file)
+
         sessions: list[SessionRecord] = []
         sessions_raw = raw.get("sessions", [])
         if isinstance(sessions_raw, list):
@@ -181,25 +209,32 @@ class QuizStats:
                     d = cast(dict[str, object], item)
                     sessions.append(self._normalize_session(d))
 
-        data = QuizStatsData(
+        data = QuizSessionsData(
             version=_as_int(raw.get("version"), 1),
             updated=_as_str(raw.get("updated"), today_iso()),
             sessions=sessions,
-            topics=topics,
         )
-        self._cache = data
+        self._sessions_cache = data
         return data
 
     def save(self, data: QuizStatsData) -> None:
-        """Persist the statistics file."""
+        """Persist the per-topic statistics file."""
         self._cache = data
         self._dirty = False
         save_json(self.stats_file, cast(dict[str, object], cast(object, data)))
+
+    def save_sessions(self, data: QuizSessionsData) -> None:
+        """Persist the session history file."""
+        self._sessions_cache = data
+        self._sessions_dirty = False
+        save_json(self.sessions_file, cast(dict[str, object], cast(object, data)))
 
     def flush(self) -> None:
         """Write any pending changes to disk (no-op when nothing changed)."""
         if self._dirty and self._cache is not None:
             self.save(self._cache)
+        if self._sessions_dirty and self._sessions_cache is not None:
+            self.save_sessions(self._sessions_cache)
 
     @staticmethod
     def _normalize_topic(raw: dict[str, object]) -> TopicStat:
@@ -307,7 +342,7 @@ class QuizStats:
         skipped: int,
     ) -> None:
         """Append a finished session to the history."""
-        data = self.load()
+        data = self.load_sessions()
         sessions = data["sessions"]
         sessions.append(
             SessionRecord(
@@ -321,9 +356,9 @@ class QuizStats:
         )
         data["sessions"] = sessions[-200:]
         data["updated"] = today_iso()
-        self._dirty = True
+        self._sessions_dirty = True
         if self.autosave:
-            self.save(data)
+            self.save_sessions(data)
 
     # --- scheduling / priority ---------------------------------------------
 
@@ -433,15 +468,16 @@ class QuizStats:
 
     def overall(self) -> dict[str, int]:
         """Aggregate totals across every recorded session."""
-        data = self.load()
+        data = self.load_sessions()
+        sessions = data["sessions"]
         total = correct = wrong = skipped = 0
-        for s in data["sessions"]:
+        for s in sessions:
             total += s["total"]
             correct += s["correct"]
             wrong += s["wrong"]
             skipped += s["skipped"]
         return {
-            "sessions": len(data["sessions"]),
+            "sessions": len(sessions),
             "total": total,
             "correct": correct,
             "wrong": wrong,
@@ -493,6 +529,12 @@ class QuizStats:
         return sorted(t for t, s in data["topics"].items() if s["streak"] >= 3)
 
     def reset(self) -> None:
-        """Delete all stored statistics."""
-        empty = QuizStatsData(version=1, updated=today_iso(), sessions=[], topics={})
-        save_json(self.stats_file, cast(dict[str, object], cast(object, empty)))
+        """Delete all stored statistics and session history."""
+        empty_topics = QuizStatsData(version=1, updated=today_iso(), topics={})
+        save_json(self.stats_file, cast(dict[str, object], cast(object, empty_topics)))
+        empty_sessions = QuizSessionsData(version=1, updated=today_iso(), sessions=[])
+        save_json(self.sessions_file, cast(dict[str, object], cast(object, empty_sessions)))
+        self._cache = empty_topics
+        self._sessions_cache = empty_sessions
+        self._dirty = False
+        self._sessions_dirty = False

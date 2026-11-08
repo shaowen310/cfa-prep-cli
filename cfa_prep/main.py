@@ -22,6 +22,7 @@ from .quiz_stats import QuizStats, next_due_of, topic_of
 from .utils import (
     get_data_dir,
     get_data_root,
+    get_home_env_file,
     load_home_env,
     load_settings,
     print_header,
@@ -170,7 +171,7 @@ def cmd_config(args: CLIArgs) -> None:
 
             resolved = set_home_env(target)
             print(f"✅ Data root (home) set to: {resolved}")
-            print(f"   Persisted in: {get_data_root() / 'config' / 'home.env'}")
+            print(f"   Persisted in: {get_home_env_file()}")
             if not has_subdirs:
                 print("   ℹ️  This folder doesn't look like a cfa-prep data root yet.")
                 print("      Run 'cfa-prep init' to create the standard structure here.")
@@ -249,6 +250,7 @@ def cmd_stats(args: CLIArgs) -> None:
         stats.reset()
         print("✅ Quiz statistics cleared.")
         print(f"   {stats.stats_file}")
+        print(f"   {stats.sessions_file}")
         return
 
     print_header("📊 Quiz Statistics")
@@ -257,7 +259,8 @@ def cmd_stats(args: CLIArgs) -> None:
     if overall["total"] == 0:
         print("  No quiz answers recorded yet.")
         print("  💡 Take a quiz first: cfa-prep quiz")
-        print(f"  📁 Stats file: {stats.stats_file}")
+        print(f"\n  📁 Stats file: {stats.stats_file}")
+        print(f"  📁 Sessions file: {stats.sessions_file}")
         return
 
     accuracy = (overall["correct"] / overall["total"] * 100) if overall["total"] else 0.0
@@ -303,6 +306,7 @@ def cmd_stats(args: CLIArgs) -> None:
             print(f"  ✅ {topic_of(topic)}")
 
     print(f"\n  📁 Stats file: {stats.stats_file}")
+    print(f"  📁 Sessions file: {stats.sessions_file}")
     print("  💡 Review the weak topics: cfa-prep quiz")
 
 

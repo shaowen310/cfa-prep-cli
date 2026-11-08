@@ -157,6 +157,16 @@ Every quiz answer is recorded in `<data_root>/progress/quiz_stats.json`, and the
 quiz is built from those statistics so that weak and forgotten material comes back
 first — while things you already know are asked less often.
 
+The data is split across two files, because the two halves have different jobs:
+
+| File | Holds | Used for |
+| --- | --- | --- |
+| `progress/quiz_stats.json` | Per-topic scheduling state | Choosing which questions to ask |
+| `progress/quiz_sessions.json` | Session history (capped at 200) | Reporting overall accuracy |
+
+The per-topic file is the one on the hot path — it is read and written once per quiz,
+not once per answer.
+
 ### How it works
 
 Each topic keeps its own schedule (a spaced-repetition style model):
@@ -319,7 +329,7 @@ Data files are stored under the configured data root (`~/.cfa-prep` by default):
 ~/.cfa-prep/
 ├── kb/                       # Knowledge files (.txt) and curriculum.json
 ├── mistakes/                 # Mistake log (auto-generated)
-├── progress/                 # Progress files (progress.json, quiz_stats.json — auto-generated)
+├── progress/                 # Progress files (progress.json, quiz_stats.json, quiz_sessions.json — auto-generated)
 ├── flashcards/               # Flashcards (flashcards.json, manually added)
 ├── templates/                # IPS templates
 └── config/
