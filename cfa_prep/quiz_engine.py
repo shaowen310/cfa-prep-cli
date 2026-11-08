@@ -121,6 +121,9 @@ class QuizEngine:
         if self.randomize:
             random.shuffle(options)
         labels = "ABC"
+        # A tuple, not the string: "" is a substring of "ABC", so an empty
+        # answer would otherwise pass the membership test and count as "A".
+        valid_answers = ("A", "B", "C")
 
         print(f"{'─' * 50}")
         print(f"  🔁 Mistake review")
@@ -139,33 +142,46 @@ class QuizEngine:
             print("👋 Quiz exited")
             raise KeyboardInterrupt
 
-        if answer in labels:
-            chosen = options[labels.index(answer)]
-            correct = chosen == correct_text
+        if answer not in valid_answers:
+            # No answer given: the question counts as skipped, never as wrong.
+            print("⚠️ No answer given — recorded as skipped.")
             self.total += 1
-            if correct:
-                print(f"\n  ✅ Correct! ({labels[labels.index(answer)]}. {chosen})")
-                self.score += 1
-                self.correct += 1
-            else:
-                correct_label = labels[options.index(correct_text)]
-                print(f"\n  ❌ Incorrect. Correct answer: {correct_label}. {correct_text}")
-                self.wrong += 1
-                # Auto-log the repeated mistake
-                self._auto_log_mistake(item)
-            # Record the outcome against the question, so it is rescheduled
+            self.skipped += 1
             if qid:
                 self.stats.record_question(
                     qid,
-                    RESULT_CORRECT if correct else RESULT_WRONG,
+                    RESULT_SKIPPED,
                     question=item["question"],
                     topic=self._topic_label(item),
                     level="L1",
                     source=SOURCE_MISTAKE,
                 )
-            return correct
-        print("⚠️ Invalid input, please choose A/B/C")
-        return False
+            return False
+
+        chosen = options[labels.index(answer)]
+        correct = chosen == correct_text
+        self.total += 1
+        if correct:
+            print(f"\n  ✅ Correct! ({labels[labels.index(answer)]}. {chosen})")
+            self.score += 1
+            self.correct += 1
+        else:
+            correct_label = labels[options.index(correct_text)]
+            print(f"\n  ❌ Incorrect. Correct answer: {correct_label}. {correct_text}")
+            self.wrong += 1
+            # Auto-log the repeated mistake
+            self._auto_log_mistake(item)
+        # Record the outcome against the question, so it is rescheduled
+        if qid:
+            self.stats.record_question(
+                qid,
+                RESULT_CORRECT if correct else RESULT_WRONG,
+                question=item["question"],
+                topic=self._topic_label(item),
+                level="L1",
+                source=SOURCE_MISTAKE,
+            )
+        return correct
 
     @staticmethod
     def _topic_label(item: MistakeQuestion) -> str:
@@ -378,12 +394,11 @@ class QuizEngine:
                     break
                 elif answer == "S":
                     print(f"⏭️ Skipped question {i}")
-                    self.total += 1
-                    self.skipped += 1
-                    self.stats.record_topic_result(topic, RESULT_SKIPPED, level=level)
+                    self._record_skipped(topic, level)
                     continue
                 elif answer not in ("A", "B", "C", "D"):
-                    print("⚠️ Invalid input, please choose A/B/C/D/S/Q or type a reference")
+                    print("⚠️ No answer given — recorded as skipped.")
+                    self._record_skipped(topic, level)
                     continue
             elif raw:
                 # A free-form answer is read as the book question reference, so
@@ -391,7 +406,8 @@ class QuizEngine:
                 ref = raw
                 print(f"  🔖 Reference: {ref}")
             else:
-                print("⚠️ Invalid input, please choose A/B/C/D/S/Q or type a reference")
+                print("⚠️ No answer given — recorded as skipped.")
+                self._record_skipped(topic, level)
                 continue
 
             self.total += 1
@@ -427,10 +443,15 @@ class QuizEngine:
             print(f"\n{'─' * 50}")
             print(f"  📌 Sub-question {i}/3: {q}")
             print(f"{'─' * 50}")
-            answer = read_input("Your answer (A/B/C): ").upper()
+            answer = read_input("Your answer (A/B/C): ").strip().upper()
             if answer == "Q":
                 print("👋 Quiz exited")
                 break
+            if answer not in ("A", "B", "C", "D"):
+                # No answer given: the question counts as skipped, never as wrong.
+                print("⚠️ No answer given — recorded as skipped.")
+                self._record_skipped(q, level)
+                continue
             print(f"  ✅ Answer recorded: {answer}")
             outcome = self._ask_outcome()
             if outcome == RESULT_CORRECT:
@@ -480,6 +501,18 @@ class QuizEngine:
         print(f"\n  📖 Please select a question related to「{topic}」from the question bank for practice.")
         print(f"  We recommend using end-of-chapter questions from the official curriculum or QBank questions on this topic.")
 
+    def _record_skipped(self, topic: str, level: str) -> None:
+        """
+        Record a question the user did not answer as skipped.
+
+        A question without an answer is never counted as wrong: it stays due
+        and keeps some priority, but it does not lower the ease or count as a
+        mistake.
+        """
+        self.total += 1
+        self.skipped += 1
+        self.stats.record_topic_result(topic, RESULT_SKIPPED, level=level)
+
     def _ask_outcome(self) -> str:
         """
         Ask the user to self-assess the answer.
@@ -487,15 +520,21 @@ class QuizEngine:
         The CLI has no question bank, so the user picks their answer from the
         book and then confirms whether it was right. The outcome drives the
         statistics and the rescheduling of the topic.
+
+        An empty answer means the user did not assess the question at all, so
+        it is recorded as skipped rather than as a wrong answer.
         """
         while True:
             print("  Did you answer correctly? [y]es / [n]o / [s]kip:")
-            choice = read_input("  > ").lower()
+            choice = read_input("  > ").strip().lower()
             if choice in ("y", "yes"):
                 return RESULT_CORRECT
             if choice in ("n", "no"):
                 return RESULT_WRONG
             if choice in ("s", "skip"):
+                return RESULT_SKIPPED
+            if not choice:
+                print("  ⚠️ No answer given — recorded as skipped.")
                 return RESULT_SKIPPED
             print("  ⚠️ Please choose y, n or s.")
 

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 CFA Prep CLI - Basic tests
 Author: CodeBuddy AI Assistant
@@ -6,34 +5,36 @@ Purpose: Run basic functional tests on the core modules to ensure each module ca
 """
 
 import math
-import sys
 import os
+import sys
 from pathlib import Path
 
 # Add the project root to the path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from cfa_prep.baii_calculator import (
+    BAIIPlus,
+    _eval_expr,  # pyright: ignore[reportPrivateUsage]
+)
+from cfa_prep.curriculum import Curriculum
+from cfa_prep.flashcard_generator import FlashcardGenerator
+from cfa_prep.ips_builder import IPSBuilder
 from cfa_prep.knowledge_base import KnowledgeBase
 from cfa_prep.mistake_analyzer import MistakeAnalyzer
 from cfa_prep.progress_tracker import ProgressTracker
-from cfa_prep.flashcard_generator import FlashcardGenerator
-from cfa_prep.ips_builder import IPSBuilder
 from cfa_prep.quiz_engine import QuizEngine
-from cfa_prep.curriculum import Curriculum
-from cfa_prep.baii_calculator import BAIIPlus
-from cfa_prep.baii_calculator import _eval_expr  # pyright: ignore[reportPrivateUsage]
 from cfa_prep.utils import (
-    get_project_root,
-    get_data_root,
-    get_data_dir,
-    fuzzy_match,
     extract_context,
-    today_iso,
+    fuzzy_match,
+    get_data_dir,
+    get_data_root,
+    get_project_root,
+    load_home_env,
     load_settings,
     save_settings,
-    set_setting,
     set_home_env,
-    load_home_env,
+    set_setting,
+    today_iso,
     write_file_text,
 )
 
@@ -52,7 +53,7 @@ def test_data_dirs():
     for d in dirs:
         p = get_data_dir(d)
         assert p.exists(), f"{d} directory creation failed"
-    print(f"  ✅ All data directories are fine")
+    print("  ✅ All data directories are fine")
 
 
 def test_fuzzy_match():
@@ -60,7 +61,7 @@ def test_fuzzy_match():
     assert fuzzy_match("FCFE", "Free Cash Flow to Equity") == True
     assert fuzzy_match("xyz", "Free Cash Flow to Equity") == False
     assert fuzzy_match("fcfe", "FCFE") == True
-    print(f"  ✅ Fuzzy matching is fine")
+    print("  ✅ Fuzzy matching is fine")
 
 
 def test_extract_context():
@@ -68,7 +69,7 @@ def test_extract_context():
     text = "The Free Cash Flow to Equity (FCFE) model values a company based on cash available to shareholders."
     snippet = extract_context(text, "FCFE")
     assert "FCFE" in snippet
-    print(f"  ✅ Context extraction is fine")
+    print("  ✅ Context extraction is fine")
 
 
 def test_knowledge_base():
@@ -117,7 +118,7 @@ def test_progress_tracker():
             # get_key_points_to_review returns fuzzy only
             tracker.update(fuzzy=["[Econ > Module 2] Topic B"])
             assert tracker.get_key_points_to_review() == ["[Econ > Module 2] Topic B"]
-            print(f"  ✅ Progress tracker is fine")
+            print("  ✅ Progress tracker is fine")
         finally:
             _ = os.environ.pop("CFA_PREP_HOME", None)
 
@@ -129,16 +130,16 @@ def test_ips_builder():
     # Test personal IPS generation
     path = builder.generate("personal", today)
     assert Path(path).exists()
-    content = open(path, "r", encoding="utf-8").read()
+    content = Path(path).read_text(encoding="utf-8")
     assert "Individual Investment Policy Statement" in content
-    print(f"  ✅ IPS builder is fine (personal)")
+    print("  ✅ IPS builder is fine (personal)")
 
     # Test institutional IPS generation
     path = builder.generate("institutional", today)
     assert Path(path).exists()
-    content = open(path, "r", encoding="utf-8").read()
+    content = Path(path).read_text(encoding="utf-8")
     assert "Institutional Investment Policy Statement" in content
-    print(f"  ✅ IPS builder is fine (institutional)")
+    print("  ✅ IPS builder is fine (institutional)")
 
 
 def test_quiz_engine():
@@ -217,8 +218,8 @@ def test_baii_calculator():
 
 def test_flashcard_generator():
     """Test manually adding a flashcard (with curriculum subject/module selection)"""
-    import tempfile
     import json
+    import tempfile
 
     with tempfile.TemporaryDirectory() as tmp:
         os.environ["CFA_PREP_HOME"] = tmp
@@ -254,8 +255,8 @@ def test_flashcard_generator():
 
 def test_flashcard_review():
     """Test reviewing flashcards (view question, reveal answer, skip)"""
-    import tempfile
     import json
+    import tempfile
 
     with tempfile.TemporaryDirectory() as tmp:
         os.environ["CFA_PREP_HOME"] = tmp
@@ -308,7 +309,7 @@ def test_settings():
     set_setting("level", "L2")
     assert load_settings().get("level") == "L2"
     set_setting("level", "L1")  # restore
-    print(f"  ✅ Config read/write is fine (level set via set_setting)")
+    print("  ✅ Config read/write is fine (level set via set_setting)")
 
 
 def test_curriculum_seed_and_load():
@@ -328,15 +329,15 @@ def test_curriculum_seed_and_load():
             assert c.seed() is True, "First seed should write a new file"
             assert c.path.exists(), "seed() should create curriculum.json"
             assert c.seed() is False, "Second seed should be a no-op"
-            print(f"  ✅ Curriculum seed + load is fine")
+            print("  ✅ Curriculum seed + load is fine")
         finally:
             _ = os.environ.pop("CFA_PREP_HOME", None)
 
 
 def test_curriculum_import_nested_modules():
     """Test that nested {module: [topics]} curriculum imports and flattens correctly"""
-    import tempfile
     import json
+    import tempfile
 
     nested = {
         "L1": {
@@ -396,13 +397,13 @@ def test_curriculum_normalize_subject():
     assert c.normalize_subject("quant") == "Quantitative Methods"
     # unknown returns None
     assert c.normalize_subject("Zzznonsense") is None
-    print(f"  ✅ Curriculum subject normalization is fine")
+    print("  ✅ Curriculum subject normalization is fine")
 
 
 def test_quiz_uses_curriculum():
     """Test that the quiz engine draws its topic pool from the imported curriculum"""
-    import tempfile
     import json
+    import tempfile
 
     data = {"L1": {"Economics": ["Demand and supply", "Monetary policy"]}}
     with tempfile.TemporaryDirectory() as tmp:
@@ -424,15 +425,102 @@ def test_quiz_uses_curriculum():
             _ = os.environ.pop("CFA_PREP_HOME", None)
 
 
+def test_quiz_no_answer_is_skipped():
+    """Test that a question without an answer is recorded as skipped, never as wrong"""
+    import json
+    import tempfile
+
+    from cfa_prep.mistake_analyzer import MistakeAnalyzer
+    from cfa_prep.quiz_stats import RESULT_SKIPPED, RESULT_WRONG
+
+    data = {
+        "L1": {"Economics": ["Demand and supply", "Monetary policy"]},
+        "L2": {"Economics": ["Inflation", "Monetary policy"]},
+    }
+    with tempfile.TemporaryDirectory() as tmp:
+        os.environ["CFA_PREP_HOME"] = tmp
+        import cfa_prep.quiz_engine as qe
+
+        # The input is patched before the try block, so the original is always
+        # bound: the finally block can then restore it without masking the
+        # error that caused the test to fail.
+        original_read_input = qe.read_input
+        qe.read_input = lambda prompt="": ""
+
+        try:
+            c = Curriculum()
+            _ = c.seed()
+            src = Path(tmp) / "cur.json"
+            _ = src.write_text(json.dumps(data), encoding="utf-8")
+            c.import_file(str(src))
+
+            # 1. The self-assessment prompt: no answer means skipped, not wrong
+            engine = QuizEngine()
+            outcome = engine._ask_outcome()  # pyright: ignore[reportPrivateUsage]
+            assert outcome == RESULT_SKIPPED, "an empty self-assessment must be skipped"
+            assert outcome != RESULT_WRONG, "an empty self-assessment must never be wrong"
+
+            # 2. The L1 flow: a question without an answer is skipped
+            engine = QuizEngine()
+            engine._do_l1_quiz("L1")  # pyright: ignore[reportPrivateUsage]
+            assert engine.wrong == 0, "an unanswered question must not be wrong"
+            assert engine.skipped == 2, "both unanswered questions must be skipped"
+            assert engine.total == 2
+            for stat in engine.stats.load()["questions"].values():
+                assert stat["last_result"] == RESULT_SKIPPED
+                assert stat["times_wrong"] == 0
+                assert stat["times_skipped"] == 1
+
+            # 3. The L2 flow: a question without an answer is skipped
+            engine = QuizEngine()
+            engine._do_l2_quiz("L2")  # pyright: ignore[reportPrivateUsage]
+            assert engine.wrong == 0, "an unanswered question must not be wrong"
+            assert engine.skipped == 3, "all three sub-questions must be skipped"
+            assert engine.total == 3
+            for stat in engine.stats.load()["questions"].values():
+                assert stat["last_result"] == RESULT_SKIPPED
+                assert stat["times_wrong"] == 0
+
+            # 4. The mistake replay: no answer is skipped, not wrong
+            analyzer = MistakeAnalyzer()
+            options = ["A tariff", "An import quota", "A voluntary export restraint"]
+            _ = analyzer.add_mistake(
+                subject="Economics",
+                question="Which trade restriction costs the importing country most?",
+                user_answer=options[0],
+                correct_answer=options[1],
+                key_point="Trade restrictions",
+                correct_conclusion="",
+                module_name="Module 6: International Trade",
+                options=options,
+            )
+            engine = QuizEngine()
+            items = engine._get_mistake_questions()  # pyright: ignore[reportPrivateUsage]
+            assert len(items) == 1
+            _ = engine._run_mistake_mcq(items[0])  # pyright: ignore[reportPrivateUsage]
+            assert engine.wrong == 0, "an unanswered mistake must not be wrong"
+            assert engine.skipped == 1, "the unanswered mistake must be skipped"
+            stat = engine.stats.load()["questions"][items[0]["question_id"]]
+            assert stat["last_result"] == RESULT_SKIPPED
+            assert stat["times_wrong"] == 0
+            assert stat["times_skipped"] == 1
+
+            print("  ✅ Unanswered questions are recorded as skipped, not wrong")
+        finally:
+            qe.read_input = original_read_input
+            _ = os.environ.pop("CFA_PREP_HOME", None)
+
+
 def test_quiz_stats_scheduling_and_selection():
     """Test the quiz statistics: scheduling, mastery discount and priority selection"""
     import tempfile
     from datetime import date, timedelta
+
     from cfa_prep.quiz_stats import (
-        QuizStats,
         RESULT_CORRECT,
-        RESULT_WRONG,
         RESULT_SKIPPED,
+        RESULT_WRONG,
+        QuizStats,
         next_due_of,
         topic_id,
     )
@@ -500,7 +588,7 @@ def test_quiz_stats_scheduling_and_selection():
                 "a skipped question must keep some priority"
             )
 
-            print(f"  ✅ Quiz stats scheduling and priority selection work")
+            print("  ✅ Quiz stats scheduling and priority selection work")
         finally:
             _ = os.environ.pop("CFA_PREP_HOME", None)
 
@@ -650,10 +738,11 @@ def test_mistake_question_id():
 
 def test_quiz_stats_file_split():
     """Test that questions and sessions live in separate files."""
-    import tempfile
     import json
+    import tempfile
     from datetime import date
-    from cfa_prep.quiz_stats import QuizStats, RESULT_CORRECT
+
+    from cfa_prep.quiz_stats import RESULT_CORRECT, QuizStats
 
     with tempfile.TemporaryDirectory() as tmp:
         os.environ["CFA_PREP_HOME"] = tmp
@@ -686,7 +775,7 @@ def test_quiz_stats_file_split():
             assert stats.overall()["sessions"] == 0
             assert stats.load()["questions"] == {}
 
-            print(f"  ✅ Quiz stats file split works")
+            print("  ✅ Quiz stats file split works")
         finally:
             _ = os.environ.pop("CFA_PREP_HOME", None)
 
@@ -770,6 +859,7 @@ def run_all_tests():
         ("Curriculum nested-module import", test_curriculum_import_nested_modules),
         ("Curriculum subject normalization", test_curriculum_normalize_subject),
         ("Quiz uses curriculum", test_quiz_uses_curriculum),
+        ("Unanswered = skipped", test_quiz_no_answer_is_skipped),
         ("Quiz stats scheduling/selection", test_quiz_stats_scheduling_and_selection),
         ("Question identity", test_question_identity),
         ("Mistake question id", test_mistake_question_id),
@@ -783,7 +873,9 @@ def run_all_tests():
         try:
             test_func()
             passed += 1
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
+            # A test runner must report every failure instead of stopping at
+            # the first one, so any exception is caught here on purpose.
             print(f"  ❌ {name}: {e}")
             failed += 1
 
