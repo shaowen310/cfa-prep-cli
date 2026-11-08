@@ -161,23 +161,42 @@ The data is split across two files, because the two halves have different jobs:
 
 | File | Holds | Used for |
 | --- | --- | --- |
-| `progress/quiz_stats.json` | Per-topic scheduling state | Choosing which questions to ask |
+| `progress/quiz_stats.json` | Per-question scheduling state | Choosing which questions to ask |
 | `progress/quiz_sessions.json` | Session history (capped at 200) | Reporting overall accuracy |
 
-The per-topic file is the one on the hot path — it is read and written once per quiz,
+The per-question file is the one on the hot path — it is read and written once per quiz,
 not once per answer.
+
+### Question identity
+
+The statistics are keyed by **question**, not by topic. Each entry is stored under a
+short hash of the question's identity instead of its full text:
+
+| Entry | Key | Example |
+| --- | --- | --- |
+| Logged mistake / book question | `q:` + hash(question text + options) | `q:9d5498fe9b6bfe5f` |
+| Topic prompt (no question text) | `t:` + hash(topic + optional book reference) | `t:c75404ed9502e198` |
+
+The options are part of the identity because two different questions can share the same
+stem, but the **correct answer is not** — re-logging a question with a fixed answer keeps
+its history attached. The hash ignores cosmetic whitespace and case and does not depend
+on the order the options are displayed in, so a question that was logged twice still
+counts as one question.
+
+The topic stays on the entry as metadata, which is what the topic selection and the
+subject breakdown are built from.
 
 ### How it works
 
-Each topic keeps its own schedule (a spaced-repetition style model):
+Each question keeps its own schedule (a spaced-repetition style model):
 
 | Outcome | Effect |
 | --- | --- |
-| ✅ Correct | The topic rests for longer (1 → 3 → 7 → 14 days, then `interval × ease`), and its **ease** grows, so it is selected less often. |
-| ❌ Wrong | The topic is due **immediately** (0 days) and its ease drops, so it is selected more often. |
-| ⏭️ Skipped | The topic was never really tested — it stays due now and keeps some priority. |
+| ✅ Correct | The question rests for longer (1 → 3 → 7 → 14 days, then `interval × ease`), and its **ease** grows, so it is selected less often. |
+| ❌ Wrong | The question is due **immediately** (0 days) and its ease drops, so it is selected more often. |
+| ⏭️ Skipped | The question was never really tested — it stays due now and keeps some priority. |
 
-Topics are then scored by **priority**, and the quiz is filled with:
+Questions are then scored by **priority**, and the quiz is filled with:
 
 - **40%** the highest-priority topics (never tested, long overdue, or repeatedly wrong)
 - **60%** a weighted random draw from the rest, so the quiz still keeps variety
@@ -188,6 +207,8 @@ priority = overdue(≤ +3.0) + 4.0·wrong_ratio + 0.8·min(wrong, 5)
 ```
 
 Never-tested topics start at a high priority so that new material still gets covered.
+A topic is as urgent as its most urgent question, so one badly known question lifts the
+whole topic, while a topic whose questions are all mastered is pushed back.
 
 The due date is **not stored** in `quiz_stats.json` — it is always derived as
 `last_seen + interval_days`, so there is a single source of truth and the two can
@@ -204,6 +225,10 @@ outcome is what drives the statistics:
 Your choice: B
 Did you answer correctly? [y]es / [n]o / [s]kip: y
 ```
+
+Instead of an answer letter you can also type the book question reference (e.g. `Q12`).
+That reference becomes part of the question's identity, so two different questions of the
+same topic are tracked apart.
 
 Mistake-review questions (logged via `cfa-prep mistake -a`) are scored automatically.
 

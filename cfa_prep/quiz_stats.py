@@ -1,12 +1,13 @@
 """
 CFA Prep CLI - Quiz statistics module
 Author: CodeBuddy AI Assistant
-Purpose: Persist per-topic quiz statistics at <data_root>/progress/quiz_stats.json,
+Purpose: Persist per-question quiz statistics at <data_root>/progress/quiz_stats.json,
          and provide a spaced-repetition style selection strategy that favours
-         stale topics and repeatedly-wrong topics while reducing the frequency
-         of topics the user has already learned.
+         stale questions and repeatedly-wrong questions while reducing the frequency
+         of questions the user has already learned.
 """
 
+import hashlib
 import random
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -24,11 +25,64 @@ def local_today() -> date:
     """
     return datetime.now().astimezone().date()
 
+
+# --- question identity ------------------------------------------------------
+
+HASH_LENGTH = 16
+QUESTION_PREFIX = "q:"   # identity derived from the question text
+TOPIC_PREFIX = "t:"     # identity derived from the topic (self-assessed prompt)
+
+
+def normalize_text(text: str) -> str:
+    """Collapse whitespace and case so cosmetic edits keep the same identity."""
+    return " ".join(text.split()).casefold()
+
+
+def hash_text(*parts: str) -> str:
+    """Return a short, stable hash for the given text parts."""
+    digest = hashlib.sha1()
+    for part in parts:
+        digest.update(normalize_text(part).encode("utf-8"))
+        digest.update(b"\x00")
+    return digest.hexdigest()[:HASH_LENGTH]
+
+
+def question_id(stem: str, options: list[str] | None = None) -> str:
+    """
+    Return the stable id of a question.
+
+    The id is a hash of the question text plus its options.  Hashing keeps the
+    statistics file small (a 12-character key instead of the whole question) and
+    makes the key immune to formatting changes, while the options are part of
+    the identity because two different questions can share the same stem.
+
+    The options are hashed in sorted order, so the identity does not depend on
+    the order the options happen to be displayed in.
+
+    The correct answer is deliberately NOT part of the id, so re-logging a
+    question with a corrected answer keeps its history attached.
+    """
+    normalized = sorted(normalize_text(option) for option in (options or []))
+    return QUESTION_PREFIX + hash_text(stem, "\n".join(normalized))
+
+
+def topic_id(topic: str, ref: str = "") -> str:
+    """
+    Return the stable id of a topic prompt.
+
+    Used for the questions the user answers against a topic without handing in
+    the question text (the regular curriculum questions).  An optional ``ref``
+    (for example a book question number) tells two questions of the same topic
+    apart.
+    """
+    return TOPIC_PREFIX + hash_text(topic, ref)
+
+
 # --- scheduling constants ---------------------------------------------------
 
-EASE_DEFAULT = 2.5   # SM-2 ease factor for a newly seen topic
-EASE_MIN = 1.3       # a badly-known topic is never fully "forgiven"
-EASE_MAX = 2.8       # a well-known topic cannot become trivially easy
+EASE_DEFAULT = 2.5   # SM-2 ease factor for a newly seen question
+EASE_MIN = 1.3       # a badly-known question is never fully "forgiven"
+EASE_MAX = 2.8       # a well-known question cannot become trivially easy
 INTERVAL_LADDER = (1, 3, 7, 14)  # days after consecutive correct answers
 
 # --- priority weights -------------------------------------------------------
@@ -37,7 +91,7 @@ UNSEEN_PRIORITY = 5.0      # never tested -> high attention
 OVERDUE_CAP = 3.0          # max bonus for being long past due
 WRONG_RATIO_WEIGHT = 4.0   # weight of the wrong-answer ratio
 WRONG_COUNT_WEIGHT = 0.8   # weight per repeat mistake (capped at 5)
-SKIP_WEIGHT = 1.5          # bonus for topics that were skipped (never answered)
+SKIP_WEIGHT = 1.5          # bonus for questions that were skipped (never answered)
 MASTERY_DISCOUNT = 2.0     # max discount for a streak of correct answers
 BOOST_AMOUNT = 1.5         # extra priority for topics in the mistake/fuzzy lists
 
@@ -45,9 +99,17 @@ RESULT_CORRECT = "correct"
 RESULT_WRONG = "wrong"
 RESULT_SKIPPED = "skipped"
 
+SOURCE_MISTAKE = "mistake"
+SOURCE_TOPIC = "topic"
+SOURCE_BOOK = "book"
 
-class TopicStat(TypedDict):
-    """Statistics kept for a single topic."""
+
+class QuestionStat(TypedDict):
+    """Statistics kept for a single question (or topic prompt)."""
+    question: str          # question text ("" when only the topic is known)
+    topic: str             # curriculum label "[Subject > Module] Topic"
+    level: str             # "L1" | "L2" | "L3"
+    source: str            # "mistake" | "topic" | "book"
     times_seen: int
     times_correct: int
     times_wrong: int
@@ -70,10 +132,10 @@ class SessionRecord(TypedDict):
 
 
 class QuizStatsData(TypedDict):
-    """JSON shape of the per-topic statistics file (quiz_stats.json)."""
+    """JSON shape of the per-question statistics file (quiz_stats.json)."""
     version: int
     updated: str
-    topics: dict[str, TopicStat]
+    questions: dict[str, QuestionStat]
 
 
 class QuizSessionsData(TypedDict):
@@ -124,15 +186,23 @@ def topic_of(label: str) -> str:
     return label[idx + 2:] if idx != -1 else label
 
 
-def next_due_of(stat: TopicStat) -> date | None:
+def describe(stat: QuestionStat, max_len: int = 60) -> str:
+    """Return a short human-readable label for a statistics entry."""
+    text = stat.get("question", "").strip() or topic_of(stat.get("topic", ""))
+    if len(text) > max_len:
+        text = text[: max_len - 3] + "..."
+    return text
+
+
+def next_due_of(stat: QuestionStat) -> date | None:
     """
-    Return the date a topic becomes due again.
+    Return the date a question becomes due again.
 
     The due date is always derived from the last attempt plus the current
     scheduling interval, so it is never stored: there is a single source of
     truth and the two can never drift apart.
 
-    Returns None when the topic has never been attempted.
+    Returns None when the question has never been attempted.
     """
     last_seen = parse_date(stat.get("last_seen", ""))
     if last_seen is None:
@@ -144,9 +214,12 @@ class QuizStats:
     """
     Quiz statistics tracker.
 
-    Stores per-topic outcomes, applies a spaced-repetition schedule to decide
-    when a topic should come back, and scores topics by urgency so the quiz can
-    focus on stale and repeatedly-wrong material.
+    Stores the outcome of every answered question, applies a spaced-repetition
+    schedule to decide when it should come back, and scores questions by urgency
+    so the quiz can focus on stale and repeatedly-wrong material.
+
+    Questions are keyed by a hash of their identity (see :func:`question_id`
+    and :func:`topic_id`), so the stored keys stay short and stable.
 
     The whole file is rewritten on every save, so writing after every single
     answer would re-read and re-serialize the entire file per question.  Pass
@@ -168,24 +241,24 @@ class QuizStats:
 
     def load(self, refresh: bool = False) -> QuizStatsData:
         """
-        Load the per-topic statistics, returning an empty structure if absent.
+        Load the per-question statistics, returning an empty structure if absent.
 
         The result is cached; pass ``refresh=True`` to force a re-read from disk.
         """
         if self._cache is not None and not refresh:
             return self._cache
         raw = load_json(self.stats_file)
-        topics: dict[str, TopicStat] = {}
-        topics_raw = raw.get("topics", {})
-        if isinstance(topics_raw, dict):
-            for key, value in topics_raw.items():
+        questions: dict[str, QuestionStat] = {}
+        questions_raw = raw.get("questions", {})
+        if isinstance(questions_raw, dict):
+            for key, value in questions_raw.items():
                 if isinstance(value, dict):
-                    topics[key] = self._normalize_topic(cast(dict[str, object], value))
+                    questions[key] = self._normalize_question(cast(dict[str, object], value))
 
         data = QuizStatsData(
             version=_as_int(raw.get("version"), 1),
             updated=_as_str(raw.get("updated"), today_iso()),
-            topics=topics,
+            questions=questions,
         )
         self._cache = data
         return data
@@ -218,7 +291,7 @@ class QuizStats:
         return data
 
     def save(self, data: QuizStatsData) -> None:
-        """Persist the per-topic statistics file."""
+        """Persist the per-question statistics file."""
         self._cache = data
         self._dirty = False
         save_json(self.stats_file, cast(dict[str, object], cast(object, data)))
@@ -237,8 +310,12 @@ class QuizStats:
             self.save_sessions(self._sessions_cache)
 
     @staticmethod
-    def _normalize_topic(raw: dict[str, object]) -> TopicStat:
-        return TopicStat(
+    def _normalize_question(raw: dict[str, object]) -> QuestionStat:
+        return QuestionStat(
+            question=_as_str(raw.get("question")),
+            topic=_as_str(raw.get("topic")),
+            level=_as_str(raw.get("level")),
+            source=_as_str(raw.get("source")),
             times_seen=_as_int(raw.get("times_seen")),
             times_correct=_as_int(raw.get("times_correct")),
             times_wrong=_as_int(raw.get("times_wrong")),
@@ -262,8 +339,12 @@ class QuizStats:
         )
 
     @staticmethod
-    def _new_stat() -> TopicStat:
-        return TopicStat(
+    def _new_stat() -> QuestionStat:
+        return QuestionStat(
+            question="",
+            topic="",
+            level="",
+            source="",
             times_seen=0,
             times_correct=0,
             times_wrong=0,
@@ -275,7 +356,7 @@ class QuizStats:
             last_result="",
         )
 
-    # --- recording ---------------------------------------------------------
+        # --- recording ---------------------------------------------------------
 
     @staticmethod
     def _next_interval(streak: int, current: int, ease: float) -> int:
@@ -286,21 +367,43 @@ class QuizStats:
             return INTERVAL_LADDER[streak - 1]
         return max(1, round(max(current, 1) * ease))
 
-    def record(self, topic: str, result: str, today: date | None = None) -> None:
+    def record_question(
+        self,
+        key: str,
+        result: str,
+        question: str = "",
+        topic: str = "",
+        level: str = "",
+        source: str = "",
+        today: date | None = None,
+    ) -> None:
         """
-        Record the outcome of one answered topic and reschedule it.
+        Record the outcome of one answered question and reschedule it.
 
         Parameters:
-            topic: curriculum topic label (or plain key point)
+            key: question identity (see :func:`question_id` / :func:`topic_id`)
             result: "correct" | "wrong" | "skipped"
+            question: the question text (kept for reporting)
+            topic: curriculum label the question belongs to
+            level: exam level the question was asked at
+            source: "mistake" | "topic" | "book"
             today: override for the current date (testing)
         """
-        if not topic:
+        if not key:
             return
         day = today or local_today()
         data = self.load()
-        topics = data["topics"]
-        stat = topics.get(topic) or self._new_stat()
+        questions = data["questions"]
+        stat = questions.get(key) or self._new_stat()
+
+        if question:
+            stat["question"] = question
+        if topic:
+            stat["topic"] = topic
+        if level:
+            stat["level"] = level
+        if source:
+            stat["source"] = source
 
         stat["times_seen"] += 1
         stat["last_seen"] = day.isoformat()
@@ -326,12 +429,38 @@ class QuizStats:
             stat["interval_days"] = 0
             stat["last_result"] = RESULT_SKIPPED
 
-        topics[topic] = stat
-        data["topics"] = topics
+        questions[key] = stat
+        data["questions"] = questions
         data["updated"] = today_iso()
         self._dirty = True
         if self.autosave:
             self.save(data)
+
+    def record_topic_result(
+        self,
+        topic: str,
+        result: str,
+        ref: str = "",
+        level: str = "",
+        today: date | None = None,
+    ) -> None:
+        """
+        Record the outcome of a question answered against a topic.
+
+        Used for the regular curriculum questions, where the user works from
+        the book and only the topic (plus an optional book reference) is known.
+        """
+        if not topic:
+            return
+        self.record_question(
+            topic_id(topic, ref),
+            result,
+            question="",
+            topic=topic,
+            level=level,
+            source=SOURCE_BOOK if ref else SOURCE_TOPIC,
+            today=today,
+        )
 
     def record_session(
         self,
@@ -363,22 +492,22 @@ class QuizStats:
     # --- scheduling / priority ---------------------------------------------
 
     @staticmethod
-    def _priority_of(stat: TopicStat | None, today: date) -> float:
+    def _priority_of(stat: QuestionStat | None, today: date) -> float:
         """
-        Score how urgently a topic should be asked.
+        Score how urgently a question should be asked.
 
-        Higher = more urgent. Never-seen topics get a flat high score; known
-        topics are scored from how overdue they are, how often they were answered
-        wrongly, how stale they are, minus a discount for consecutive correct
-        answers (which means the knowledge has been learnt).
+        Higher = more urgent. Never-seen questions get a flat high score; known
+        questions are scored from how overdue they are, how often they were
+        answered wrongly, how stale they are, minus a discount for consecutive
+        correct answers (which means the knowledge has been learnt).
         """
         if stat is None:
             return UNSEEN_PRIORITY
 
         priority = 0.0
 
-        # 1. How long past due.  The interval already encodes how long a topic may
-        #    rest, so "overdue" also covers "not tested for a long time".
+        # 1. How long past due.  The interval already encodes how long a question
+        #    may rest, so "overdue" also covers "not tested for a long time".
         due = next_due_of(stat)
         if due is None:
             overdue_days = 30
@@ -392,7 +521,7 @@ class QuizStats:
         priority += WRONG_RATIO_WEIGHT * wrong_ratio
         priority += WRONG_COUNT_WEIGHT * min(stat["times_wrong"], 5)
 
-        # 3. Skipped topics were never really tested, so they still need attention.
+        # 3. Skipped questions were never really tested, so they still need attention.
         priority += SKIP_WEIGHT * min(stat["times_skipped"], 2)
 
         # 4. Mastery discount: consecutive correct answers push it back.
@@ -400,10 +529,29 @@ class QuizStats:
 
         return priority
 
+    def topic_scores(self, today: date | None = None) -> dict[str, float]:
+        """
+        Urgency score per topic, derived from the questions of that topic.
+
+        A topic is as urgent as its most urgent question, so a single badly
+        known question lifts the whole topic, while a topic whose questions are
+        all mastered is pushed back.
+        """
+        day = today or local_today()
+        data = self.load()
+        scores: dict[str, float] = {}
+        for stat in data["questions"].values():
+            topic = stat.get("topic") or ""
+            if not topic:
+                continue
+            score = self._priority_of(stat, day)
+            if score > scores.get(topic, float("-inf")):
+                scores[topic] = score
+        return scores
+
     def priority(self, topic: str, today: date | None = None) -> float:
         """Public accessor for the urgency score of a single topic."""
-        data = self.load()
-        return self._priority_of(data["topics"].get(topic), today or local_today())
+        return self.topic_scores(today).get(topic, UNSEEN_PRIORITY)
 
     def select_topics(
         self,
@@ -433,13 +581,12 @@ class QuizStats:
             return []
 
         day = today or local_today()
-        data = self.load()
-        topics = data["topics"]
+        scores = self.topic_scores(day)
         boost_set = boosted or set()
 
         scored: list[tuple[float, str]] = []
         for topic in candidates:
-            score = self._priority_of(topics.get(topic), day)
+            score = scores.get(topic, UNSEEN_PRIORITY)
             if topic in boost_set:
                 score += BOOST_AMOUNT
             scored.append((score, topic))
@@ -491,8 +638,8 @@ class QuizStats:
         """
         data = self.load()
         agg: dict[str, list[int]] = {}
-        for topic, stat in data["topics"].items():
-            subject = subject_of(topic) or "(unclassified)"
+        for stat in data["questions"].values():
+            subject = subject_of(stat.get("topic", "")) or "(unclassified)"
             row = agg.setdefault(subject, [0, 0, 0])
             row[0] += stat["times_seen"]
             row[1] += stat["times_correct"]
@@ -501,40 +648,49 @@ class QuizStats:
         rows.sort(key=lambda r: (r[1] - r[2], r[0]))
         return rows
 
-    def weakest_topics(self, limit: int = 10) -> list[tuple[str, TopicStat]]:
-        """Topics answered wrongly most often, worst first."""
+    def weakest_questions(self, limit: int = 10) -> list[tuple[str, QuestionStat]]:
+        """Questions answered wrongly most often, worst first."""
         data = self.load()
-        rows = [(t, s) for t, s in data["topics"].items() if s["times_wrong"] > 0]
+        rows = [
+            (key, stat)
+            for key, stat in data["questions"].items()
+            if stat["times_wrong"] > 0
+        ]
         rows.sort(key=lambda pair: (-pair[1]["times_wrong"], -pair[1]["times_seen"]))
         return rows[:limit]
 
-    def due_topics(self, limit: int = 10, today: date | None = None) -> list[tuple[str, int]]:
-        """Topics that are due (or overdue), most overdue first."""
+    def due_questions(
+        self, limit: int = 10, today: date | None = None
+    ) -> list[tuple[str, QuestionStat, int]]:
+        """Questions that are due (or overdue), most overdue first."""
         day = today or local_today()
         data = self.load()
-        rows: list[tuple[str, int]] = []
-        for topic, stat in data["topics"].items():
+        rows: list[tuple[str, QuestionStat, int]] = []
+        for key, stat in data["questions"].items():
             due = next_due_of(stat)
             if due is None:
                 continue
             overdue = (day - due).days
             if overdue >= 0:
-                rows.append((topic, overdue))
-        rows.sort(key=lambda pair: -pair[1])
+                rows.append((key, stat, overdue))
+        rows.sort(key=lambda row: -row[2])
         return rows[:limit]
 
-    def mastered_topics(self) -> list[str]:
-        """Topics answered correctly at least three times in a row."""
+    def mastered_questions(self) -> list[tuple[str, QuestionStat]]:
+        """Questions answered correctly at least three times in a row."""
         data = self.load()
-        return sorted(t for t, s in data["topics"].items() if s["streak"] >= 3)
+        return sorted(
+            ((key, stat) for key, stat in data["questions"].items() if stat["streak"] >= 3),
+            key=lambda pair: pair[0],
+        )
 
     def reset(self) -> None:
         """Delete all stored statistics and session history."""
-        empty_topics = QuizStatsData(version=1, updated=today_iso(), topics={})
-        save_json(self.stats_file, cast(dict[str, object], cast(object, empty_topics)))
+        empty_questions = QuizStatsData(version=1, updated=today_iso(), questions={})
+        save_json(self.stats_file, cast(dict[str, object], cast(object, empty_questions)))
         empty_sessions = QuizSessionsData(version=1, updated=today_iso(), sessions=[])
         save_json(self.sessions_file, cast(dict[str, object], cast(object, empty_sessions)))
-        self._cache = empty_topics
+        self._cache = empty_questions
         self._sessions_cache = empty_sessions
         self._dirty = False
         self._sessions_dirty = False

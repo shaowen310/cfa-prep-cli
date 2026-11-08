@@ -434,6 +434,7 @@ def test_quiz_stats_scheduling_and_selection():
         RESULT_WRONG,
         RESULT_SKIPPED,
         next_due_of,
+        topic_id,
     )
 
     with tempfile.TemporaryDirectory() as tmp:
@@ -445,19 +446,19 @@ def test_quiz_stats_scheduling_and_selection():
             good_topic = "[Economics > General] Monetary policy"
             unseen_topic = "[Economics > General] Inflation"
 
-            # A wrong answer keeps the topic due immediately
-            stats.record(wrong_topic, RESULT_WRONG, today=today)
+            # A wrong answer keeps the question due immediately
+            stats.record_topic_result(wrong_topic, RESULT_WRONG, today=today)
             data = stats.load()
-            stat = data["topics"][wrong_topic]
+            stat = data["questions"][topic_id(wrong_topic)]
             assert stat["times_wrong"] == 1
             assert stat["streak"] == 0
             assert stat["interval_days"] == 0
             assert next_due_of(stat) == today, "a wrong answer must be due again now"
             assert "next_due" not in stat, "the due date must be derived, not stored"
 
-            # A correct answer pushes the topic into the future
-            stats.record(good_topic, RESULT_CORRECT, today=today)
-            stat = stats.load()["topics"][good_topic]
+            # A correct answer pushes the question into the future
+            stats.record_topic_result(good_topic, RESULT_CORRECT, today=today)
+            stat = stats.load()["questions"][topic_id(good_topic)]
             assert stat["times_correct"] == 1
             assert stat["streak"] == 1
             assert stat["interval_days"] == 1
@@ -465,8 +466,10 @@ def test_quiz_stats_scheduling_and_selection():
 
             # Consecutive correct answers lengthen the interval (spaced repetition)
             for day_offset in range(1, 4):
-                stats.record(good_topic, RESULT_CORRECT, today=today + timedelta(days=day_offset))
-            stat = stats.load()["topics"][good_topic]
+                stats.record_topic_result(
+                    good_topic, RESULT_CORRECT, today=today + timedelta(days=day_offset)
+                )
+            stat = stats.load()["questions"][topic_id(good_topic)]
             assert stat["streak"] == 4
             assert stat["interval_days"] == 14, "the interval ladder should reach 14 days"
 
@@ -488,13 +491,13 @@ def test_quiz_stats_scheduling_and_selection():
             assert wrong_topic in selected, "repeatedly wrong topics should be selected"
             assert good_topic not in selected, "a mastered topic should be pushed back"
 
-            # A skipped topic was never really tested, so it must stay due
+            # A skipped question was never really tested, so it must stay due
             skipped_topic = "[Economics > General] Yield curve"
-            stats.record(skipped_topic, RESULT_SKIPPED, today=today)
-            stat = stats.load()["topics"][skipped_topic]
-            assert stat["interval_days"] == 0, "a skipped topic must be due again immediately"
+            stats.record_topic_result(skipped_topic, RESULT_SKIPPED, today=today)
+            stat = stats.load()["questions"][topic_id(skipped_topic)]
+            assert stat["interval_days"] == 0, "a skipped question must be due again immediately"
             assert stats.priority(skipped_topic, today=today) > 0, (
-                "a skipped topic must keep some priority"
+                "a skipped question must keep some priority"
             )
 
             print(f"  ✅ Quiz stats scheduling and priority selection work")
@@ -502,8 +505,71 @@ def test_quiz_stats_scheduling_and_selection():
             _ = os.environ.pop("CFA_PREP_HOME", None)
 
 
+def test_quiz_stats_question_identity():
+    """Test the hashed question identity: stable, short and free of collisions"""
+    import tempfile
+    from datetime import date
+
+    from cfa_prep.quiz_stats import (
+        RESULT_CORRECT,
+        RESULT_WRONG,
+        QuizStats,
+        question_id,
+        topic_id,
+    )
+
+    stem = "Which of the following best describes a callable bond?"
+    options = ["Redeemable before maturity", "Issued by a corporation", "Exchangeable for stock"]
+
+    # The same question always gets the same id
+    assert question_id(stem, options) == question_id(stem, list(options))
+    # Cosmetic changes do not change the identity
+    assert question_id(stem.upper(), options) == question_id(stem, options)
+    # The order of the options does not change the identity
+    assert question_id(stem, list(reversed(options))) == question_id(stem, options)
+    # A different option set is a different question
+    assert question_id(stem, options + ["Another option"]) != question_id(stem, options)
+    # The id is short and does not leak the question text
+    qid = question_id(stem, options)
+    assert len(qid) == 18, f"unexpected id length: {qid}"
+    assert stem not in qid
+    # Topic prompts live in their own namespace
+    assert topic_id("[Economics > General] Inflation") != qid
+    assert topic_id("[Economics > General] Inflation") != topic_id(
+        "[Economics > General] Inflation", "Q12"
+    )
+
+    with tempfile.TemporaryDirectory() as tmp:
+        os.environ["CFA_PREP_HOME"] = tmp
+        try:
+            stats = QuizStats()
+            today = date(2026, 1, 1)
+            topic = "[Economics > General] Interest Rates"
+            stats.record_question(
+                qid, RESULT_WRONG, question=stem, topic=topic, level="L1",
+                source="mistake", today=today,
+            )
+            # The same question asked again updates the same entry
+            stats.record_question(
+                qid, RESULT_CORRECT, question=stem, topic=topic, level="L1",
+                source="mistake", today=today,
+            )
+            questions = stats.load()["questions"]
+            assert len(questions) == 1, "the same question must not create a second entry"
+            stat = questions[qid]
+            assert stat["times_seen"] == 2
+            assert stat["times_wrong"] == 1
+            assert stat["times_correct"] == 1
+            assert stat["question"] == stem
+            assert stat["topic"] == topic
+
+            print("  ✅ Quiz stats question identity works")
+        finally:
+            _ = os.environ.pop("CFA_PREP_HOME", None)
+
+
 def test_quiz_stats_file_split():
-    """Test that topics and sessions live in separate files."""
+    """Test that questions and sessions live in separate files."""
     import tempfile
     import json
     from datetime import date
@@ -514,20 +580,20 @@ def test_quiz_stats_file_split():
         try:
             stats = QuizStats()
             today = date(2026, 1, 1)
-            stats.record("[Economics > General] Topic X", RESULT_CORRECT, today=today)
+            stats.record_topic_result("[Economics > General] Topic X", RESULT_CORRECT, today=today)
             stats.record_session("L1", total=10, correct=7, wrong=2, skipped=1)
 
             # The two files are separate
-            assert stats.stats_file.exists(), "the topics file must exist"
+            assert stats.stats_file.exists(), "the questions file must exist"
             assert stats.sessions_file.exists(), "the sessions file must exist"
             assert stats.stats_file != stats.sessions_file
 
-            topics_raw = json.loads(stats.stats_file.read_text(encoding="utf-8"))
+            questions_raw = json.loads(stats.stats_file.read_text(encoding="utf-8"))
             sessions_raw = json.loads(stats.sessions_file.read_text(encoding="utf-8"))
-            assert "topics" in topics_raw, "the topics file holds the per-topic stats"
-            assert "sessions" not in topics_raw, "sessions must not live in the topics file"
+            assert "questions" in questions_raw, "the questions file holds the per-question stats"
+            assert "sessions" not in questions_raw, "sessions must not live in the questions file"
             assert "sessions" in sessions_raw, "the sessions file holds the history"
-            assert "topics" not in sessions_raw, "topics must not live in the sessions file"
+            assert "questions" not in sessions_raw, "questions must not live in the sessions file"
 
             # The aggregate report still reads the session history
             overall = stats.overall()
@@ -538,7 +604,7 @@ def test_quiz_stats_file_split():
             # Reset clears both files
             stats.reset()
             assert stats.overall()["sessions"] == 0
-            assert stats.load()["topics"] == {}
+            assert stats.load()["questions"] == {}
 
             print(f"  ✅ Quiz stats file split works")
         finally:
@@ -625,6 +691,7 @@ def run_all_tests():
         ("Curriculum subject normalization", test_curriculum_normalize_subject),
         ("Quiz uses curriculum", test_quiz_uses_curriculum),
         ("Quiz stats scheduling/selection", test_quiz_stats_scheduling_and_selection),
+        ("Quiz stats question identity", test_quiz_stats_question_identity),
         ("Quiz stats file split", test_quiz_stats_file_split),
     ]
 

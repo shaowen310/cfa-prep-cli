@@ -18,7 +18,7 @@ from .knowledge_base import KnowledgeBase
 from .mistake_analyzer import MistakeAnalyzer
 from .progress_tracker import ProgressTracker
 from .quiz_engine import QuizEngine
-from .quiz_stats import QuizStats, next_due_of, topic_of
+from .quiz_stats import QuizStats, describe, next_due_of, topic_of
 from .utils import (
     get_data_dir,
     get_data_root,
@@ -281,29 +281,33 @@ def cmd_stats(args: CLIArgs) -> None:
                 f"  📖 {subject}: {correct}/{seen} correct, {wrong} wrong ({pct:.0f}%) {bar}"
             )
 
-    weakest = stats.weakest_topics(limit=10)
+    weakest = stats.weakest_questions(limit=10)
     if weakest:
-        print_section("Topics answered wrongly most often")
-        for topic, stat in weakest:
-                        due = next_due_of(stat)
-                        print(
-                            f"  • {topic_of(topic)}"
-                            f" — {stat['times_wrong']} wrong / {stat['times_seen']} seen"
-                            f" (streak {stat['streak']}, due {due.isoformat() if due else 'n/a'})"
-                        )
+        print_section("Questions answered wrongly most often")
+        for _key, stat in weakest:
+            due = next_due_of(stat)
+            label = describe(stat)
+            print(
+                f"  • {label}"
+                f" — {stat['times_wrong']} wrong / {stat['times_seen']} seen"
+                f" (streak {stat['streak']}, due {due.isoformat() if due else 'n/a'})"
+            )
+            topic = topic_of(stat.get("topic", ""))
+            if topic and stat.get("question"):
+                print(f"      topic: {topic}")
 
-    due = stats.due_topics(limit=10)
+    due = stats.due_questions(limit=10)
     if due:
         print_section("Due for review")
-        for topic, overdue in due:
+        for _key, stat, overdue in due:
             when = f"overdue by {overdue}d" if overdue > 0 else "due today"
-            print(f"  • {topic_of(topic)} ({when})")
+            print(f"  • {describe(stat)} ({when})")
 
-    mastered = stats.mastered_topics()
+    mastered = stats.mastered_questions()
     if mastered:
         print_section("Learned (3+ correct in a row)")
-        for topic in mastered[:10]:
-            print(f"  ✅ {topic_of(topic)}")
+        for _key, stat in mastered[:10]:
+            print(f"  ✅ {describe(stat)}")
 
     print(f"\n  📁 Stats file: {stats.stats_file}")
     print(f"  📁 Sessions file: {stats.sessions_file}")

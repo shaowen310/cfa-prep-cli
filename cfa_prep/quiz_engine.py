@@ -13,10 +13,13 @@ from .mistake_analyzer import MistakeAnalyzer
 from .progress_tracker import ProgressTracker
 from .curriculum import Curriculum
 from .quiz_stats import (
-    QuizStats,
     RESULT_CORRECT,
-    RESULT_WRONG,
     RESULT_SKIPPED,
+    RESULT_WRONG,
+    SOURCE_MISTAKE,
+    QuizStats,
+    describe,
+    question_id,
     topic_of,
 )
 
@@ -107,8 +110,12 @@ class QuizEngine:
         Replay a logged MCQ mistake with shuffled options and check the answer.
         Returns True if the user answered correctly, False otherwise.
         """
-        options = item["options"]
         correct_text = item["correct"]
+        # The identity of the question is derived from the original options,
+        # before they are shuffled for display, so the statistics of a question
+        # stay attached to it across replays.
+        qid = question_id(item["question"], item["options"])
+        options = list(item["options"])
         # Shuffle so the correct answer is not always at the same position
         if self.randomize:
             random.shuffle(options)
@@ -145,10 +152,14 @@ class QuizEngine:
                 self.wrong += 1
                 # Auto-log the repeated mistake
                 self._auto_log_mistake(item)
-            # Record the outcome so this topic is rescheduled accordingly
-            self.stats.record(
-                self._topic_label(item),
+            # Record the outcome against the question, so it is rescheduled
+            self.stats.record_question(
+                qid,
                 RESULT_CORRECT if correct else RESULT_WRONG,
+                question=item["question"],
+                topic=self._topic_label(item),
+                level="L1",
+                source=SOURCE_MISTAKE,
             )
             return correct
         print("⚠️ Invalid input, please choose A/B/C")
@@ -350,34 +361,48 @@ class QuizEngine:
             self._generate_question_prompt(topic)
 
             # User answer
-            print("\nPlease choose an answer (or enter 's' to skip, 'q' to quit):")
+            print("\nPlease choose an answer, or type the book question reference")
+            print("(e.g. 'Q12') to track this question on its own; 's' skips, 'q' quits:")
             print("  [A] [B] [C] [D]")
-            answer = read_input("Your choice: ").upper()
+            raw = read_input("Your choice: ").strip()
+            answer = raw.upper()
+            ref = ""
 
-            if answer == "Q":
-                print("👋 Quiz exited")
-                break
-            elif answer == "S":
-                print(f"⏭️ Skipped question {i}")
-                self.total += 1
-                self.skipped += 1
-                self.stats.record(topic, RESULT_SKIPPED)
-                continue
-            elif answer in ("A", "B", "C", "D"):
-                self.total += 1
-                print(f"\n  ✅ Answer recorded: {answer}")
-                outcome = self._ask_outcome()
-                if outcome == RESULT_CORRECT:
-                    self.score += 1
-                    self.correct += 1
-                elif outcome == RESULT_WRONG:
-                    self.wrong += 1
-                else:
+            if len(raw) == 1:
+                if answer == "Q":
+                    print("👋 Quiz exited")
+                    break
+                elif answer == "S":
+                    print(f"⏭️ Skipped question {i}")
+                    self.total += 1
                     self.skipped += 1
-                self.stats.record(topic, outcome)
-                print(f"  💡 For any mistake, log it with the 'mistake -a' command.")
+                    self.stats.record_topic_result(topic, RESULT_SKIPPED, level=level)
+                    continue
+                elif answer not in ("A", "B", "C", "D"):
+                    print("⚠️ Invalid input, please choose A/B/C/D/S/Q or type a reference")
+                    continue
+            elif raw:
+                # A free-form answer is read as the book question reference, so
+                # two different questions of the same topic are tracked apart.
+                ref = raw
+                print(f"  🔖 Reference: {ref}")
             else:
-                print("⚠️ Invalid input, please choose A/B/C/D/S/Q")
+                print("⚠️ Invalid input, please choose A/B/C/D/S/Q or type a reference")
+                continue
+
+            self.total += 1
+            if not ref:
+                print(f"\n  ✅ Answer recorded: {answer}")
+            outcome = self._ask_outcome()
+            if outcome == RESULT_CORRECT:
+                self.score += 1
+                self.correct += 1
+            elif outcome == RESULT_WRONG:
+                self.wrong += 1
+            else:
+                self.skipped += 1
+            self.stats.record_topic_result(topic, outcome, ref=ref, level=level)
+            print(f"  💡 For any mistake, log it with the 'mistake -a' command.")
 
         self._show_quiz_summary(level)
 
@@ -412,7 +437,7 @@ class QuizEngine:
             else:
                 self.skipped += 1
             self.total += 1
-            self.stats.record(q, outcome)
+            self.stats.record_topic_result(q, outcome, level=level)
             print(f"  💡 Check against the standard answer.")
 
         self._show_quiz_summary(level)
@@ -494,18 +519,21 @@ class QuizEngine:
         self.stats.flush()
         print(f"  📈 Saved to: {self.stats.stats_file}")
 
-        weakest = self.stats.weakest_topics(limit=3)
+        weakest = self.stats.weakest_questions(limit=3)
         if weakest:
-            print(f"\n  🔁 Topics to review next (most wrong answers):")
-            for topic, stat in weakest:
-                print(f"     • {topic_of(topic)} ({stat['times_wrong']} wrong / {stat['times_seen']} seen)")
+            print(f"\n  🔁 Questions to review next (most wrong answers):")
+            for _key, stat in weakest:
+                print(
+                    f"     • {describe(stat)}"
+                    f" ({stat['times_wrong']} wrong / {stat['times_seen']} seen)"
+                )
 
-        due = self.stats.due_topics(limit=3)
+        due = self.stats.due_questions(limit=3)
         if due:
             print(f"\n  📅 Due for review:")
-            for topic, overdue in due:
+            for _key, stat, overdue in due:
                 when = "overdue" if overdue > 0 else "due today"
-                print(f"     • {topic_of(topic)} ({when})")
+                print(f"     • {describe(stat)} ({when})")
 
         print(f"  📝 For any mistakes, log them with the following command:")
         print(f"     cfa-prep mistake -a")
