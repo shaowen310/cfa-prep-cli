@@ -299,18 +299,25 @@ class QuizEngine:
         self.wrong = 0
         self.skipped = 0
 
+        # Batch the statistics writes: the file is rewritten in full each time,
+        # so it is written once at the end instead of once per answer.
+        self.stats = QuizStats(autosave=False)
+
         print("\n" + "=" * 60)
         print(f"  📝 CFA {level} Quiz Mode")
         print("=" * 60)
 
-        if level == "L1":
-            self._do_l1_quiz(level)
-        elif level == "L2":
-            self._do_l2_quiz(level)
-        elif level == "L3":
-            self._do_l3_quiz()
-        else:
-            print(f"❌ Unsupported level: {level}, please use L1/L2/L3")
+        try:
+            if level == "L1":
+                self._do_l1_quiz(level)
+            elif level == "L2":
+                self._do_l2_quiz(level)
+            elif level == "L3":
+                self._do_l3_quiz()
+            else:
+                print(f"❌ Unsupported level: {level}, please use L1/L2/L3")
+        finally:
+            self.stats.flush()
 
     def _do_l1_quiz(self, level: str = "L1") -> None:
         """Run the L1 quiz flow"""
@@ -480,10 +487,12 @@ class QuizEngine:
         print(f"  ❌ Wrong: {self.wrong}")
         print(f"  ⏭️  Skipped: {self.skipped}")
         print(f"  🎯 Accuracy: {accuracy:.1f}%")
-        print(f"  📈 Saved to: {self.stats.stats_file}")
 
-        # Persist the session so the history stays complete
+        # Persist the session so the history stays complete, then write the
+        # batched statistics to disk in one go.
         self.stats.record_session(level, self.total, self.correct, self.wrong, self.skipped)
+        self.stats.flush()
+        print(f"  📈 Saved to: {self.stats.stats_file}")
 
         weakest = self.stats.weakest_topics(limit=3)
         if weakest:

@@ -141,16 +141,30 @@ class QuizStats:
     Stores per-topic outcomes, applies a spaced-repetition schedule to decide
     when a topic should come back, and scores topics by urgency so the quiz can
     focus on stale and repeatedly-wrong material.
+
+    The whole file is rewritten on every save, so writing after every single
+    answer would re-read and re-serialize the entire file per question.  Pass
+    ``autosave=False`` to keep the changes in memory and call :meth:`flush`
+    once at the end instead.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, autosave: bool = True) -> None:
         self.stats_dir: Path = get_data_dir("progress")
         self.stats_file: Path = self.stats_dir / "quiz_stats.json"
+        self.autosave: bool = autosave
+        self._cache: QuizStatsData | None = None
+        self._dirty: bool = False
 
     # --- persistence -------------------------------------------------------
 
-    def load(self) -> QuizStatsData:
-        """Load the statistics file, returning an empty structure if absent."""
+    def load(self, refresh: bool = False) -> QuizStatsData:
+        """
+        Load the statistics file, returning an empty structure if absent.
+
+        The result is cached; pass ``refresh=True`` to force a re-read from disk.
+        """
+        if self._cache is not None and not refresh:
+            return self._cache
         raw = load_json(self.stats_file)
         topics: dict[str, TopicStat] = {}
         topics_raw = raw.get("topics", {})
@@ -167,16 +181,25 @@ class QuizStats:
                     d = cast(dict[str, object], item)
                     sessions.append(self._normalize_session(d))
 
-        return QuizStatsData(
+        data = QuizStatsData(
             version=_as_int(raw.get("version"), 1),
             updated=_as_str(raw.get("updated"), today_iso()),
             sessions=sessions,
             topics=topics,
         )
+        self._cache = data
+        return data
 
     def save(self, data: QuizStatsData) -> None:
         """Persist the statistics file."""
+        self._cache = data
+        self._dirty = False
         save_json(self.stats_file, cast(dict[str, object], cast(object, data)))
+
+    def flush(self) -> None:
+        """Write any pending changes to disk (no-op when nothing changed)."""
+        if self._dirty and self._cache is not None:
+            self.save(self._cache)
 
     @staticmethod
     def _normalize_topic(raw: dict[str, object]) -> TopicStat:
@@ -271,7 +294,9 @@ class QuizStats:
         topics[topic] = stat
         data["topics"] = topics
         data["updated"] = today_iso()
-        self.save(data)
+        self._dirty = True
+        if self.autosave:
+            self.save(data)
 
     def record_session(
         self,
@@ -296,7 +321,9 @@ class QuizStats:
         )
         data["sessions"] = sessions[-200:]
         data["updated"] = today_iso()
-        self.save(data)
+        self._dirty = True
+        if self.autosave:
+            self.save(data)
 
     # --- scheduling / priority ---------------------------------------------
 
