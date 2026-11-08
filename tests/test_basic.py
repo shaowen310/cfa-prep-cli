@@ -425,6 +425,98 @@ def test_quiz_uses_curriculum():
             _ = os.environ.pop("CFA_PREP_HOME", None)
 
 
+def test_quiz_module_attribution():
+    """Test that a mistake is attributed to its module, not to a typed topic"""
+    import json
+    import tempfile
+
+    from cfa_prep.curriculum import module_group_of
+    from cfa_prep.quiz_stats import RESULT_WRONG
+
+    modules = [f"Module {i}: Basics" for i in range(1, 7)]
+    data = {
+        "L1": {
+            "Economics": {
+                mod: [f"{mod} topic {t}" for t in range(1, 4)] for mod in modules
+            }
+        }
+    }
+    with tempfile.TemporaryDirectory() as tmp:
+        os.environ["CFA_PREP_HOME"] = tmp
+        try:
+            c = Curriculum()
+            _ = c.seed()
+            src = Path(tmp) / "cur.json"
+            _ = src.write_text(json.dumps(data), encoding="utf-8")
+            c.import_file(str(src))
+
+            options = ["A tariff", "An import quota", "A voluntary export restraint"]
+            analyzer = MistakeAnalyzer()
+            _ = analyzer.add_mistake(
+                subject="Economics",
+                question="Which trade restriction costs the importing country most?",
+                user_answer=options[0],
+                correct_answer=options[1],
+                correct_conclusion="",
+                module_name="Module 1: Basics",
+                options=options,
+            )
+            records = json.loads(analyzer.data_file.read_text(encoding="utf-8"))["records"]
+            assert "key_point" not in records[0], "the typed topic must not be recorded"
+            assert records[0]["module"] == "Module 1: Basics"
+            # A mistake without a module cannot be attributed, so it is rejected
+            try:
+                _ = analyzer.add_mistake(
+                    subject="Economics",
+                    question="A question without a module",
+                    user_answer=options[0],
+                    correct_answer=options[1],
+                    correct_conclusion="",
+                    module_name="",
+                    options=options,
+                )
+                raise AssertionError("a mistake without a module must be rejected")
+            except ValueError:
+                pass
+
+            engine = QuizEngine()
+            topics = engine._get_all_topics("L1")  # pyright: ignore[reportPrivateUsage]
+            mapping = engine._topic_question_ids(topics)  # pyright: ignore[reportPrivateUsage]
+            qid = records[0]["question_id"]
+            group = "Economics > Module 1: Basics"
+            in_module = [t for t in topics if module_group_of(t) == group]
+            elsewhere = [t for t in topics if module_group_of(t) != group]
+            assert len(in_module) == 3
+            for label in in_module:
+                assert qid in mapping.get(label, []), (
+                    "the mistake must count for every topic of its module"
+                )
+            for label in elsewhere:
+                assert qid not in mapping.get(label, []), (
+                    "the mistake must not leak into another module"
+                )
+            # A wrong answer boosts the whole module, not a single topic
+            engine.stats.record_question(
+                qid, RESULT_WRONG, question=records[0]["question"], level="L1"
+            )
+            boosts = engine._boost_set(topics)  # pyright: ignore[reportPrivateUsage]
+            assert len(boosts) == 3
+            assert all(module_group_of(label) == group for label in boosts)
+
+            # The quiz keeps the per-module cap of two
+            quiz = engine._generate_l1_quiz("L1")  # pyright: ignore[reportPrivateUsage]
+            assert len(quiz) == 10
+            counts: dict[str, int] = {}
+            for label in quiz:
+                key = module_group_of(label)
+                counts[key] = counts.get(key, 0) + 1
+            assert max(counts.values()) <= 2, "at most two questions per module"
+
+            print("  ✅ A mistake is attributed to its module, not to a typed topic")
+        finally:
+            _ = os.environ.pop("CFA_PREP_HOME", None)
+
+
 def test_quiz_no_answer_is_skipped():
     """Test that a question without an answer is recorded as skipped, never as wrong"""
     import json
@@ -489,7 +581,6 @@ def test_quiz_no_answer_is_skipped():
                 question="Which trade restriction costs the importing country most?",
                 user_answer=options[0],
                 correct_answer=options[1],
-                key_point="Trade restrictions",
                 correct_conclusion="",
                 module_name="Module 6: International Trade",
                 options=options,
@@ -688,8 +779,8 @@ def test_mistake_question_id():
                 question=question,
                 user_answer=options[0],
                 correct_answer=options[1],
-                key_point="Trade restrictions",
                 correct_conclusion="",
+                module_name="Module 6: International Trade",
                 options=options,
             )
             records = json.loads(analyzer.data_file.read_text(encoding="utf-8"))["records"]
@@ -706,8 +797,8 @@ def test_mistake_question_id():
                 question=question,
                 user_answer=options[0],
                 correct_answer=options[1],
-                key_point="Trade restrictions",
                 correct_conclusion="",
+                module_name="Module 6: International Trade",
                 options=options,
                 existing_question_id=stored,
             )
@@ -876,6 +967,7 @@ def run_all_tests():
         ("Curriculum nested-module import", test_curriculum_import_nested_modules),
         ("Curriculum subject normalization", test_curriculum_normalize_subject),
         ("Quiz uses curriculum", test_quiz_uses_curriculum),
+        ("Mistake module attribution", test_quiz_module_attribution),
         ("Unanswered = skipped", test_quiz_no_answer_is_skipped),
         ("Quiz stats scheduling/selection", test_quiz_stats_scheduling_and_selection),
         ("Question identity", test_question_identity),

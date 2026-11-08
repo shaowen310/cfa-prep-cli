@@ -340,7 +340,7 @@ def cmd_mistake(args: CLIArgs) -> None:
         print("  No mistakes logged yet.")
         return
     for m in recent:
-        print(f"  [{m['date']}] {m['subject']} — {m['key_point']}")
+        print(f"  [{m['date']}] {m['subject']} — {m.get('module', '')}")
 
 
 def cmd_recap(args: CLIArgs) -> None:

@@ -11,7 +11,12 @@ from typing import TypedDict
 
 from .mistake_analyzer import MistakeAnalyzer, question_id
 from .progress_tracker import ProgressTracker
-from .curriculum import Curriculum, subject_of, topic_of
+from .curriculum import (
+    Curriculum,
+    module_group,
+    module_group_of,
+    subject_of,
+)
 from .quiz_stats import (
     RESULT_CORRECT,
     RESULT_SKIPPED,
@@ -55,7 +60,6 @@ class MistakeQuestion(TypedDict):
     """A logged L1 MCQ mistake, replayable as a quiz question."""
     subject: str
     module: str
-    key_point: str
     question: str
     question_id: str
     options: list[str]
@@ -88,15 +92,22 @@ class QuizEngine:
         """
         return self.curriculum.all_topics(level.upper())
 
-    def _get_mistake_topics(self) -> list[str]:
-        """Extract knowledge points from the mistake log for priority question selection"""
-        records = self.mistake_analyzer.get_recent_mistakes(limit=20)
-        topics: list[str] = []
+    def _get_mistake_modules(self) -> set[str]:
+        """
+        Return the modules the user has logged mistakes in.
+
+        The module is the reliable link between a mistake and the curriculum:
+        subject and module are curriculum values, while the topic a mistake
+        could have been filed under is not recorded.
+        """
+        records = self.mistake_analyzer.get_recent_mistakes(limit=50)
+        modules: set[str] = set()
         for r in records:
-            kp = r.get("key_point", "")
-            if kp:
-                topics.append(kp)
-        return topics
+            subject = str(r.get("subject", ""))
+            module = str(r.get("module", ""))
+            if subject and module:
+                modules.add(module_group(subject, module))
+        return modules
 
     def _get_mistake_questions(self, limit: int = 10) -> list[MistakeQuestion]:
         """
@@ -113,7 +124,6 @@ class QuizEngine:
                 questions.append(MistakeQuestion(
                     subject=str(r.get("subject", "")),
                     module=str(r.get("module", "")),
-                    key_point=str(r.get("key_point", "")),
                     question=question,
                     # The id is taken from the log, never derived again here.
                     question_id=str(r.get("question_id", "")),
@@ -148,7 +158,7 @@ class QuizEngine:
         module = item.get("module", "")
         label = f"{subject} > {module}" if subject and module else subject or "Mistake"
         print(f"  Source: {label}")
-        print(f"  Topic: {item.get('key_point', '')}")
+        print(f"  Module: {item.get('module', '')}")
         print(f"{'─' * 50}")
         print(f"\n  {item['question']}")
         for i, opt in enumerate(options):
@@ -200,12 +210,14 @@ class QuizEngine:
 
     def _auto_log_mistake(self, item: MistakeQuestion) -> None:
         """Re-log a mistake that was answered incorrectly during review."""
+        if not item.get("module"):
+            # Without a module the copy cannot be attributed to the curriculum.
+            return
         _ = self.mistake_analyzer.add_mistake(
             subject=item["subject"],
             question=item["question"],
             user_answer="",
             correct_answer=item["correct"],
-            key_point=item["key_point"],
             correct_conclusion="",
             module_name=item["module"],
             level="L1",
@@ -219,45 +231,57 @@ class QuizEngine:
         """Extract fuzzy knowledge points from progress tracking"""
         return self.progress_tracker.get_key_points_to_review()
 
-    def _boost_set(self, all_topics: list[str], raw_topics: list[str]) -> set[str]:
-        """
-        Map plain topic / key-point strings onto their curriculum labels so the
-        mistake log and the fuzzy list can boost the matching quiz topics.
-        """
-        by_text: dict[str, str] = {}
-        for label in all_topics:
-            _ = by_text.setdefault(topic_of(label).strip().lower(), label)
+    def _get_fuzzy_modules(self) -> set[str]:
+        """The modules the user marked as fuzzy in the progress tracker."""
+        modules: set[str] = set()
+        for label in self._get_fuzzy_topics():
+            if label.startswith("["):
+                modules.add(module_group_of(label))
+        return modules
 
+    def _weak_module_topics(self, all_topics: list[str]) -> list[str]:
+        """The curriculum topics of the modules the user is weak in."""
+        weak = self._get_mistake_modules() | self._get_fuzzy_modules()
+        return [label for label in all_topics if module_group_of(label) in weak]
+
+    def _boost_set(self, all_topics: list[str]) -> set[str]:
+        """
+        Boost the curriculum topics of the modules the user is weak in.
+
+        A mistake belongs to its module and a fuzzy point to its module too, so
+        the boost follows the module - the level the user can trust.
+        """
+        weak_modules = self._get_mistake_modules() | self._get_fuzzy_modules()
         boosts: set[str] = set()
-        for raw in raw_topics:
-            key = raw.strip().lower()
-            if not key:
-                continue
-            boosts.add(by_text.get(key, raw))
+        for label in all_topics:
+            if module_group_of(label) in weak_modules:
+                boosts.add(label)
         return boosts
 
     def _topic_question_ids(self, all_topics: list[str]) -> dict[str, list[str]]:
         """
         Map every curriculum topic to the question ids that belong to it.
 
-        A topic owns its own curriculum question, plus every logged mistake
-        whose key point matches the topic.  The mistake log is the source of
-        truth for the ids of the mistakes, so they are read from there.
+        A topic owns its own curriculum question.  A logged mistake belongs to
+        the module it was logged in, so it counts for every topic of that
+        module.  The mistake log is the source of truth for the ids of the
+        mistakes, so they are read from there.
         """
-        mapping: dict[str, list[str]] = {
-            topic: [curriculum_question_id(topic)] for topic in all_topics
-        }
-        by_text: dict[str, str] = {}
+        mapping: dict[str, list[str]] = {}
+        by_module: dict[str, list[str]] = {}
         for label in all_topics:
-            _ = by_text.setdefault(topic_of(label).strip().lower(), label)
+            mapping[label] = [curriculum_question_id(label)]
+            by_module.setdefault(module_group_of(label), []).append(label)
 
         for record in self.mistake_analyzer.get_recent_mistakes(limit=200):
             qid = str(record.get("question_id", ""))
             if not qid:
                 continue
-            key_point = str(record.get("key_point", "")).strip().lower()
-            label = by_text.get(key_point)
-            if label is not None:
+            subject = str(record.get("subject", ""))
+            module = str(record.get("module", ""))
+            if not subject or not module:
+                continue
+            for label in by_module.get(module_group(subject, module), []):
                 mapping[label].append(qid)
         return mapping
 
@@ -273,9 +297,7 @@ class QuizEngine:
         if not all_topics:
             return []
 
-        priority_pool = self._boost_set(
-            all_topics, self._get_mistake_topics() + self._get_fuzzy_topics()
-        )
+        priority_pool = self._boost_set(all_topics)
         question_ids = self._topic_question_ids(all_topics)
 
         # A topic is as urgent as its most urgent question, so a single badly
@@ -289,7 +311,11 @@ class QuizEngine:
                 score += BOOST_AMOUNT
             scored.append((score, topic))
 
-        return self.stats.select_scored(scored, 10)
+        # At most two questions per module, so a weak module comes back often
+        # without crowding out the rest of the curriculum.
+        return self.stats.select_scored(
+            scored, 10, group_of=module_group_of, limit_per_group=2
+        )
 
     def _subject_topics(self, level: str, subject: str) -> list[str]:
         """Return all "[Subject > Module] Topic" labels for a subject, across its modules."""
@@ -304,7 +330,7 @@ class QuizEngine:
         A vignette is a case scenario accompanied by 3 related questions.
         """
         all_topics = self._get_all_topics(level)
-        priority_topics = list(set(self._get_mistake_topics() + self._get_fuzzy_topics()))
+        priority_topics = self._weak_module_topics(all_topics)
 
         # Choose the vignette topic
         if priority_topics and random.random() < 0.4:

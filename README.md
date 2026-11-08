@@ -12,7 +12,7 @@ CFA Prep CLI is a pure-Python command-line CFA study assistant covering all prep
 | ------------------ | ----------------------------------------------------------------- |
 | **Knowledge Search** | Search keywords across textbook/Notes slices, with regex and fuzzy matching |
 | **Smart Quiz**      | L1 mixed selection / L2 vignette / L3 scenario analysis, with mistake-priority questions |
-| **Mistake Analysis** | Logs mistakes (MCQ or free-form), tracks subjects and key points, generates review suggestions |
+| **Mistake Analysis** | Logs mistakes (MCQ or free-form), tracks subjects and modules, generates review suggestions |
 | **Progress Tracking** | Maintains a study progress file, tracks mastered and fuzzy knowledge points |
 | **Flashcards** | Manually add Q&A flashcards, selecting the subject/module from the curriculum |
 | **IPS Templates**    | L3 personal and institutional IPS templates with full frameworks |
@@ -190,6 +190,7 @@ The id is created **once**, when the mistake is logged, and stored with the reco
 {
   "date": "20261108",
   "subject": "Financial Statement Analysis",
+  "module": "Module 3: Financial Statements",
   "question": "An independent audit report is most likely to provide:",
   "question_id": "q:9d5498fe9b6bfe5f",
   "options": ["absolute assurance ...", "a qualified opinion ...", "reasonable assurance ..."],
@@ -205,6 +206,26 @@ The topic is **not** stored with the entry. A question belongs to a topic, but t
 lives where the truth is: the curriculum owns the curriculum questions, and the mistake
 log owns the logged mistakes. The quiz engine joins the two when it selects what to
 ask, so the statistics file stays a pure question store.
+
+### Mistake attribution: subject + module
+
+A mistake is attributed to its **subject and module**, both taken from the curriculum.
+No topic is recorded — a topic typed by the user can be wrong, while the subject/module
+pair is always a curriculum value. The module is therefore **required**: a mistake
+without one cannot be attributed and is rejected.
+
+| Value | Trust | Recorded with the mistake |
+| --- | --- | --- |
+| Subject | Curriculum value | ✅ |
+| Module | Curriculum value | ✅ (required) |
+| Topic | Typed by the user | ❌ not recorded |
+
+Because a mistake belongs to a module rather than to a single topic, it counts for
+**every** topic of that module: the quiz boosts the whole module and re-asks it from
+different angles. To keep a weak module from crowding out the rest of the curriculum,
+a quiz holds **at most 2 questions per module**; if the curriculum is too small to fill
+the quiz within that cap, the cap is relaxed for the remainder so the quiz still has
+10 questions.
 
 ### How it works
 

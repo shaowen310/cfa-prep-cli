@@ -51,7 +51,6 @@ class MistakeRecord(TypedDict):
     options: list[str]  # [A text, B text, C text]
     user_answer: str     # the option text the user chose
     correct_answer: str  # the option text that is correct
-    key_point: str
     correct_conclusion: str
 
 
@@ -108,8 +107,6 @@ class MistakeAnalyzer:
                     print(f"      {letter}. {opt}")
             if r.get("correct_answer"):
                 print(f"      ✅ Correct: {r['correct_answer']}")
-            if r.get("key_point"):
-                print(f"      📌 Key point: {r['key_point']}")
             if r.get("date"):
                 print(f"      🗓 Date: {r['date']}")
         choice = self._prompt("\nAdd it again anyway? [y/N]: ").strip().lower()
@@ -121,7 +118,6 @@ class MistakeAnalyzer:
         question: str,
         user_answer: str,
         correct_answer: str,
-        key_point: str,
         correct_conclusion: str,
         module_name: str = "",
         level: str = "L1",
@@ -136,9 +132,8 @@ class MistakeAnalyzer:
             question: question text (without options)
             user_answer: the user's incorrect answer
             correct_answer: the correct answer
-            key_point: knowledge point
             correct_conclusion: correct conclusion
-            module_name: module within the subject
+            module_name: module within the subject (required)
             level: exam level (L1/L2/L3)
             options: list of option texts [A, B, C] for MCQ (optional)
             existing_question_id: id of an already known question (e.g. when a
@@ -148,6 +143,11 @@ class MistakeAnalyzer:
         Returns:
             the path of the mistakes file
         """
+        # The subject and module are curriculum values, so they are the reliable
+        # link between a mistake and the material it belongs to.  A mistake
+        # without a module cannot be attributed, so it is rejected.
+        if not module_name.strip():
+            raise ValueError("A mistake needs a module to belong to.")
         records = self._load()
         # The question id is created once, here, and stored with the record.
         # Everything downstream reads it from this file, so the id of a
@@ -165,7 +165,6 @@ class MistakeAnalyzer:
             options=options or [],
             user_answer=user_answer,
             correct_answer=correct_answer,
-            key_point=key_point,
             correct_conclusion=correct_conclusion,
         ))
         self._save(records)
@@ -188,9 +187,10 @@ class MistakeAnalyzer:
     ) -> None:
         """
         Interactively log a mistake.
-        For L1 (MCQ mode): streamlined single-question, A/B/C answers,
-        key point picked from curriculum topics.
-        For L2/L3: free-text question description, answers, key point, conclusion.
+        For L1 (MCQ mode): streamlined single-question, A/B/C answers.
+        For L2/L3: free-text question description, answers, conclusion.
+        The subject and module are required: they are the curriculum values that
+        tie a mistake to the material it belongs to.
         Exits gracefully if the user stops inputting (Ctrl+C / Ctrl+D).
         """
         saved = 0
@@ -206,19 +206,26 @@ class MistakeAnalyzer:
             module_name = ""
             if curriculum:
                 subject, module_name = self._pick_subject_and_module(curriculum, level)
-                if not subject:
+                if not subject or not module_name:
+                    print("❌ A subject and module are required to log a mistake.")
                     return
             else:
                 subject = self._prompt("Subject (e.g., FRA, Equity, Ethics): ").strip()
                 if not subject:
                     print("❌ Subject cannot be empty")
                     return
+                module_name = self._prompt(
+                    "Module (e.g., Module 3: Fiscal Policy): "
+                ).strip()
+                if not module_name:
+                    print("❌ Module cannot be empty - a mistake must belong to a module.")
+                    return
 
             if is_mcq:
                 first = True
                 while True:
                     result = self._log_mcq(
-                        subject, module_name, curriculum, level, show_hint=first
+                        subject, module_name, level, show_hint=first
                     )
                     first = False
                     if result == "finished":
@@ -239,7 +246,6 @@ class MistakeAnalyzer:
         self,
         subject: str,
         module_name: str,
-        curriculum: Curriculum | None,
         level: str,
         show_hint: bool = True,
     ) -> str:
@@ -268,25 +274,12 @@ class MistakeAnalyzer:
             ("option_c", "    C: ", False),
             ("user_letter", "\nYour wrong answer (A/B/C): ", True),
             ("correct_letter", "Correct answer (A/B/C): ", True),
-            ("key_point", "Key point (one-sentence summary): ", False),
             ("correct_conclusion", "Correct conclusion / explanation (optional): ", False),
         ]
 
         i = 0
         while i < len(fields):
             key, prompt, upper = fields[i]
-
-            # Key point is picked from the curriculum menu (with \b handled inside)
-            if key == "key_point":
-                picked = self._pick_key_point(curriculum, level, subject, module_name)
-                if picked == "__back__":
-                    if i > 0:
-                        i -= 1
-                        print(f"  ⬅️ Back to: {fields[i][0]}")
-                    continue
-                data["key_point"] = picked
-                i += 1
-                continue
 
             raw = self._prompt(prompt).strip()
             # Back command: return to the previous field (no-op on the first)
@@ -324,7 +317,6 @@ class MistakeAnalyzer:
         user_answer = letter_to_text.get(user_letter, user_letter)
         correct_answer = letter_to_text.get(correct_letter, correct_letter)
 
-        key_point = data["key_point"]
         correct_conclusion = data["correct_conclusion"]
 
         filepath = self.add_mistake(
@@ -333,7 +325,6 @@ class MistakeAnalyzer:
             options=[option_a, option_b, option_c],
             user_answer=user_answer,
             correct_answer=correct_answer,
-            key_point=key_point,
             correct_conclusion=correct_conclusion,
             module_name=module_name,
             level=level,
@@ -353,7 +344,6 @@ class MistakeAnalyzer:
         fields: list[str] = [
             "user_answer",
             "correct_answer",
-            "key_point",
             "correct_conclusion",
         ]
 
@@ -387,8 +377,6 @@ class MistakeAnalyzer:
                 prompt = "\nYour wrong answer: "
             elif key == "correct_answer":
                 prompt = "Correct answer: "
-            elif key == "key_point":
-                prompt = "\nKey point (one-sentence summary): "
             else:
                 prompt = "Correct conclusion (one-sentence summary): "
 
@@ -408,47 +396,12 @@ class MistakeAnalyzer:
             question=data["question"],
             user_answer=data["user_answer"],
             correct_answer=data["correct_answer"],
-            key_point=data["key_point"],
             correct_conclusion=data["correct_conclusion"],
             module_name=module_name,
             level=level,
         )
         print(f"\n✅ Mistake saved to: {filepath}")
         return True
-
-    def _pick_key_point(
-        self, curriculum: Curriculum | None, level: str, subject: str, module_name: str
-    ) -> str:
-        """
-        Let the user pick the key point (topic) from the selected module's topics.
-        Falls back to free-text if curriculum is unavailable or module has no topics.
-        Returns "__back__" if the user enters `\\b` to go back to the previous field.
-        """
-        if not curriculum or not module_name:
-            return self._prompt("Key point (one-sentence summary): ").strip()
-
-        modules = cast(
-            dict[str, dict[str, list[str]]], curriculum.subject_modules(level)
-        )
-        topics = modules.get(subject, {}).get(module_name, [])
-        if not topics:
-            return self._prompt("Key point (one-sentence summary): ").strip()
-
-        print(f"\n  Pick the key point tested by this question:")
-        for i, t in enumerate(topics, 1):
-            print(f"    [{i}] {t}")
-        print(f"    [0] Type a custom key point")
-        print(f"    [\\b] Back to the previous field")
-        choice = self._prompt("  > ").strip()
-        if choice == r"\b":
-            return "__back__"
-        if choice == "0" or not choice.isdigit():
-            return self._prompt("Key point (one-sentence summary): ").strip()
-
-        idx = int(choice) - 1
-        if 0 <= idx < len(topics):
-            return topics[idx]
-        return self._prompt("Key point (one-sentence summary): ").strip()
 
     @staticmethod
     def _pick_subject_and_module(curriculum: Curriculum, level: str) -> tuple[str, str]:
@@ -504,7 +457,7 @@ class MistakeAnalyzer:
     def get_mistake_stats(self) -> dict[str, object]:
         """
         Get mistake statistics.
-        Returns the total count, per-subject counts, and key points.
+        Returns the total count, per-subject counts, and per-module counts.
         """
         records = self._load()
         total = len(records)
@@ -512,22 +465,23 @@ class MistakeAnalyzer:
             return {
                 "total": 0,
                 "subjects": {},
-                "key_points": [],
+                "modules": {},
             }
 
         subj_count: dict[str, int] = {}
-        key_points: list[str] = []
+        module_count: dict[str, int] = {}
         for r in records:
             subj = r.get("subject", "Unknown")
             subj_count[subj] = subj_count.get(subj, 0) + 1
-            kp = r.get("key_point", "")
-            if kp:
-                key_points.append(kp)
+            module = r.get("module", "")
+            if module:
+                key = f"{subj} > {module}"
+                module_count[key] = module_count.get(key, 0) + 1
 
         return {
             "total": total,
             "subjects": subj_count,
-            "key_points": key_points,
+            "modules": module_count,
         }
 
     def list_mistake_files(self) -> list[Path]:

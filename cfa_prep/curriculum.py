@@ -43,6 +43,35 @@ def topic_of(label: str) -> str:
     return label[idx + 2:] if idx != -1 else label
 
 
+def module_of(label: str) -> str:
+    """
+    Extract the module from a "[Subject > Module] Topic" label.
+
+    Returns "" when the label does not follow that shape.
+    """
+    start = label.find("> ")
+    end = label.find("]")
+    if start == -1 or end == -1 or end < start:
+        return ""
+    return label[start + 2:end].strip()
+
+
+def module_group(subject: str, module: str) -> str:
+    """
+    Return the grouping key of a (subject, module) pair.
+
+    The same key is produced for a curriculum label and for a mistake record, so
+    the two can be matched.  Both values come from the curriculum, which makes
+    them reliable - unlike the topic a user may have typed.
+    """
+    return f"{subject.strip()} > {module.strip()}"
+
+
+def module_group_of(label: str) -> str:
+    """Return the grouping key of a curriculum topic label."""
+    return module_group(subject_of(label), module_of(label))
+
+
 # Official CFA topic area names (public, non-copyrighted structure)
 CANONICAL_SUBJECTS = [
     "Ethical & Professional Standards",

@@ -14,6 +14,7 @@ Purpose: Persist per-question quiz statistics at <data_root>/progress/quiz_stats
 import random
 from datetime import date, datetime, timedelta
 from pathlib import Path
+from collections.abc import Callable
 from typing import TypedDict, cast
 
 from .curriculum import subject_of, topic_of
@@ -452,7 +453,13 @@ class QuizStats:
             return UNSEEN_PRIORITY
         return self._priority_of(stat, day)
 
-    def select_scored(self, scored: list[tuple[float, str]], count: int) -> list[str]:
+    def select_scored(
+        self,
+        scored: list[tuple[float, str]],
+        count: int,
+        group_of: Callable[[str], str] | None = None,
+        limit_per_group: int = 0,
+    ) -> list[str]:
         """
         Pick the items to quiz from a list of scored candidates.
 
@@ -464,6 +471,9 @@ class QuizStats:
         Parameters:
             scored: the candidates as (priority, key) pairs
             count: number of items to select
+            group_of: maps a key to the group it belongs to (optional)
+            limit_per_group: how many keys of one group may be selected;
+                0 means no limit
 
         Returns:
             The selected keys, in quiz order.
@@ -476,17 +486,45 @@ class QuizStats:
 
         # Highest priority first, random tie-break so the order is not fixed.
         ordered = sorted(scored, key=lambda pair: (-pair[0], random.random()))
-        selected: list[str] = [key for _, key in ordered[:num_priority]]
 
-        # The rest is a weighted random draw (without replacement) so the quiz
-        # keeps some variety while still favouring urgent items.
+        selected: list[str] = []
+        taken: dict[str, int] = {}
+
+        def take(key: str, enforce_limit: bool) -> bool:
+            """Add a key to the selection, respecting the per-group limit."""
+            if enforce_limit and group_of is not None and limit_per_group > 0:
+                group = group_of(key)
+                if taken.get(group, 0) >= limit_per_group:
+                    return False
+                taken[group] = taken.get(group, 0) + 1
+            selected.append(key)
+            return True
+
+        # 40% highest priority first
+        for _score, key in ordered:
+            if len(selected) >= num_priority:
+                break
+            _ = take(key, enforce_limit=True)
+
+        # 60% weighted random from the rest
         remaining = total - len(selected)
         pool: list[tuple[float, str]] = ordered[num_priority:]
         while remaining > 0 and pool:
             weights = [max(0.1, score) for score, _ in pool]
             idx = random.choices(range(len(pool)), weights=weights, k=1)[0]
-            selected.append(pool.pop(idx)[1])
-            remaining -= 1
+            _score, key = pool.pop(idx)
+            if take(key, enforce_limit=True):
+                remaining -= 1
+
+        # The group limit can leave the quiz short (e.g. a small curriculum):
+        # fill the rest without the limit rather than asking fewer questions.
+        if remaining > 0 and pool:
+            random.shuffle(pool)
+            for _score, key in pool:
+                if remaining <= 0:
+                    break
+                if take(key, enforce_limit=False):
+                    remaining -= 1
 
         random.shuffle(selected)
         return selected
