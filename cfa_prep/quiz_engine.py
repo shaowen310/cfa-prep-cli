@@ -220,7 +220,7 @@ class QuizEngine:
         for i, opt in enumerate(options):
             print(f"    {labels[i]}. {opt}")
 
-        answer = read_input("\nYour wrong answer (A/B/C): ").upper()
+        answer = read_input("\nYour answer (A/B/C): ").upper()
         if answer == "Q":
             print("👋 Quiz exited")
             raise KeyboardInterrupt
