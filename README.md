@@ -179,6 +179,12 @@ priority = overdue(≤ +3.0) + 4.0·wrong_ratio + 0.8·min(wrong, 5)
 
 Never-tested topics start at a high priority so that new material still gets covered.
 
+The due date is **not stored** in `quiz_stats.json` — it is always derived as
+`last_seen + interval_days`, so there is a single source of truth and the two can
+never drift apart. Only `interval_days` is persisted, because for a long streak it
+depends on the previous interval and cannot be recomputed from the current streak
+alone.
+
 ### Answering
 
 Because there is no question bank, the CLI asks you to confirm each answer — the

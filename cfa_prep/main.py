@@ -18,7 +18,7 @@ from .knowledge_base import KnowledgeBase
 from .mistake_analyzer import MistakeAnalyzer
 from .progress_tracker import ProgressTracker
 from .quiz_engine import QuizEngine
-from .quiz_stats import QuizStats, topic_of
+from .quiz_stats import QuizStats, next_due_of, topic_of
 from .utils import (
     get_data_dir,
     get_data_root,
@@ -282,11 +282,12 @@ def cmd_stats(args: CLIArgs) -> None:
     if weakest:
         print_section("Topics answered wrongly most often")
         for topic, stat in weakest:
-            print(
-                f"  • {topic_of(topic)}"
-                f" — {stat['times_wrong']} wrong / {stat['times_seen']} seen"
-                f" (streak {stat['streak']}, due {stat['next_due'] or 'n/a'})"
-            )
+                        due = next_due_of(stat)
+                        print(
+                            f"  • {topic_of(topic)}"
+                            f" — {stat['times_wrong']} wrong / {stat['times_seen']} seen"
+                            f" (streak {stat['streak']}, due {due.isoformat() if due else 'n/a'})"
+                        )
 
     due = stats.due_topics(limit=10)
     if due:

@@ -57,7 +57,6 @@ class TopicStat(TypedDict):
     interval_days: int     # current scheduling interval
     last_seen: str         # ISO date of the last attempt
     last_result: str       # "correct" | "wrong" | "skipped"
-    next_due: str          # ISO date the topic becomes due again
 
 
 class SessionRecord(TypedDict):
@@ -119,6 +118,22 @@ def topic_of(label: str) -> str:
     return label[idx + 2:] if idx != -1 else label
 
 
+def next_due_of(stat: TopicStat) -> date | None:
+    """
+    Return the date a topic becomes due again.
+
+    The due date is always derived from the last attempt plus the current
+    scheduling interval, so it is never stored: there is a single source of
+    truth and the two can never drift apart.
+
+    Returns None when the topic has never been attempted.
+    """
+    last_seen = parse_date(stat.get("last_seen", ""))
+    if last_seen is None:
+        return None
+    return last_seen + timedelta(days=stat.get("interval_days", 0))
+
+
 class QuizStats:
     """
     Quiz statistics tracker.
@@ -175,7 +190,6 @@ class QuizStats:
             interval_days=_as_int(raw.get("interval_days")),
             last_seen=_as_str(raw.get("last_seen")),
             last_result=_as_str(raw.get("last_result")),
-            next_due=_as_str(raw.get("next_due")),
         )
 
     @staticmethod
@@ -201,7 +215,6 @@ class QuizStats:
             interval_days=0,
             last_seen="",
             last_result="",
-            next_due="",
         )
 
     # --- recording ---------------------------------------------------------
@@ -255,7 +268,6 @@ class QuizStats:
             stat["interval_days"] = 0
             stat["last_result"] = RESULT_SKIPPED
 
-        stat["next_due"] = (day + timedelta(days=stat["interval_days"])).isoformat()
         topics[topic] = stat
         data["topics"] = topics
         data["updated"] = today_iso()
@@ -305,7 +317,7 @@ class QuizStats:
 
         # 1. How long past due.  The interval already encodes how long a topic may
         #    rest, so "overdue" also covers "not tested for a long time".
-        due = parse_date(stat["next_due"])
+        due = next_due_of(stat)
         if due is None:
             overdue_days = 30
         else:
@@ -439,7 +451,7 @@ class QuizStats:
         data = self.load()
         rows: list[tuple[str, int]] = []
         for topic, stat in data["topics"].items():
-            due = parse_date(stat["next_due"])
+            due = next_due_of(stat)
             if due is None:
                 continue
             overdue = (day - due).days

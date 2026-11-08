@@ -428,7 +428,13 @@ def test_quiz_stats_scheduling_and_selection():
     """Test the quiz statistics: scheduling, mastery discount and priority selection"""
     import tempfile
     from datetime import date, timedelta
-    from cfa_prep.quiz_stats import QuizStats, RESULT_CORRECT, RESULT_WRONG, RESULT_SKIPPED
+    from cfa_prep.quiz_stats import (
+        QuizStats,
+        RESULT_CORRECT,
+        RESULT_WRONG,
+        RESULT_SKIPPED,
+        next_due_of,
+    )
 
     with tempfile.TemporaryDirectory() as tmp:
         os.environ["CFA_PREP_HOME"] = tmp
@@ -446,7 +452,8 @@ def test_quiz_stats_scheduling_and_selection():
             assert stat["times_wrong"] == 1
             assert stat["streak"] == 0
             assert stat["interval_days"] == 0
-            assert stat["next_due"] == today.isoformat(), "a wrong answer must be due again now"
+            assert next_due_of(stat) == today, "a wrong answer must be due again now"
+            assert "next_due" not in stat, "the due date must be derived, not stored"
 
             # A correct answer pushes the topic into the future
             stats.record(good_topic, RESULT_CORRECT, today=today)
@@ -454,7 +461,7 @@ def test_quiz_stats_scheduling_and_selection():
             assert stat["times_correct"] == 1
             assert stat["streak"] == 1
             assert stat["interval_days"] == 1
-            assert stat["next_due"] == (today + timedelta(days=1)).isoformat()
+            assert next_due_of(stat) == today + timedelta(days=1)
 
             # Consecutive correct answers lengthen the interval (spaced repetition)
             for day_offset in range(1, 4):
