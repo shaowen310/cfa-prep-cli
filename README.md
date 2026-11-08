@@ -80,6 +80,8 @@ cfa-prep search "FCFE"
 | `search --regex`             | Regex search                 | `cfa-prep search "FCF[EF]" --regex`            |
 | `quiz`                       | Quiz at the configured level (set via `config level`) | `cfa-prep quiz`                          |
 | `quiz --no-randomize`        | Disable question/option shuffling | `cfa-prep quiz --no-randomize`             |
+| `stats`                      | Quiz statistics and review schedule | `cfa-prep stats`                        |
+| `stats --reset`              | Clear all stored quiz statistics | `cfa-prep stats --reset`                    |
 | `mistake -a`                 | Interactive mistake entry    | `cfa-prep mistake -a`                          |
 | `recap`                      | View study progress          | `cfa-prep recap`                               |
 | `recap --update`             | Update study progress        | `cfa-prep recap --update`                      |
@@ -148,6 +150,53 @@ cfa-prep curriculum import /path/to/my-curriculum.json
 
 The quiz engine draws its topic pool from the curriculum automatically — no other
 configuration needed.
+
+## Quiz Statistics & Smart Review
+
+Every quiz answer is recorded in `<data_root>/progress/quiz_stats.json`, and the next
+quiz is built from those statistics so that weak and forgotten material comes back
+first — while things you already know are asked less often.
+
+### How it works
+
+Each topic keeps its own schedule (a spaced-repetition style model):
+
+| Outcome | Effect |
+| --- | --- |
+| ✅ Correct | The topic rests for longer (1 → 3 → 7 → 14 days, then `interval × ease`), and its **ease** grows, so it is selected less often. |
+| ❌ Wrong | The topic is due **immediately** (0 days) and its ease drops, so it is selected more often. |
+| ⏭️ Skipped | The topic was never really tested — it stays due now and keeps some priority. |
+
+Topics are then scored by **priority**, and the quiz is filled with:
+
+- **40%** the highest-priority topics (never tested, long overdue, or repeatedly wrong)
+- **60%** a weighted random draw from the rest, so the quiz still keeps variety
+
+```
+priority = overdue(≤ +3.0) + 4.0·wrong_ratio + 0.8·min(wrong, 5)
+           + 1.5·min(skipped, 2) − 2.0·min(streak/3, 1)
+```
+
+Never-tested topics start at a high priority so that new material still gets covered.
+
+### Answering
+
+Because there is no question bank, the CLI asks you to confirm each answer — the
+outcome is what drives the statistics:
+
+```
+Your choice: B
+Did you answer correctly? [y]es / [n]o / [s]kip: y
+```
+
+Mistake-review questions (logged via `cfa-prep mistake -a`) are scored automatically.
+
+### Viewing the statistics
+
+```bash
+cfa-prep stats           # accuracy, weakest subjects, topics to review, due list
+cfa-prep stats --reset   # clear all stored statistics
+```
 
 ## Flashcards
 
@@ -244,6 +293,7 @@ cfa-prep-cli/
 │   ├── main.py                  # CLI entry point
 │   ├── knowledge_base.py        # Knowledge base management
 │   ├── quiz_engine.py           # Quiz engine
+│   ├── quiz_stats.py            # Quiz statistics, spaced-repetition scheduling, smart selection
 │   ├── mistake_analyzer.py      # Mistake analyzer
 │   ├── progress_tracker.py      # Progress tracking
 │   ├── flashcard_generator.py   # Manual flashcard management
@@ -263,11 +313,12 @@ Data files are stored under the configured data root (`~/.cfa-prep` by default):
 ~/.cfa-prep/
 ├── kb/                       # Knowledge files (.txt) and curriculum.json
 ├── mistakes/                 # Mistake log (auto-generated)
-├── progress/                 # Progress file (progress.json, auto-generated)
+├── progress/                 # Progress files (progress.json, quiz_stats.json — auto-generated)
 ├── flashcards/               # Flashcards (flashcards.json, manually added)
 ├── templates/                # IPS templates
 └── config/
-    └── settings.json         # Configuration (includes data_root)
+    ├── settings.json         # Configuration (level, directory names)
+    └── home.env              # Persisted data root (written by `config home --set`)
 ```
 
 ## Knowledge File Format

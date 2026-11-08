@@ -12,6 +12,24 @@ from typing import TypedDict
 from .mistake_analyzer import MistakeAnalyzer
 from .progress_tracker import ProgressTracker
 from .curriculum import Curriculum
+from .quiz_stats import (
+    QuizStats,
+    RESULT_CORRECT,
+    RESULT_WRONG,
+    RESULT_SKIPPED,
+    topic_of,
+)
+
+
+def read_input(prompt: str = "") -> str:
+    """
+    Read a line of user input.
+
+    Strips surrounding whitespace and a leading UTF-8 BOM, which Windows shells
+    (e.g. PowerShell) prepend to piped input and which would otherwise make the
+    first answer look invalid.
+    """
+    return input(prompt).strip().lstrip("\ufeff").strip()
 
 
 class MistakeQuestion(TypedDict):
@@ -35,8 +53,12 @@ class QuizEngine:
         self.mistake_analyzer: MistakeAnalyzer = MistakeAnalyzer()
         self.progress_tracker: ProgressTracker = ProgressTracker()
         self.curriculum: Curriculum = Curriculum()
+        self.stats: QuizStats = QuizStats()
         self.score: int = 0
         self.total: int = 0
+        self.correct: int = 0
+        self.wrong: int = 0
+        self.skipped: int = 0
         self.randomize: bool = True
 
     def _get_all_topics(self, level: str = "L1") -> list[str]:
@@ -104,7 +126,7 @@ class QuizEngine:
         for i, opt in enumerate(options):
             print(f"    {labels[i]}. {opt}")
 
-        answer = input("\nYour wrong answer (A/B/C): ").strip().upper()
+        answer = read_input("\nYour wrong answer (A/B/C): ").upper()
         if answer == "Q":
             print("👋 Quiz exited")
             raise KeyboardInterrupt
@@ -116,14 +138,31 @@ class QuizEngine:
             if correct:
                 print(f"\n  ✅ Correct! ({labels[labels.index(answer)]}. {chosen})")
                 self.score += 1
+                self.correct += 1
             else:
                 correct_label = labels[options.index(correct_text)]
                 print(f"\n  ❌ Incorrect. Correct answer: {correct_label}. {correct_text}")
+                self.wrong += 1
                 # Auto-log the repeated mistake
                 self._auto_log_mistake(item)
+            # Record the outcome so this topic is rescheduled accordingly
+            self.stats.record(
+                self._topic_label(item),
+                RESULT_CORRECT if correct else RESULT_WRONG,
+            )
             return correct
         print("⚠️ Invalid input, please choose A/B/C")
         return False
+
+    @staticmethod
+    def _topic_label(item: MistakeQuestion) -> str:
+        """Build a curriculum-style label for a mistake item."""
+        subject = item.get("subject", "")
+        module = item.get("module", "")
+        key_point = item.get("key_point", "")
+        if subject and module:
+            return f"[{subject} > {module}] {key_point}"
+        return key_point or subject
 
     def _auto_log_mistake(self, item: MistakeQuestion) -> None:
         """Re-log a mistake that was answered incorrectly during review."""
@@ -144,42 +183,39 @@ class QuizEngine:
         """Extract fuzzy knowledge points from progress tracking"""
         return self.progress_tracker.get_key_points_to_review()
 
+    def _boost_set(self, all_topics: list[str], raw_topics: list[str]) -> set[str]:
+        """
+        Map plain topic / key-point strings onto their curriculum labels so the
+        mistake log and the fuzzy list can boost the matching quiz topics.
+        """
+        by_text: dict[str, str] = {}
+        for label in all_topics:
+            _ = by_text.setdefault(topic_of(label).strip().lower(), label)
+
+        boosts: set[str] = set()
+        for raw in raw_topics:
+            key = raw.strip().lower()
+            if not key:
+                continue
+            boosts.add(by_text.get(key, raw))
+        return boosts
+
     def _generate_l1_quiz(self, level: str = "L1") -> list[str]:
         """
         Generate L1 questions (10 mixed single-choice questions).
-        40% from mistakes/fuzzy knowledge points, 60% random.
-        Note: This generates the question framework; actual questions are answered by the user based on the knowledge point.
+        The selection is driven by the stored statistics: topics that are long
+        overdue, that were answered wrongly before, or that have never been
+        tested get the highest priority, while topics answered correctly in a
+        row are pushed further into the future.
         """
         all_topics = self._get_all_topics(level)
-        mistake_topics = self._get_mistake_topics()
-        fuzzy_topics = self._get_fuzzy_topics()
+        if not all_topics:
+            return []
 
-        priority_pool = list(set(mistake_topics + fuzzy_topics))
-        regular_pool = [t for t in all_topics if t not in priority_pool]
-
-        num_priority = min(4, len(priority_pool))  # 40%
-        num_regular = 10 - num_priority
-
-        selected = []
-
-        # Priority selection
-        if priority_pool:
-            selected.extend(random.sample(priority_pool, min(num_priority, len(priority_pool))))
-
-        # Random supplement
-        if regular_pool and num_regular > 0:
-            selected.extend(random.sample(regular_pool, min(num_regular, len(regular_pool))))
-
-        # If still fewer than 10, supplement from the full pool
-        while len(selected) < 10 and all_topics:
-            remaining = [t for t in all_topics if t not in selected]
-            if not remaining:
-                break
-            selected.append(random.choice(remaining))
-
-        if self.randomize:
-            random.shuffle(selected)
-        return selected[:10]
+        priority_pool = self._boost_set(
+            all_topics, self._get_mistake_topics() + self._get_fuzzy_topics()
+        )
+        return self.stats.select_topics(all_topics, 10, boosted=priority_pool)
 
     def _subject_from_label(self, label: str) -> str:
         """
@@ -259,6 +295,9 @@ class QuizEngine:
         self.randomize = randomize
         self.score = 0
         self.total = 0
+        self.correct = 0
+        self.wrong = 0
+        self.skipped = 0
 
         print("\n" + "=" * 60)
         print(f"  📝 CFA {level} Quiz Mode")
@@ -286,7 +325,7 @@ class QuizEngine:
                     _ = self._run_mistake_mcq(item)
                 except KeyboardInterrupt:
                     print("👋 Quiz exited")
-                    self._show_quiz_summary()
+                    self._show_quiz_summary(level)
                     return
 
         # Then run the regular topic questions
@@ -306,24 +345,34 @@ class QuizEngine:
             # User answer
             print("\nPlease choose an answer (or enter 's' to skip, 'q' to quit):")
             print("  [A] [B] [C] [D]")
-            answer = input("Your choice: ").strip().upper()
+            answer = read_input("Your choice: ").upper()
 
             if answer == "Q":
                 print("👋 Quiz exited")
                 break
             elif answer == "S":
                 print(f"⏭️ Skipped question {i}")
+                self.total += 1
+                self.skipped += 1
+                self.stats.record(topic, RESULT_SKIPPED)
                 continue
             elif answer in ("A", "B", "C", "D"):
                 self.total += 1
-                # Simulated scoring (in practice, compare with the correct answer)
                 print(f"\n  ✅ Answer recorded: {answer}")
-                print(f"  💡 Check against the standard answer; if wrong, use the 'mistake -a' command to log it.")
-                self.score += 1  # Placeholder: should judge correctness in practice
+                outcome = self._ask_outcome()
+                if outcome == RESULT_CORRECT:
+                    self.score += 1
+                    self.correct += 1
+                elif outcome == RESULT_WRONG:
+                    self.wrong += 1
+                else:
+                    self.skipped += 1
+                self.stats.record(topic, outcome)
+                print(f"  💡 For any mistake, log it with the 'mistake -a' command.")
             else:
                 print("⚠️ Invalid input, please choose A/B/C/D/S/Q")
 
-        self._show_quiz_summary()
+        self._show_quiz_summary(level)
 
     def _do_l2_quiz(self, level: str = "L2") -> None:
         """Run the L2 quiz flow"""
@@ -336,20 +385,30 @@ class QuizEngine:
         for i, q in enumerate(quiz["sub_questions"], 1):
             print(f"    {i}. {q}")
 
-        self.total = 3
+        self.total = 0
         print("\nPlease answer each question (or enter 'q' to quit):")
         for i, q in enumerate(quiz["sub_questions"], 1):
             print(f"\n{'─' * 50}")
             print(f"  📌 Sub-question {i}/3: {q}")
             print(f"{'─' * 50}")
-            answer = input("Your wrong answer (A/B/C): ").strip().upper()
+            answer = read_input("Your answer (A/B/C): ").upper()
             if answer == "Q":
                 print("👋 Quiz exited")
                 break
             print(f"  ✅ Answer recorded: {answer}")
+            outcome = self._ask_outcome()
+            if outcome == RESULT_CORRECT:
+                self.score += 1
+                self.correct += 1
+            elif outcome == RESULT_WRONG:
+                self.wrong += 1
+            else:
+                self.skipped += 1
+            self.total += 1
+            self.stats.record(q, outcome)
             print(f"  💡 Check against the standard answer.")
 
-        self._show_quiz_summary()
+        self._show_quiz_summary(level)
 
     def _do_l3_quiz(self) -> None:
         """Run the L3 quiz flow"""
@@ -371,7 +430,7 @@ class QuizEngine:
         print("\n  ✅ Your response has been recorded.")
         print("  💡 Self-assess against the standard answer; if improvement is needed, use 'mistake -a' to log weak points.")
 
-        self._show_quiz_summary()
+        self._show_quiz_summary("L3")
 
     def _generate_question_prompt(self, topic: str) -> None:
         """
@@ -385,18 +444,63 @@ class QuizEngine:
         print(f"\n  📖 Please select a question related to「{topic}」from the question bank for practice.")
         print(f"  We recommend using end-of-chapter questions from the official curriculum or QBank questions on this topic.")
 
-    def _show_quiz_summary(self) -> None:
-        """Show the quiz summary"""
+    def _ask_outcome(self) -> str:
+        """
+        Ask the user to self-assess the answer.
+
+        The CLI has no question bank, so the user picks their answer from the
+        book and then confirms whether it was right. The outcome drives the
+        statistics and the rescheduling of the topic.
+        """
+        while True:
+            print("  Did you answer correctly? [y]es / [n]o / [s]kip:")
+            choice = read_input("  > ").lower()
+            if choice in ("y", "yes"):
+                return RESULT_CORRECT
+            if choice in ("n", "no"):
+                return RESULT_WRONG
+            if choice in ("s", "skip"):
+                return RESULT_SKIPPED
+            print("  ⚠️ Please choose y, n or s.")
+
+    def _show_quiz_summary(self, level: str = "L1") -> None:
+        """Show the quiz summary, persist the session and report the statistics."""
         if self.total == 0:
             print("\n📊 No questions completed this time.")
             return
 
+        accuracy = (self.correct / self.total * 100) if self.total else 0.0
+
         print(f"\n{'=' * 50}")
         print(f"  📊 Quiz Summary")
         print(f"{'=' * 50}")
+        print(f"  Level: {level}")
         print(f"  Questions completed: {self.total}")
-        print(f"  💡 Check your accuracy rate against the standard answers.")
+        print(f"  ✅ Correct: {self.correct}")
+        print(f"  ❌ Wrong: {self.wrong}")
+        print(f"  ⏭️  Skipped: {self.skipped}")
+        print(f"  🎯 Accuracy: {accuracy:.1f}%")
+        print(f"  📈 Saved to: {self.stats.stats_file}")
+
+        # Persist the session so the history stays complete
+        self.stats.record_session(level, self.total, self.correct, self.wrong, self.skipped)
+
+        weakest = self.stats.weakest_topics(limit=3)
+        if weakest:
+            print(f"\n  🔁 Topics to review next (most wrong answers):")
+            for topic, stat in weakest:
+                print(f"     • {topic_of(topic)} ({stat['times_wrong']} wrong / {stat['times_seen']} seen)")
+
+        due = self.stats.due_topics(limit=3)
+        if due:
+            print(f"\n  📅 Due for review:")
+            for topic, overdue in due:
+                when = "overdue" if overdue > 0 else "due today"
+                print(f"     • {topic_of(topic)} ({when})")
+
         print(f"  📝 For any mistakes, log them with the following command:")
         print(f"     cfa-prep mistake -a")
         print(f"  📊 View progress:")
         print(f"     cfa-prep recap")
+        print(f"  📊 View quiz statistics:")
+        print(f"     cfa-prep stats")

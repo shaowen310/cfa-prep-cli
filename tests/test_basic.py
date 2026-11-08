@@ -424,6 +424,77 @@ def test_quiz_uses_curriculum():
             _ = os.environ.pop("CFA_PREP_HOME", None)
 
 
+def test_quiz_stats_scheduling_and_selection():
+    """Test the quiz statistics: scheduling, mastery discount and priority selection"""
+    import tempfile
+    from datetime import date, timedelta
+    from cfa_prep.quiz_stats import QuizStats, RESULT_CORRECT, RESULT_WRONG, RESULT_SKIPPED
+
+    with tempfile.TemporaryDirectory() as tmp:
+        os.environ["CFA_PREP_HOME"] = tmp
+        try:
+            stats = QuizStats()
+            today = date(2026, 1, 1)
+            wrong_topic = "[Economics > General] Discounted Dividend Valuation"
+            good_topic = "[Economics > General] Monetary policy"
+            unseen_topic = "[Economics > General] Inflation"
+
+            # A wrong answer keeps the topic due immediately
+            stats.record(wrong_topic, RESULT_WRONG, today=today)
+            data = stats.load()
+            stat = data["topics"][wrong_topic]
+            assert stat["times_wrong"] == 1
+            assert stat["streak"] == 0
+            assert stat["interval_days"] == 0
+            assert stat["next_due"] == today.isoformat(), "a wrong answer must be due again now"
+
+            # A correct answer pushes the topic into the future
+            stats.record(good_topic, RESULT_CORRECT, today=today)
+            stat = stats.load()["topics"][good_topic]
+            assert stat["times_correct"] == 1
+            assert stat["streak"] == 1
+            assert stat["interval_days"] == 1
+            assert stat["next_due"] == (today + timedelta(days=1)).isoformat()
+
+            # Consecutive correct answers lengthen the interval (spaced repetition)
+            for day_offset in range(1, 4):
+                stats.record(good_topic, RESULT_CORRECT, today=today + timedelta(days=day_offset))
+            stat = stats.load()["topics"][good_topic]
+            assert stat["streak"] == 4
+            assert stat["interval_days"] == 14, "the interval ladder should reach 14 days"
+
+            # Priority: the wrong topic outranks the mastered one; unseen topics rank high
+            p_wrong = stats.priority(wrong_topic, today=today)
+            p_good = stats.priority(good_topic, today=today)
+            p_unseen = stats.priority(unseen_topic, today=today)
+            assert p_wrong > p_good, "repeatedly wrong topics must have a higher priority"
+            assert p_unseen > p_wrong, "never tested topics must have a high priority"
+            assert p_good < 0, "a mastered topic must be pushed back by the mastery discount"
+
+            # Selection must favour the weak topics over the mastered one
+            candidates = [wrong_topic, good_topic, unseen_topic]
+            import random as _random
+            _random.seed(42)
+            selected = stats.select_topics(candidates, 2, today=today)
+            assert len(selected) == 2
+            assert unseen_topic in selected, "unseen topics should be selected first"
+            assert wrong_topic in selected, "repeatedly wrong topics should be selected"
+            assert good_topic not in selected, "a mastered topic should be pushed back"
+
+            # A skipped topic was never really tested, so it must stay due
+            skipped_topic = "[Economics > General] Yield curve"
+            stats.record(skipped_topic, RESULT_SKIPPED, today=today)
+            stat = stats.load()["topics"][skipped_topic]
+            assert stat["interval_days"] == 0, "a skipped topic must be due again immediately"
+            assert stats.priority(skipped_topic, today=today) > 0, (
+                "a skipped topic must keep some priority"
+            )
+
+            print(f"  ✅ Quiz stats scheduling and priority selection work")
+        finally:
+            _ = os.environ.pop("CFA_PREP_HOME", None)
+
+
 def test_data_root_env_override():
     """Test that get_data_root() honors the CFA_PREP_HOME env var"""
     import tempfile
@@ -503,6 +574,7 @@ def run_all_tests():
         ("Curriculum nested-module import", test_curriculum_import_nested_modules),
         ("Curriculum subject normalization", test_curriculum_normalize_subject),
         ("Quiz uses curriculum", test_quiz_uses_curriculum),
+        ("Quiz stats scheduling/selection", test_quiz_stats_scheduling_and_selection),
     ]
 
     passed = 0

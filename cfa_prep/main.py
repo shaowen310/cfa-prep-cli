@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 CFA Prep CLI - Main entry point (CLI)
 Author: CodeBuddy AI Assistant
@@ -6,10 +5,32 @@ Purpose: Provide a command-line interface that orchestrates all submodule functi
          Supports the search / quiz / mistake / recap / flashcard / ips / init commands.
 """
 
-import json
 import argparse
+import json
 from pathlib import Path
 from typing import Protocol, cast
+
+from .baii_calculator import run_repl as run_baii_repl
+from .curriculum import Curriculum
+from .flashcard_generator import FlashcardGenerator
+from .ips_builder import IPSBuilder
+from .knowledge_base import KnowledgeBase
+from .mistake_analyzer import MistakeAnalyzer
+from .progress_tracker import ProgressTracker
+from .quiz_engine import QuizEngine
+from .quiz_stats import QuizStats, topic_of
+from .utils import (
+    get_data_dir,
+    get_data_root,
+    load_home_env,
+    load_settings,
+    print_header,
+    print_section,
+    save_settings,
+    set_home_env,
+    set_setting,
+    today_iso,
+)
 
 
 class CLIArgs(Protocol):
@@ -24,6 +45,7 @@ class CLIArgs(Protocol):
     no_fuzzy: bool
     max_results: int
     randomize: bool
+    reset: bool
     add: bool
     remove: bool
     update: bool
@@ -31,27 +53,6 @@ class CLIArgs(Protocol):
     show: bool
     action: str | None
     file: str | None
-
-from .knowledge_base import KnowledgeBase
-from .quiz_engine import QuizEngine
-from .mistake_analyzer import MistakeAnalyzer
-from .progress_tracker import ProgressTracker
-from .flashcard_generator import FlashcardGenerator
-from .ips_builder import IPSBuilder
-from .curriculum import Curriculum
-from .baii_calculator import run_repl as run_baii_repl
-from .utils import (
-    get_data_root,
-    get_data_dir,
-    load_settings,
-    save_settings,
-    set_setting,
-    set_home_env,
-    load_home_env,
-    print_header,
-    print_section,
-    today_iso,
-)
 
 
 def cmd_init(_args: CLIArgs) -> None:
@@ -90,18 +91,18 @@ def cmd_init(_args: CLIArgs) -> None:
         "templates_dir": "templates",
     }
     save_settings(cast(dict[str, object], settings))
-    print(f"  ✅ Created config: config/settings.json")
+    print("  ✅ Created config: config/settings.json")
 
     # Create the initial progress file
     tracker = ProgressTracker()
     _ = tracker.load()
-    print(f"  ✅ Created progress file: progress/progress.md")
+    print("  ✅ Created progress file: progress/progress.md")
 
     # Create an empty curriculum file (idempotent; keeps an existing file if present)
     curriculum = Curriculum()
     if curriculum.seed():
         print(f"  ✅ Created empty curriculum: {curriculum.path.name}")
-        print(f"     Use 'cfa-prep curriculum import <file.json>' to populate it.")
+        print("     Use 'cfa-prep curriculum import <file.json>' to populate it.")
     else:
         print(f"  ℹ️  Curriculum already exists: {curriculum.path.name}")
 
@@ -110,7 +111,7 @@ def cmd_init(_args: CLIArgs) -> None:
     today = today_iso()
     _ = builder.generate("personal", today)
     _ = builder.generate("institutional", today)
-    print(f"  ✅ Generated IPS templates: templates/")
+    print("  ✅ Generated IPS templates: templates/")
 
     print("\n" + "=" * 60)
     print("  🎉 Initialization complete!")
@@ -237,6 +238,73 @@ def cmd_quiz(args: CLIArgs) -> None:
     engine.start_quiz(level=level, randomize=args.randomize)
 
 
+def cmd_stats(args: CLIArgs) -> None:
+    """
+    Show the accumulated quiz statistics: overall accuracy, per-subject accuracy,
+    the topics answered wrongly most often, and what is due for review.
+    """
+    stats = QuizStats()
+
+    if args.reset:
+        stats.reset()
+        print("✅ Quiz statistics cleared.")
+        print(f"   {stats.stats_file}")
+        return
+
+    print_header("📊 Quiz Statistics")
+
+    overall = stats.overall()
+    if overall["total"] == 0:
+        print("  No quiz answers recorded yet.")
+        print("  💡 Take a quiz first: cfa-prep quiz")
+        print(f"  📁 Stats file: {stats.stats_file}")
+        return
+
+    accuracy = (overall["correct"] / overall["total"] * 100) if overall["total"] else 0.0
+    print(f"  Sessions: {overall['sessions']}")
+    print(f"  Questions answered: {overall['total']}")
+    print(f"  ✅ Correct: {overall['correct']}")
+    print(f"  ❌ Wrong: {overall['wrong']}")
+    print(f"  ⏭️  Skipped: {overall['skipped']}")
+    print(f"  🎯 Accuracy: {accuracy:.1f}%")
+
+    subjects = stats.by_subject()
+    if subjects:
+        print_section("Accuracy by Subject (weakest first)")
+        for subject, seen, correct, wrong in subjects:
+            pct = (correct / seen * 100) if seen else 0.0
+            bar = ProgressTracker.progress_bar(correct, max(seen, 1))
+            print(
+                f"  📖 {subject}: {correct}/{seen} correct, {wrong} wrong ({pct:.0f}%) {bar}"
+            )
+
+    weakest = stats.weakest_topics(limit=10)
+    if weakest:
+        print_section("Topics answered wrongly most often")
+        for topic, stat in weakest:
+            print(
+                f"  • {topic_of(topic)}"
+                f" — {stat['times_wrong']} wrong / {stat['times_seen']} seen"
+                f" (streak {stat['streak']}, due {stat['next_due'] or 'n/a'})"
+            )
+
+    due = stats.due_topics(limit=10)
+    if due:
+        print_section("Due for review")
+        for topic, overdue in due:
+            when = f"overdue by {overdue}d" if overdue > 0 else "due today"
+            print(f"  • {topic_of(topic)} ({when})")
+
+    mastered = stats.mastered_topics()
+    if mastered:
+        print_section("Learned (3+ correct in a row)")
+        for topic in mastered[:10]:
+            print(f"  ✅ {topic_of(topic)}")
+
+    print(f"\n  📁 Stats file: {stats.stats_file}")
+    print("  💡 Review the weak topics: cfa-prep quiz")
+
+
 def cmd_mistake(args: CLIArgs) -> None:
     """
     Log and view mistakes.
@@ -295,7 +363,7 @@ def cmd_recap(args: CLIArgs) -> None:
         total = total_value if isinstance(total_value, int) else 0
         print(f"  Total mistakes: {total}")
         if total > 0:
-            print(f"\n  Subject distribution:")
+            print("\n  Subject distribution:")
             subjects_value = stats.get("subjects")
             if isinstance(subjects_value, dict):
                 subjects_map = cast(dict[str, object], subjects_value)
@@ -307,7 +375,7 @@ def cmd_recap(args: CLIArgs) -> None:
             for subj, count in sorted(subjects.items(), key=lambda x: x[1], reverse=True):
                 print(f"    {subj}: {count} questions")
 
-        print(f"\n💡 Use 'cfa-prep recap --update' to update progress")
+        print("\n💡 Use 'cfa-prep recap --update' to update progress")
 
 
 def cmd_flashcard(args: CLIArgs) -> None:
@@ -426,6 +494,7 @@ Examples:
   cfa-prep search "FCFE" --regex         Use regex search
   cfa-prep quiz                          Start quizzing at the configured level (config level)
   cfa-prep quiz --no-randomize           Disable question/option shuffling
+  cfa-prep stats                        Show quiz statistics and the review schedule
   cfa-prep mistake -a                    Log a mistake
   cfa-prep recap                         View progress
   cfa-prep recap --update                Update progress
@@ -473,6 +542,10 @@ Data root (default ~/.cfa-prep) can be set via:
     _ = p_quiz.add_argument("--no-randomize", dest="randomize", action="store_false", default=True,
                         help="disable question/option shuffling (randomized by default)")
 
+    # stats command
+    p_stats = subparsers.add_parser("stats", aliases=["stat"], help="Show quiz statistics and review schedule")
+    _ = p_stats.add_argument("--reset", action="store_true", help="clear all stored quiz statistics")
+
     # recap command
     p_recap = subparsers.add_parser("recap", help="View/update study progress")
     _ = p_recap.add_argument("--update", action="store_true", help="interactively update progress")
@@ -509,7 +582,12 @@ Data root (default ~/.cfa-prep) can be set via:
         return
 
     # Normalize subcommand aliases before dispatch
-    command_aliases = {"curri": "curriculum", "mis": "mistake", "flash": "flashcard"}
+    command_aliases = {
+        "curri": "curriculum",
+        "mis": "mistake",
+        "flash": "flashcard",
+        "stat": "stats",
+    }
     args.command = command_aliases.get(args.command, args.command)
 
     # Dispatch commands
@@ -518,6 +596,7 @@ Data root (default ~/.cfa-prep) can be set via:
         "config": cmd_config,
         "search": cmd_search,
         "quiz": cmd_quiz,
+        "stats": cmd_stats,
         "mistake": cmd_mistake,
         "recap": cmd_recap,
         "flashcard": cmd_flashcard,

@@ -183,7 +183,7 @@ class ProgressTracker:
             cls._print_grouped_from_labels(entries)
 
     @staticmethod
-    def _progress_bar(done: int, total: int, width: int = 20) -> str:
+    def progress_bar(done: int, total: int, width: int = 20) -> str:
         """
         Render a textual progress bar, e.g. "█████░░░░░░░░░░░░░░░ 25%".
 
@@ -252,7 +252,7 @@ class ProgressTracker:
                 )
             )
             marker = " ✅" if subject_complete else ""
-            bar = cls._progress_bar(done_count, total_count)
+            bar = cls.progress_bar(done_count, total_count)
             print(f"    📖 {subject} ({done_count}/{total_count}){marker}")
             print(f"        {bar}")
             if subject_complete:
