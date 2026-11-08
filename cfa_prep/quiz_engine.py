@@ -3,32 +3,33 @@
 CFA Prep CLI - Quiz engine module
 Author: CodeBuddy AI Assistant
 Purpose: Provide quiz modes for the three CFA exam levels (L1/L2/L3),
-         with random question selection and mistake-priority strategy, interactive answering, and instant scoring.
+         with random topic selection driven by the logged mistakes, replay of
+         those mistakes as real multiple-choice questions, and instant scoring.
 """
 
 import random
 from typing import TypedDict
 
-from .mistake_analyzer import MistakeAnalyzer, question_id
+from .mistake_analyzer import MistakeAnalyzer
 from .progress_tracker import ProgressTracker
 from .curriculum import (
     Curriculum,
     module_group,
     module_group_of,
     subject_of,
+    topic_of,
 )
 from .quiz_stats import (
     RESULT_CORRECT,
     RESULT_SKIPPED,
     RESULT_WRONG,
+    UNSEEN_PRIORITY,
     QuizStats,
     describe,
 )
 
 # Where a recorded question came from.
 SOURCE_MISTAKE = "mistake"   # a logged mistake, replayed from the mistake log
-SOURCE_TOPIC = "topic"       # a curriculum question answered from the book
-SOURCE_BOOK = "book"         # a curriculum question with a book reference
 
 BOOST_AMOUNT = 1.5    # extra priority for topics in the mistake/fuzzy lists
 
@@ -40,20 +41,14 @@ def read_input(prompt: str = "") -> str:
     Strips surrounding whitespace and a leading UTF-8 BOM, which Windows shells
     (e.g. PowerShell) prepend to piped input and which would otherwise make the
     first answer look invalid.
-    """
-    return input(prompt).strip().lstrip("\ufeff").strip()
 
-
-def curriculum_question_id(label: str, ref: str = "") -> str:
+    An end of input (piped input that ran out, or Ctrl+D) is an empty answer
+    rather than an error: the caller decides what an empty answer means.
     """
-    Return the stable id of a curriculum question.
-
-    A curriculum question is answered from the book, so its identity is the
-    curriculum topic it belongs to plus the optional book reference.  The
-    curriculum is the source of truth for that identity - the statistics file
-    only stores the id.
-    """
-    return question_id(f"{label}\n{ref}" if ref else label)
+    try:
+        return input(prompt).strip().lstrip("\ufeff").strip()
+    except EOFError:
+        return ""
 
 
 class MistakeQuestion(TypedDict):
@@ -92,47 +87,112 @@ class QuizEngine:
         """
         return self.curriculum.all_topics(level.upper())
 
-    def _get_mistake_modules(self) -> set[str]:
+    def _module_scores(self) -> dict[str, float]:
         """
-        Return the modules the user has logged mistakes in.
+        Score every module by the mistakes logged in it.
 
-        The module is the reliable link between a mistake and the curriculum:
-        subject and module are curriculum values, while the topic a mistake
-        could have been filed under is not recorded.
+        A module is as urgent as its most urgent mistake; a module without any
+        mistake counts as unseen.  The modules the user marked as fuzzy are
+        treated like a weak module.
+
+        The score belongs to the module, so every topic of that module inherits
+        it - a topic is not tracked on its own, it only carries its module.
         """
-        records = self.mistake_analyzer.get_recent_mistakes(limit=50)
-        modules: set[str] = set()
-        for r in records:
-            subject = str(r.get("subject", ""))
-            module = str(r.get("module", ""))
-            if subject and module:
-                modules.add(module_group(subject, module))
-        return modules
+        scores: dict[str, float] = {}
+        weak: set[str] = set()
 
-    def _get_mistake_questions(self, limit: int = 10) -> list[MistakeQuestion]:
+        for record in self.mistake_analyzer.get_recent_mistakes(limit=200):
+            subject = str(record.get("subject", ""))
+            module = str(record.get("module", ""))
+            qid = str(record.get("question_id", ""))
+            if not subject or not module or not qid:
+                continue
+            group = module_group(subject, module)
+            weak.add(group)
+            scores[group] = max(scores.get(group, 0.0), self.stats.priority_of(qid))
+
+        weak.update(self._get_fuzzy_modules())
+
+        for group in weak:
+            scores[group] = scores.get(group, UNSEEN_PRIORITY) + BOOST_AMOUNT
+
+        return scores
+
+    def _module_topics(self, level: str = "L1") -> dict[str, list[str]]:
+        """
+        Return the curriculum topics of every module.
+
+        The topics are the material to cover, not a queue of items: nothing is
+        tracked per topic, the module is the unit that comes back until you log
+        fewer mistakes in it.
+        """
+        by_module: dict[str, list[str]] = {}
+        for label in self._get_all_topics(level):
+            by_module.setdefault(module_group_of(label), []).append(label)
+        return by_module
+
+    def _get_mistake_questions(
+        self, limit: int = 10, limit_per_module: int = 2
+    ) -> list[MistakeQuestion]:
         """
         Fetch logged L1 MCQ mistakes that have full question/options data,
         so the quiz can replay them as real, checkable questions.
+
+        At most `limit_per_module` questions of one module are selected, so a
+        single weak module cannot take over the review.  The questions that are
+        still replayable are ordered by their urgency in the statistics, so the
+        ones that are due or repeatedly wrong come first.
         """
         records = self.mistake_analyzer.get_recent_mistakes(limit=50)
-        questions: list[MistakeQuestion] = []
+        candidates: list[tuple[float, MistakeQuestion]] = []
         for r in records:
             options = r.get("options") or []
             correct = r.get("correct_answer", "")
             question = r.get("question", "")
             if len(options) >= 2 and question and correct:
-                questions.append(MistakeQuestion(
-                    subject=str(r.get("subject", "")),
-                    module=str(r.get("module", "")),
-                    question=question,
-                    # The id is taken from the log, never derived again here.
-                    question_id=str(r.get("question_id", "")),
-                    options=[str(o) for o in options],
-                    correct=str(correct),
+                # The id is taken from the log, never derived again here.
+                qid = str(r.get("question_id", ""))
+                candidates.append((
+                    self.stats.priority_of(qid),
+                    MistakeQuestion(
+                        subject=str(r.get("subject", "")),
+                        module=str(r.get("module", "")),
+                        question=question,
+                        question_id=qid,
+                        options=[str(o) for o in options],
+                        correct=str(correct),
+                    ),
                 ))
-            if len(questions) >= limit:
+
+        # Most urgent first; equally urgent questions keep their order in the log.
+        candidates.sort(key=lambda pair: -pair[0])
+
+        selected: list[MistakeQuestion] = []
+        taken: dict[str, int] = {}
+        for _score, item in candidates:
+            if len(selected) >= limit:
                 break
-        return questions
+            group = self._module_group_of(item)
+            if taken.get(group, 0) >= limit_per_module:
+                continue
+            taken[group] = taken.get(group, 0) + 1
+            selected.append(item)
+        return selected
+
+    @staticmethod
+    def _module_group_of(item: MistakeQuestion) -> str:
+        """
+        Return the module group of a mistake.
+
+        A mistake always belongs to a module, so the group is the module it was
+        logged in.  A mistake without a module belongs to no module and is
+        therefore not counted against the per-module limit.
+        """
+        subject = str(item.get("subject", ""))
+        module = str(item.get("module", ""))
+        if not module:
+            return f"?{item.get('question_id', '')}"
+        return module_group(subject, module)
 
     def _run_mistake_mcq(self, item: MistakeQuestion) -> bool:
         """
@@ -241,81 +301,52 @@ class QuizEngine:
 
     def _weak_module_topics(self, all_topics: list[str]) -> list[str]:
         """The curriculum topics of the modules the user is weak in."""
-        weak = self._get_mistake_modules() | self._get_fuzzy_modules()
+        weak = set(self._module_scores())
         return [label for label in all_topics if module_group_of(label) in weak]
 
-    def _boost_set(self, all_topics: list[str]) -> set[str]:
+    def _modules_of(self, items: list[MistakeQuestion]) -> list[str]:
         """
-        Boost the curriculum topics of the modules the user is weak in.
+        Return the modules the given mistake questions belong to, in order.
 
-        A mistake belongs to its module and a fuzzy point to its module too, so
-        the boost follows the module - the level the user can trust.
+        The modules are the unit the quiz reviews: a mistake belongs to a module
+        and the module carries the score.
         """
-        weak_modules = self._get_mistake_modules() | self._get_fuzzy_modules()
-        boosts: set[str] = set()
-        for label in all_topics:
-            if module_group_of(label) in weak_modules:
-                boosts.add(label)
-        return boosts
+        modules: list[str] = []
+        for item in items:
+            group = self._module_group_of(item)
+            if group not in modules:
+                modules.append(group)
+        return modules
 
-    def _topic_question_ids(self, all_topics: list[str]) -> dict[str, list[str]]:
+    def _unseen_modules(self, level: str = "L1") -> list[str]:
+        """The modules the user has not logged a mistake in yet."""
+        scored = set(self._module_scores())
+        return [group for group in self._module_topics(level) if group not in scored]
+
+    def _module_review(self, level: str, modules: list[str]) -> list[str]:
         """
-        Map every curriculum topic to the question ids that belong to it.
-
-        A topic owns its own curriculum question.  A logged mistake belongs to
-        the module it was logged in, so it counts for every topic of that
-        module.  The mistake log is the source of truth for the ids of the
-        mistakes, so they are read from there.
+        Return the modules to review: the ones the questions came from, plus one
+        module without mistakes so that new material keeps coming back.
         """
-        mapping: dict[str, list[str]] = {}
-        by_module: dict[str, list[str]] = {}
-        for label in all_topics:
-            mapping[label] = [curriculum_question_id(label)]
-            by_module.setdefault(module_group_of(label), []).append(label)
+        review = list(modules)
+        unseen = self._unseen_modules(level)
+        if unseen:
+            # All unseen modules score the same, so the pick is a random one.
+            picked = self.stats.select_scored(
+                [(UNSEEN_PRIORITY, group) for group in unseen], 1
+            )
+            review.extend(picked)
+        return review
 
-        for record in self.mistake_analyzer.get_recent_mistakes(limit=200):
-            qid = str(record.get("question_id", ""))
-            if not qid:
-                continue
-            subject = str(record.get("subject", ""))
-            module = str(record.get("module", ""))
-            if not subject or not module:
-                continue
-            for label in by_module.get(module_group(subject, module), []):
-                mapping[label].append(qid)
-        return mapping
-
-    def _generate_l1_quiz(self, level: str = "L1") -> list[str]:
+    def _module_material(self, level: str, modules: list[str]) -> list[tuple[str, list[str]]]:
         """
-        Generate L1 questions (10 mixed single-choice questions).
-        The selection is driven by the stored statistics: topics that are long
-        overdue, that were answered wrongly before, or that have never been
-        tested get the highest priority, while topics answered correctly in a
-        row are pushed further into the future.
+        Pair every module under review with the topics it covers.
+
+        The topics are the material to work through, not a queue: nothing is
+        tracked per topic, so the whole list of a module is shown every time.
         """
-        all_topics = self._get_all_topics(level)
-        if not all_topics:
-            return []
-
-        priority_pool = self._boost_set(all_topics)
-        question_ids = self._topic_question_ids(all_topics)
-
-        # A topic is as urgent as its most urgent question, so a single badly
-        # known question lifts the whole topic, while a topic whose questions
-        # are all mastered is pushed back.
-        scored: list[tuple[float, str]] = []
-        for topic in all_topics:
-            ids = question_ids.get(topic) or [curriculum_question_id(topic)]
-            score = max(self.stats.priority_of(qid) for qid in ids)
-            if topic in priority_pool:
-                score += BOOST_AMOUNT
-            scored.append((score, topic))
-
-        # At most two questions per module, so a weak module comes back often
-        # without crowding out the rest of the curriculum.
-        return self.stats.select_scored(
-            scored, 10, group_of=module_group_of, limit_per_group=2
-        )
+        by_module = self._module_topics(level)
+        return [(group, by_module.get(group, [])) for group in modules]
 
     def _subject_topics(self, level: str, subject: str) -> list[str]:
         """Return all "[Subject > Module] Topic" labels for a subject, across its modules."""
@@ -407,8 +438,10 @@ class QuizEngine:
 
     def _do_l1_quiz(self, level: str = "L1") -> None:
         """Run the L1 quiz flow"""
-        # First replay logged mistakes as real MCQ questions
+        # First replay logged mistakes as real MCQ questions.  At most two per
+        # module, so a single weak module cannot take over the review.
         mistake_questions = self._get_mistake_questions()
+        modules = self._modules_of(mistake_questions)
         if self.randomize:
             random.shuffle(mistake_questions)
         if mistake_questions:
@@ -421,71 +454,43 @@ class QuizEngine:
                     self._show_quiz_summary(level)
                     return
 
-        # Then run the regular topic questions
-        topics = self._generate_l1_quiz(level)
-        print(f"\n📋 {len(topics)} regular questions")
-        print("Answer each question based on the knowledge point; your responses will be recorded.\n")
-
-        for i, topic in enumerate(topics, 1):
-            print(f"{'─' * 50}")
-            print(f"  📌 Question {i}/{len(topics)}")
-            print(f"  Topic: {topic}")
-            print(f"{'─' * 50}")
-
-            # Generate the question prompt
-            self._generate_question_prompt(topic)
-
-            # User answer
-            print("\nPlease choose an answer, or type the book question reference")
-            print("(e.g. 'Q12') to track this question on its own; 's' skips, 'q' quits:")
-            print("  [A] [B] [C] [D]")
-            raw = read_input("Your choice: ").strip()
-            answer = raw.upper()
-            ref = ""
-
-            if len(raw) == 1:
-                if answer == "Q":
-                    print("👋 Quiz exited")
-                    break
-                elif answer == "S":
-                    print(f"⏭️ Skipped question {i}")
-                    self._record_skipped(topic, level)
-                    continue
-                elif answer not in ("A", "B", "C", "D"):
-                    print("⚠️ No answer given — recorded as skipped.")
-                    self._record_skipped(topic, level)
-                    continue
-            elif raw:
-                # A free-form answer is read as the book question reference, so
-                # two different questions of the same topic are tracked apart.
-                ref = raw
-                print(f"  🔖 Reference: {ref}")
-            else:
-                print("⚠️ No answer given — recorded as skipped.")
-                self._record_skipped(topic, level)
-                continue
-
-            self.total += 1
-            if not ref:
-                print(f"\n  ✅ Answer recorded: {answer}")
-            outcome = self._ask_outcome()
-            if outcome == RESULT_CORRECT:
-                self.score += 1
-                self.correct += 1
-            elif outcome == RESULT_WRONG:
-                self.wrong += 1
-            else:
-                self.skipped += 1
-            self.stats.record_question(
-                curriculum_question_id(topic, ref),
-                outcome,
-                question=topic,
-                level=level,
-                source=SOURCE_BOOK if ref else SOURCE_TOPIC,
-            )
-            print(f"  💡 For any mistake, log it with the 'mistake -a' command.")
+        # Then the material of the modules those questions came from
+        self._show_module_material(level, self._module_review(level, modules))
 
         self._show_quiz_summary(level)
+
+    def _show_module_material(self, level: str, modules: list[str]) -> None:
+        """
+        Show the modules under review and the topics they cover.
+
+        The topics are the material to work through, not a queue of items: the
+        whole list of a module is shown every time, because nothing is tracked
+        per topic.  The module is the unit that comes back until you log fewer
+        mistakes in it.
+        """
+        material = self._module_material(level, modules)
+        if not material:
+            return
+
+        print(f"\n📋 {len(material)} module(s) to review")
+        print("Work through the topics from your book. There is no record per topic:")
+        print("log the questions you get wrong with 'mistake -a', and their module")
+        print("comes back first next time.\n")
+
+        for i, (group, topics) in enumerate(material, 1):
+            print(f"{'─' * 50}")
+            print(f"  📖 Module {i}/{len(material)}: {group}")
+            if topics:
+                for topic in topics:
+                    # The label repeats the module, which is the header already.
+                    print(f"     • {topic_of(topic)}")
+            else:
+                print("     (no topics in the curriculum)")
+            print(f"{'─' * 50}")
+
+            if read_input("Press Enter for the next module ('q' quits): ").strip().upper() == "Q":
+                print("👋 Quiz exited")
+                return
 
     def _do_l2_quiz(self, level: str = "L2") -> None:
         """Run the L2 quiz flow"""
@@ -499,38 +504,16 @@ class QuizEngine:
             print(f"    {i}. {q}")
 
         self.total = 0
-        print("\nPlease answer each question (or enter 'q' to quit):")
+        print("\nWork through each sub-question (press Enter to continue, 'q' to quit):")
         for i, q in enumerate(quiz["sub_questions"], 1):
             print(f"\n{'─' * 50}")
             print(f"  📌 Sub-question {i}/3: {q}")
             print(f"{'─' * 50}")
-            answer = read_input("Your answer (A/B/C): ").strip().upper()
-            if answer == "Q":
+            print(f"  📖 Please select a question related to「{q}」from the question bank for practice.")
+            if read_input("Press Enter for the next sub-question ('q' quits): ").strip().upper() == "Q":
                 print("👋 Quiz exited")
                 break
-            if answer not in ("A", "B", "C", "D"):
-                # No answer given: the question counts as skipped, never as wrong.
-                print("⚠️ No answer given — recorded as skipped.")
-                self._record_skipped(q, level)
-                continue
-            print(f"  ✅ Answer recorded: {answer}")
-            outcome = self._ask_outcome()
-            if outcome == RESULT_CORRECT:
-                self.score += 1
-                self.correct += 1
-            elif outcome == RESULT_WRONG:
-                self.wrong += 1
-            else:
-                self.skipped += 1
-            self.total += 1
-            self.stats.record_question(
-                curriculum_question_id(q),
-                outcome,
-                question=q,
-                level=level,
-                source=SOURCE_TOPIC,
-            )
-            print(f"  💡 Check against the standard answer.")
+            print(f"  💡 Check against the standard answer; log mistakes with 'mistake -a'.")
 
         self._show_quiz_summary(level)
 
@@ -551,7 +534,7 @@ class QuizEngine:
 
         self.total = 1
         self.score = 1  # Placeholder
-        print("\n  ✅ Your response has been recorded.")
+        print("\n  ✅ Analysis finished.")
         print("  💡 Self-assess against the standard answer; if improvement is needed, use 'mistake -a' to log weak points.")
 
         self._show_quiz_summary("L3")
@@ -567,49 +550,6 @@ class QuizEngine:
         # Provide direction hints for the question
         print(f"\n  📖 Please select a question related to「{topic}」from the question bank for practice.")
         print(f"  We recommend using end-of-chapter questions from the official curriculum or QBank questions on this topic.")
-
-    def _record_skipped(self, topic: str, level: str) -> None:
-        """
-        Record a question the user did not answer as skipped.
-
-        A question without an answer is never counted as wrong: it stays due
-        and keeps some priority, but it does not lower the ease or count as a
-        mistake.
-        """
-        self.total += 1
-        self.skipped += 1
-        self.stats.record_question(
-            curriculum_question_id(topic),
-            RESULT_SKIPPED,
-            question=topic,
-            level=level,
-            source=SOURCE_TOPIC,
-        )
-
-    def _ask_outcome(self) -> str:
-        """
-        Ask the user to self-assess the answer.
-
-        The CLI has no question bank, so the user picks their answer from the
-        book and then confirms whether it was right. The outcome drives the
-        statistics and the rescheduling of the topic.
-
-        An empty answer means the user did not assess the question at all, so
-        it is recorded as skipped rather than as a wrong answer.
-        """
-        while True:
-            print("  Did you answer correctly? [y]es / [n]o / [s]kip:")
-            choice = read_input("  > ").strip().lower()
-            if choice in ("y", "yes"):
-                return RESULT_CORRECT
-            if choice in ("n", "no"):
-                return RESULT_WRONG
-            if choice in ("s", "skip"):
-                return RESULT_SKIPPED
-            if not choice:
-                print("  ⚠️ No answer given — recorded as skipped.")
-                return RESULT_SKIPPED
-            print("  ⚠️ Please choose y, n or s.")
 
     def _show_quiz_summary(self, level: str = "L1") -> None:
         """Show the quiz summary, persist the session and report the statistics."""

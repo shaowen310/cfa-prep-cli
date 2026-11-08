@@ -145,9 +145,11 @@ def test_ips_builder():
 def test_quiz_engine():
     """Test the quiz engine"""
     engine = QuizEngine()
-    topics = engine._generate_l1_quiz()  # pyright: ignore[reportPrivateUsage]
-    assert len(topics) <= 10
-    print(f"  ✅ Quiz engine is fine (L1 question count: {len(topics)})")
+    modules = engine._module_review("L1", [])  # pyright: ignore[reportPrivateUsage]
+    assert isinstance(modules, list)
+    material = engine._module_material("L1", modules)  # pyright: ignore[reportPrivateUsage]
+    assert len(material) == len(modules)
+    print(f"  ✅ Quiz engine is fine (L1 module review: {len(material)} module(s))")
 
 
 def test_baii_calculator():
@@ -431,7 +433,7 @@ def test_quiz_module_attribution():
     import tempfile
 
     from cfa_prep.curriculum import module_group_of
-    from cfa_prep.quiz_stats import RESULT_WRONG
+    from cfa_prep.quiz_stats import RESULT_WRONG, UNSEEN_PRIORITY
 
     modules = [f"Module {i}: Basics" for i in range(1, 7)]
     data = {
@@ -480,50 +482,183 @@ def test_quiz_module_attribution():
                 pass
 
             engine = QuizEngine()
-            topics = engine._get_all_topics("L1")  # pyright: ignore[reportPrivateUsage]
-            mapping = engine._topic_question_ids(topics)  # pyright: ignore[reportPrivateUsage]
             qid = records[0]["question_id"]
             group = "Economics > Module 1: Basics"
-            in_module = [t for t in topics if module_group_of(t) == group]
-            elsewhere = [t for t in topics if module_group_of(t) != group]
-            assert len(in_module) == 3
-            for label in in_module:
-                assert qid in mapping.get(label, []), (
-                    "the mistake must count for every topic of its module"
-                )
-            for label in elsewhere:
-                assert qid not in mapping.get(label, []), (
-                    "the mistake must not leak into another module"
-                )
-            # A wrong answer boosts the whole module, not a single topic
+
+            # The module is the unit the quiz reviews: it carries the score
+            scores = engine._module_scores()  # pyright: ignore[reportPrivateUsage]
+            assert group in scores, "the module of the mistake must carry the score"
+            assert "Economics > Module 2: Basics" not in scores, (
+                "a mistake must not leak into another module"
+            )
+
+            # The mistake is replayed as a question of its module
+            items = engine._get_mistake_questions()  # pyright: ignore[reportPrivateUsage]
+            assert len(items) == 1
+            assert items[0]["module"] == "Module 1: Basics"
+            assert items[0]["question_id"] == qid
+
+            # The material of the module follows the question
+            material = engine._module_material(  # pyright: ignore[reportPrivateUsage]
+                "L1", engine._modules_of(items)  # pyright: ignore[reportPrivateUsage]
+            )
+            assert len(material) == 1
+            module_group, topics = material[0]
+            assert module_group == group
+            assert len(topics) == 3, "the whole topic list of the module is the material"
+            assert all(module_group_of(t) == group for t in topics)
+
+            # A wrong answer makes the module urgent
             engine.stats.record_question(
                 qid, RESULT_WRONG, question=records[0]["question"], level="L1"
             )
-            boosts = engine._boost_set(topics)  # pyright: ignore[reportPrivateUsage]
-            assert len(boosts) == 3
-            assert all(module_group_of(label) == group for label in boosts)
-
-            # The quiz keeps the per-module cap of two
-            quiz = engine._generate_l1_quiz("L1")  # pyright: ignore[reportPrivateUsage]
-            assert len(quiz) == 10
-            counts: dict[str, int] = {}
-            for label in quiz:
-                key = module_group_of(label)
-                counts[key] = counts.get(key, 0) + 1
-            assert max(counts.values()) <= 2, "at most two questions per module"
+            scores = engine._module_scores()  # pyright: ignore[reportPrivateUsage]
+            assert scores[group] > UNSEEN_PRIORITY, (
+                "a module with a wrong mistake must outrank an unseen module"
+            )
 
             print("  ✅ A mistake is attributed to its module, not to a typed topic")
         finally:
             _ = os.environ.pop("CFA_PREP_HOME", None)
 
 
-def test_quiz_no_answer_is_skipped():
-    """Test that a question without an answer is recorded as skipped, never as wrong"""
+def test_module_review_follows_the_questions():
+    """Test that the material under review is the material of the modules asked about"""
+    import json
+    import tempfile
+
+    from cfa_prep.curriculum import module_group_of
+
+    data = {
+        "L1": {
+            "Economics": {
+                "Module 1: Basics": ["A", "B", "C"],
+                "Module 2: Policy": ["D", "E", "F"],
+            }
+        }
+    }
+    with tempfile.TemporaryDirectory() as tmp:
+        os.environ["CFA_PREP_HOME"] = tmp
+        try:
+            c = Curriculum()
+            _ = c.seed()
+            src = Path(tmp) / "cur.json"
+            _ = src.write_text(json.dumps(data), encoding="utf-8")
+            c.import_file(str(src))
+
+            # Without any mistake the review still gives material to work on
+            engine = QuizEngine()
+            modules = engine._module_review("L1", [])  # pyright: ignore[reportPrivateUsage]
+            assert len(modules) == 1, "one module without mistakes is added"
+            material = engine._module_material("L1", modules)  # pyright: ignore[reportPrivateUsage]
+            assert len(material) == 1
+            assert len(material[0][1]) == 3, "the whole topic list of the module is shown"
+
+            # The material follows the modules the questions came from
+            options = ["A tariff", "An import quota", "A voluntary export restraint"]
+            analyzer = MistakeAnalyzer()
+            _ = analyzer.add_mistake(
+                subject="Economics",
+                question="Which trade restriction costs the importing country most?",
+                user_answer=options[0],
+                correct_answer=options[1],
+                correct_conclusion="",
+                module_name="Module 2: Policy",
+                options=options,
+            )
+            engine = QuizEngine()
+            items = engine._get_mistake_questions()  # pyright: ignore[reportPrivateUsage]
+            assert len(items) == 1
+            review = engine._module_review("L1", engine._modules_of(items))  # pyright: ignore[reportPrivateUsage]
+            assert "Economics > Module 2: Policy" in review
+            assert len(review) == 2, "the module of the question plus one without mistakes"
+            material = engine._module_material("L1", review)  # pyright: ignore[reportPrivateUsage]
+            for module_group, topics in material:
+                assert topics, f"every module under review must have material: {module_group}"
+                assert all(module_group_of(t) == module_group for t in topics)
+
+            print("  ✅ The material under review follows the questions")
+        finally:
+            _ = os.environ.pop("CFA_PREP_HOME", None)
+
+
+def test_mistake_replay_module_cap():
+    """Test that the mistake review holds at most two questions per module"""
+    import json
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as tmp:
+        os.environ["CFA_PREP_HOME"] = tmp
+        try:
+            data = {
+                "L1": {
+                    "Economics": {
+                        "Module 1: Basics": ["Topic A"],
+                        "Module 2: Policy": ["Topic B"],
+                    }
+                }
+            }
+            c = Curriculum()
+            _ = c.seed()
+            src = Path(tmp) / "cur.json"
+            _ = src.write_text(json.dumps(data), encoding="utf-8")
+            c.import_file(str(src))
+
+            analyzer = MistakeAnalyzer()
+            options = ["A tariff", "An import quota", "A voluntary export restraint"]
+            # Four mistakes in one module, one in another
+            for i in range(4):
+                _ = analyzer.add_mistake(
+                    subject="Economics",
+                    question=f"A question of module one ({i})",
+                    user_answer=options[0],
+                    correct_answer=options[1],
+                    correct_conclusion="",
+                    module_name="Module 1: Basics",
+                    options=options,
+                )
+            _ = analyzer.add_mistake(
+                subject="Economics",
+                question="A question of module two",
+                user_answer=options[0],
+                correct_answer=options[1],
+                correct_conclusion="",
+                module_name="Module 2: Policy",
+                options=options,
+            )
+
+            engine = QuizEngine()
+            items = engine._get_mistake_questions()  # pyright: ignore[reportPrivateUsage]
+            counts: dict[str, int] = {}
+            for item in items:
+                key = f"{item['subject']} > {item['module']}"
+                counts[key] = counts.get(key, 0) + 1
+            assert counts.get("Economics > Module 1: Basics", 0) == 2, (
+                "at most two questions of one module may be replayed"
+            )
+            assert counts.get("Economics > Module 2: Policy", 0) == 1, (
+                "the other module must still be reviewed"
+            )
+            assert len(items) == 3, "the cap must not drop the other modules"
+
+            # The limit can be raised when a module is the only source
+            items = engine._get_mistake_questions(  # pyright: ignore[reportPrivateUsage]
+                limit=10, limit_per_module=5
+            )
+            assert len(items) == 5, "a higher per-module limit takes more questions"
+
+            print("  ✅ The mistake review holds at most two questions per module")
+        finally:
+            _ = os.environ.pop("CFA_PREP_HOME", None)
+
+
+def test_quiz_records_only_questions():
+    """Test that only real questions are recorded: a topic prompt is not a question"""
     import json
     import tempfile
 
     from cfa_prep.mistake_analyzer import MistakeAnalyzer
-    from cfa_prep.quiz_stats import RESULT_SKIPPED, RESULT_WRONG
+    from cfa_prep.quiz_stats import RESULT_SKIPPED, QuizStats
 
     data = {
         "L1": {"Economics": ["Demand and supply", "Monetary policy"]},
@@ -546,34 +681,22 @@ def test_quiz_no_answer_is_skipped():
             _ = src.write_text(json.dumps(data), encoding="utf-8")
             c.import_file(str(src))
 
-            # 1. The self-assessment prompt: no answer means skipped, not wrong
-            engine = QuizEngine()
-            outcome = engine._ask_outcome()  # pyright: ignore[reportPrivateUsage]
-            assert outcome == RESULT_SKIPPED, "an empty self-assessment must be skipped"
-            assert outcome != RESULT_WRONG, "an empty self-assessment must never be wrong"
-
-            # 2. The L1 flow: a question without an answer is skipped
+            # 1. The L1 flow: the topic prompts create no record at all
             engine = QuizEngine()
             engine._do_l1_quiz("L1")  # pyright: ignore[reportPrivateUsage]
-            assert engine.wrong == 0, "an unanswered question must not be wrong"
-            assert engine.skipped == 2, "both unanswered questions must be skipped"
-            assert engine.total == 2
-            for stat in engine.stats.load()["questions"].values():
-                assert stat["last_result"] == RESULT_SKIPPED
-                assert stat["times_wrong"] == 0
-                assert stat["times_skipped"] == 1
+            assert engine.stats.load()["questions"] == {}, (
+                "a topic prompt is not a question and must not be recorded"
+            )
 
-            # 3. The L2 flow: a question without an answer is skipped
+            # 2. The L2 flow: the sub-question prompts create no record either
             engine = QuizEngine()
             engine._do_l2_quiz("L2")  # pyright: ignore[reportPrivateUsage]
-            assert engine.wrong == 0, "an unanswered question must not be wrong"
-            assert engine.skipped == 3, "all three sub-questions must be skipped"
-            assert engine.total == 3
-            for stat in engine.stats.load()["questions"].values():
-                assert stat["last_result"] == RESULT_SKIPPED
-                assert stat["times_wrong"] == 0
+            assert engine.stats.load()["questions"] == {}, (
+                "a sub-question prompt must not be recorded"
+            )
 
-            # 4. The mistake replay: no answer is skipped, not wrong
+            # 3. The mistake replay: the question is recorded, and an unanswered
+            #    mistake is skipped, never wrong
             analyzer = MistakeAnalyzer()
             options = ["A tariff", "An import quota", "A voluntary export restraint"]
             _ = analyzer.add_mistake(
@@ -591,12 +714,16 @@ def test_quiz_no_answer_is_skipped():
             _ = engine._run_mistake_mcq(items[0])  # pyright: ignore[reportPrivateUsage]
             assert engine.wrong == 0, "an unanswered mistake must not be wrong"
             assert engine.skipped == 1, "the unanswered mistake must be skipped"
-            stat = engine.stats.load()["questions"][items[0]["question_id"]]
+            questions = QuizStats().load()["questions"]
+            assert list(questions) == [items[0]["question_id"]], (
+                "only the mistake question may be in the statistics"
+            )
+            stat = questions[items[0]["question_id"]]
             assert stat["last_result"] == RESULT_SKIPPED
             assert stat["times_wrong"] == 0
             assert stat["times_skipped"] == 1
 
-            print("  ✅ Unanswered questions are recorded as skipped, not wrong")
+            print("  ✅ Only questions are recorded - a topic prompt is not a question")
         finally:
             qe.read_input = original_read_input
             _ = os.environ.pop("CFA_PREP_HOME", None)
@@ -607,7 +734,7 @@ def test_quiz_stats_scheduling_and_selection():
     import tempfile
     from datetime import date, timedelta
 
-    from cfa_prep.quiz_engine import curriculum_question_id
+    from cfa_prep.mistake_analyzer import question_id
     from cfa_prep.quiz_stats import (
         RESULT_CORRECT,
         RESULT_SKIPPED,
@@ -621,13 +748,13 @@ def test_quiz_stats_scheduling_and_selection():
         try:
             stats = QuizStats()
             today = date(2026, 1, 1)
-            wrong_topic = "[Economics > General] Discounted Dividend Valuation"
-            good_topic = "[Economics > General] Monetary policy"
-            unseen_topic = "[Economics > General] Inflation"
+            wrong_question = "Which of the following best values a stock?"
+            good_question = "Which of the following describes a bond?"
+            unseen_question = "Which of the following describes an index?"
 
             # A wrong answer keeps the question due immediately
-            wrong_id = curriculum_question_id(wrong_topic)
-            stats.record_question(wrong_id, RESULT_WRONG, question=wrong_topic, today=today)
+            wrong_id = question_id(wrong_question)
+            stats.record_question(wrong_id, RESULT_WRONG, question=wrong_question, today=today)
             data = stats.load()
             stat = data["questions"][wrong_id]
             assert stat["times_wrong"] == 1
@@ -638,8 +765,8 @@ def test_quiz_stats_scheduling_and_selection():
             assert "topic" not in stat, "the topic is not stored with the question"
 
             # A correct answer pushes the question into the future
-            good_id = curriculum_question_id(good_topic)
-            stats.record_question(good_id, RESULT_CORRECT, question=good_topic, today=today)
+            good_id = question_id(good_question)
+            stats.record_question(good_id, RESULT_CORRECT, question=good_question, today=today)
             stat = stats.load()["questions"][good_id]
             assert stat["times_correct"] == 1
             assert stat["streak"] == 1
@@ -651,7 +778,7 @@ def test_quiz_stats_scheduling_and_selection():
                 stats.record_question(
                     good_id,
                     RESULT_CORRECT,
-                    question=good_topic,
+                    question=good_question,
                     today=today + timedelta(days=day_offset),
                 )
             stat = stats.load()["questions"][good_id]
@@ -661,30 +788,30 @@ def test_quiz_stats_scheduling_and_selection():
             # Priority: the wrong question outranks the mastered one; unseen ones rank high
             p_wrong = stats.priority_of(wrong_id, today=today)
             p_good = stats.priority_of(good_id, today=today)
-            p_unseen = stats.priority_of(curriculum_question_id(unseen_topic), today=today)
+            p_unseen = stats.priority_of(question_id(unseen_question), today=today)
             assert p_wrong > p_good, "repeatedly wrong questions must have a higher priority"
             assert p_unseen > p_wrong, "never tested questions must have a high priority"
             assert p_good < 0, "a mastered question must be pushed back by the mastery discount"
 
             # Selection must favour the weak questions over the mastered one
-            candidates = [wrong_topic, good_topic, unseen_topic]
+            candidates = [wrong_question, good_question, unseen_question]
             import random as _random
             _random.seed(42)
             scored = [
-                (stats.priority_of(curriculum_question_id(t), today=today), t)
+                (stats.priority_of(question_id(t), today=today), t)
                 for t in candidates
             ]
             selected = stats.select_scored(scored, 2)
             assert len(selected) == 2
-            assert unseen_topic in selected, "unseen questions should be selected first"
-            assert wrong_topic in selected, "repeatedly wrong questions should be selected"
-            assert good_topic not in selected, "a mastered question should be pushed back"
+            assert unseen_question in selected, "unseen questions should be selected first"
+            assert wrong_question in selected, "repeatedly wrong questions should be selected"
+            assert good_question not in selected, "a mastered question should be pushed back"
 
             # A skipped question was never really tested, so it must stay due
-            skipped_topic = "[Economics > General] Yield curve"
-            skipped_id = curriculum_question_id(skipped_topic)
+            skipped_question = "Which of the following describes a derivative?"
+            skipped_id = question_id(skipped_question)
             stats.record_question(
-                skipped_id, RESULT_SKIPPED, question=skipped_topic, today=today
+                skipped_id, RESULT_SKIPPED, question=skipped_question, today=today
             )
             stat = stats.load()["questions"][skipped_id]
             assert stat["interval_days"] == 0, "a skipped question must be due again immediately"
@@ -703,7 +830,6 @@ def test_question_identity():
     from datetime import date
 
     from cfa_prep.mistake_analyzer import question_id
-    from cfa_prep.quiz_engine import curriculum_question_id
     from cfa_prep.quiz_stats import (
         RESULT_CORRECT,
         RESULT_WRONG,
@@ -725,11 +851,9 @@ def test_question_identity():
     qid = question_id(stem, options)
     assert len(qid) == 18, f"unexpected id length: {qid}"
     assert stem not in qid
-    # A curriculum question has its own identity, derived from its label
-    curriculum_id = curriculum_question_id("[Economics > General] Inflation")
-    assert curriculum_id != qid
-    # The book reference tells two questions of the same topic apart
-    assert curriculum_id != curriculum_question_id("[Economics > General] Inflation", "Q12")
+    # A curriculum topic is not a question, so it has no identity of its own
+    import cfa_prep.quiz_engine as qe
+    assert not hasattr(qe, "curriculum_topic_id")
 
     with tempfile.TemporaryDirectory() as tmp:
         os.environ["CFA_PREP_HOME"] = tmp
@@ -968,7 +1092,9 @@ def run_all_tests():
         ("Curriculum subject normalization", test_curriculum_normalize_subject),
         ("Quiz uses curriculum", test_quiz_uses_curriculum),
         ("Mistake module attribution", test_quiz_module_attribution),
-        ("Unanswered = skipped", test_quiz_no_answer_is_skipped),
+        ("Material follows the questions", test_module_review_follows_the_questions),
+        ("Mistake review module cap", test_mistake_replay_module_cap),
+        ("Only questions are recorded", test_quiz_records_only_questions),
         ("Quiz stats scheduling/selection", test_quiz_stats_scheduling_and_selection),
         ("Question identity", test_question_identity),
         ("Mistake question id", test_mistake_question_id),

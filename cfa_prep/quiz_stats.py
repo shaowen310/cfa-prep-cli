@@ -14,10 +14,8 @@ Purpose: Persist per-question quiz statistics at <data_root>/progress/quiz_stats
 import random
 from datetime import date, datetime, timedelta
 from pathlib import Path
-from collections.abc import Callable
 from typing import TypedDict, cast
 
-from .curriculum import subject_of, topic_of
 from .utils import get_data_dir, load_json, save_json, today_iso
 
 
@@ -33,8 +31,8 @@ def local_today() -> date:
 
 # --- question identity ------------------------------------------------------
 #
-# Questions are keyed by the hash of their identity text (see :func:`question_id`
-# in the mistake analyzer for the question scheme).  A curriculum question is
+# Tracked items are keyed by the hash of their identity text (see :func:`question_id`
+# in the mistake analyzer for the question scheme).  A curriculum topic prompt is
 # identified by its curriculum label, so its id is derived there - this module
 # only stores and schedules the ids it is given.
 
@@ -62,9 +60,9 @@ RESULT_SKIPPED = "skipped"
 
 class QuestionStat(TypedDict):
     """Statistics kept for a single question."""
-    question: str          # the question text (or the prompt that was answered)
+    question: str          # the question text
     level: str             # "L1" | "L2" | "L3"
-    source: str            # "mistake" | "topic" | "book"
+    source: str            # "mistake"
     times_seen: int
     times_correct: int
     times_wrong: int
@@ -127,9 +125,6 @@ def parse_date(value: str) -> date | None:
 def describe(stat: QuestionStat, max_len: int = 60) -> str:
     """Return a short human-readable label for a statistics entry."""
     text = stat.get("question", "").strip()
-    if text.startswith("["):
-        # A curriculum question carries its label as the prompt that was answered.
-        text = topic_of(text)
     if len(text) > max_len:
         text = text[: max_len - 3] + "..."
     return text
@@ -160,7 +155,7 @@ class QuizStats:
     so the quiz can focus on stale and repeatedly-wrong material.
 
     Questions are keyed by a hash of their identity (see :func:`question_id`
-    and :func:`topic_id`), so the stored keys stay short and stable.
+    and :func:`curriculum_topic_id`), so the stored keys stay short and stable.
 
     The whole file is rewritten on every save, so writing after every single
     answer would re-read and re-serialize the entire file per question.  Pass
@@ -453,13 +448,7 @@ class QuizStats:
             return UNSEEN_PRIORITY
         return self._priority_of(stat, day)
 
-    def select_scored(
-        self,
-        scored: list[tuple[float, str]],
-        count: int,
-        group_of: Callable[[str], str] | None = None,
-        limit_per_group: int = 0,
-    ) -> list[str]:
+    def select_scored(self, scored: list[tuple[float, str]], count: int) -> list[str]:
         """
         Pick the items to quiz from a list of scored candidates.
 
@@ -471,9 +460,6 @@ class QuizStats:
         Parameters:
             scored: the candidates as (priority, key) pairs
             count: number of items to select
-            group_of: maps a key to the group it belongs to (optional)
-            limit_per_group: how many keys of one group may be selected;
-                0 means no limit
 
         Returns:
             The selected keys, in quiz order.
@@ -488,43 +474,28 @@ class QuizStats:
         ordered = sorted(scored, key=lambda pair: (-pair[0], random.random()))
 
         selected: list[str] = []
-        taken: dict[str, int] = {}
+        chosen: set[str] = set()
 
-        def take(key: str, enforce_limit: bool) -> bool:
-            """Add a key to the selection, respecting the per-group limit."""
-            if enforce_limit and group_of is not None and limit_per_group > 0:
-                group = group_of(key)
-                if taken.get(group, 0) >= limit_per_group:
-                    return False
-                taken[group] = taken.get(group, 0) + 1
+        def take(key: str) -> None:
+            """Add a key to the selection."""
             selected.append(key)
-            return True
+            chosen.add(key)
 
         # 40% highest priority first
         for _score, key in ordered:
             if len(selected) >= num_priority:
                 break
-            _ = take(key, enforce_limit=True)
+            take(key)
 
         # 60% weighted random from the rest
         remaining = total - len(selected)
-        pool: list[tuple[float, str]] = ordered[num_priority:]
+        pool: list[tuple[float, str]] = [(s, k) for s, k in ordered if k not in chosen]
         while remaining > 0 and pool:
             weights = [max(0.1, score) for score, _ in pool]
             idx = random.choices(range(len(pool)), weights=weights, k=1)[0]
             _score, key = pool.pop(idx)
-            if take(key, enforce_limit=True):
-                remaining -= 1
-
-        # The group limit can leave the quiz short (e.g. a small curriculum):
-        # fill the rest without the limit rather than asking fewer questions.
-        if remaining > 0 and pool:
-            random.shuffle(pool)
-            for _score, key in pool:
-                if remaining <= 0:
-                    break
-                if take(key, enforce_limit=False):
-                    remaining -= 1
+            take(key)
+            remaining -= 1
 
         random.shuffle(selected)
         return selected
@@ -556,17 +527,14 @@ class QuizStats:
         Per-subject breakdown as (subject, seen, correct, wrong) tuples,
         sorted by accuracy ascending (weakest subject first).
 
-        The subject is not stored with the question, so it is resolved in two
-        ways: a curriculum question carries its label in the prompt text, and a
-        logged mistake carries its subject in the mistake log - which the caller
-        passes in as ``subject_by_id``.
+        The subject is not stored with the question, so it is resolved from the
+        mistake log, which the caller passes in as ``subject_by_id``.
         """
         data = self.load()
         mapping = subject_by_id or {}
         agg: dict[str, list[int]] = {}
         for key, stat in data["questions"].items():
-            text = stat.get("question", "")
-            subject = mapping.get(key) or (subject_of(text) if text.startswith("[") else "")
+            subject = mapping.get(key, "")
             row = agg.setdefault(subject or "(unclassified)", [0, 0, 0])
             row[0] += stat["times_seen"]
             row[1] += stat["times_correct"]

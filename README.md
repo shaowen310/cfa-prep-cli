@@ -11,7 +11,7 @@ CFA Prep CLI is a pure-Python command-line CFA study assistant covering all prep
 | Feature            | Description                                                        |
 | ------------------ | ----------------------------------------------------------------- |
 | **Knowledge Search** | Search keywords across textbook/Notes slices, with regex and fuzzy matching |
-| **Smart Quiz**      | L1 mixed selection / L2 vignette / L3 scenario analysis, with mistake-priority questions |
+| **Smart Quiz**      | L1 module review / L2 vignette / L3 scenario analysis, with mistake-priority questions |
 | **Mistake Analysis** | Logs mistakes (MCQ or free-form), tracks subjects and modules, generates review suggestions |
 | **Progress Tracking** | Maintains a study progress file, tracks mastered and fuzzy knowledge points |
 | **Flashcards** | Manually add Q&A flashcards, selecting the subject/module from the curriculum |
@@ -153,9 +153,15 @@ configuration needed.
 
 ## Quiz Statistics & Smart Review
 
-Every quiz answer is recorded in `<data_root>/progress/quiz_stats.json`, and the next
-quiz is built from those statistics so that weak and forgotten material comes back
+The statistics hold **questions only** — the mistakes you logged and answered again.
+Each of them keeps its own schedule in `<data_root>/progress/quiz_stats.json`, and the
+next quiz is built from those statistics so that weak and forgotten material comes back
 first — while things you already know are asked less often.
+
+A curriculum topic has no record of its own: the CLI shows you the topics of a module
+and you answer them from your own book, so the tool never sees the question. What it
+knows about a topic is what the mistake log tells it — which **module** the mistakes
+belong to. The module is therefore the unit the quiz reviews.
 
 The data is split across two files, because the two halves have different jobs:
 
@@ -169,13 +175,12 @@ not once per answer.
 
 ### Question identity
 
-The statistics are keyed by **question**, not by topic. Each entry is stored under a
-short hash of the question's identity instead of its full text:
+A logged mistake is stored under a short hash of the question's identity instead of its
+full text:
 
 | Entry | Key | Example |
 | --- | --- | --- |
 | Logged mistake | `q:` + hash(question text + options) | `q:9d5498fe9b6bfe5f` |
-| Curriculum question | `q:` + hash(curriculum label + optional book reference) | `q:c75404ed9502e198` |
 
 The options are part of the identity because two different questions can share the same
 stem, but the **correct answer is not** — re-logging a question with a fixed answer keeps
@@ -203,9 +208,9 @@ there instead of deriving it again, and a mistake that is re-logged after a wron
 carries the id of the original question. The statistics file only refers to that id.
 
 The topic is **not** stored with the entry. A question belongs to a topic, but that link
-lives where the truth is: the curriculum owns the curriculum questions, and the mistake
+lives where the truth is: the curriculum owns the curriculum topics, and the mistake
 log owns the logged mistakes. The quiz engine joins the two when it selects what to
-ask, so the statistics file stays a pure question store.
+ask, so the statistics file stays a pure store of questions.
 
 ### Mistake attribution: subject + module
 
@@ -220,36 +225,40 @@ without one cannot be attributed and is rejected.
 | Module | Curriculum value | ✅ (required) |
 | Topic | Typed by the user | ❌ not recorded |
 
-Because a mistake belongs to a module rather than to a single topic, it counts for
-**every** topic of that module: the quiz boosts the whole module and re-asks it from
-different angles. To keep a weak module from crowding out the rest of the curriculum,
-a quiz holds **at most 2 questions per module**; if the curriculum is too small to fill
-the quiz within that cap, the cap is relaxed for the remainder so the quiz still has
-10 questions.
+The **module is the unit the quiz reviews**. A mistake belongs to a module, the module
+carries the score, and the quiz asks you about the modules you are weak in:
+
+- the **questions** are the logged mistakes, at most **2 per module**, so a single weak
+  module cannot take over the session. Ten questions under that cap therefore cover at
+  least **5 modules**; modules with a thin history push the count up.
+- the **material** is the topic list of the modules those questions came from, plus one
+  module without mistakes so that new material keeps coming back.
+
+Nothing is tracked per topic: the topic list of a module is material to work through,
+not a queue of items, so the whole list is shown every time.
 
 ### How it works
 
-Each question keeps its own schedule (a spaced-repetition style model):
+Every logged mistake keeps its own schedule (a spaced-repetition style model):
 
 | Outcome | Effect |
 | --- | --- |
-| ✅ Correct | The question rests for longer (1 → 3 → 7 → 14 days, then `interval × ease`), and its **ease** grows, so it is selected less often. |
-| ❌ Wrong | The question is due **immediately** (0 days) and its ease drops, so it is selected more often. |
-| ⏭️ Skipped | The question was never really tested — it stays due now and keeps some priority. |
+| ✅ Correct | It rests for longer (1 → 3 → 7 → 14 days, then `interval × ease`), and its **ease** grows, so it is selected less often. |
+| ❌ Wrong | It is due **immediately** (0 days) and its ease drops, so it is selected more often. |
+| ⏭️ Skipped | It was never really tested — it stays due now and keeps some priority. |
 
-Questions are then scored by **priority**, and the quiz is filled with:
-
-- **40%** the highest-priority topics (never tested, long overdue, or repeatedly wrong)
-- **60%** a weighted random draw from the rest, so the quiz still keeps variety
+Questions are then scored by **priority**:
 
 ```
 priority = overdue(≤ +3.0) + 4.0·wrong_ratio + 0.8·min(wrong, 5)
            + 1.5·min(skipped, 2) − 2.0·min(streak/3, 1)
 ```
 
-Never-tested topics start at a high priority so that new material still gets covered.
-A topic is as urgent as its most urgent question, so one badly known question lifts the
-whole topic, while a topic whose questions are all mastered is pushed back.
+A module is as urgent as the most urgent mistake logged in it, and a module without any
+mistake counts as unseen. That way one badly known question lifts the whole module,
+while a module whose mistakes are all mastered is pushed back. The questions of a quiz
+are the most urgent ones — the ones that are due or that you keep getting wrong come
+first.
 
 The due date is **not stored** in `quiz_stats.json` — it is always derived as
 `last_seen + interval_days`, so there is a single source of truth and the two can
@@ -259,24 +268,20 @@ alone.
 
 ### Answering
 
-Because there is no question bank, the CLI asks you to confirm each answer — the
-outcome is what drives the statistics:
+The quiz replays your logged mistakes as real multiple-choice questions and scores them
+automatically — the correct answer is part of the mistake record. At most **2 questions
+per module** are replayed, so the review spreads over your weak modules instead of
+repeating the same one.
 
-```
-Your choice: B
-Did you answer correctly? [y]es / [n]o / [s]kip: y
-```
-
-Instead of an answer letter you can also type the book question reference (e.g. `Q12`).
-That reference becomes part of the question's identity, so two different questions of the
-same topic are tracked apart.
-
-Mistake-review questions (logged via `cfa-prep mistake -a`) are scored automatically.
+The curriculum topics are material, not questions: the CLI shows the topics of the
+modules under review and you work through them from your book, so there is nothing to
+grade and nothing to record. If you get one wrong, log it with `cfa-prep mistake -a` —
+the module it belongs to then comes back first in the next quiz.
 
 ### Viewing the statistics
 
 ```bash
-cfa-prep stats           # accuracy, weakest subjects, topics to review, due list
+cfa-prep stats           # accuracy, weakest subjects, questions to review, due list
 cfa-prep stats --reset   # clear all stored statistics
 ```
 
