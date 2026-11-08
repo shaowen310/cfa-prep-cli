@@ -7,9 +7,26 @@ Purpose: Provide project-level utility functions, including path management, fil
 
 import os
 import json
+import hashlib
 from pathlib import Path
 from datetime import datetime
 from typing import cast
+
+HASH_LENGTH = 16  # number of hex characters kept from a hash
+
+
+def normalize_text(text: str) -> str:
+    """Collapse whitespace and case so cosmetic edits keep the same identity."""
+    return " ".join(text.split()).casefold()
+
+
+def hash_text(*parts: str) -> str:
+    """Return a short, stable hash for the given text parts."""
+    digest = hashlib.sha1()
+    for part in parts:
+        digest.update(normalize_text(part).encode("utf-8"))
+        digest.update(b"\x00")
+    return digest.hexdigest()[:HASH_LENGTH]
 
 
 def get_project_root() -> Path:

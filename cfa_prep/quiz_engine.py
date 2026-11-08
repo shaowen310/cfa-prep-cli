@@ -19,7 +19,6 @@ from .quiz_stats import (
     SOURCE_MISTAKE,
     QuizStats,
     describe,
-    question_id,
     topic_of,
 )
 
@@ -41,6 +40,7 @@ class MistakeQuestion(TypedDict):
     module: str
     key_point: str
     question: str
+    question_id: str
     options: list[str]
     correct: str
 
@@ -98,6 +98,8 @@ class QuizEngine:
                     module=str(r.get("module", "")),
                     key_point=str(r.get("key_point", "")),
                     question=question,
+                    # The id is taken from the log, never derived again here.
+                    question_id=str(r.get("question_id", "")),
                     options=[str(o) for o in options],
                     correct=str(correct),
                 ))
@@ -111,10 +113,9 @@ class QuizEngine:
         Returns True if the user answered correctly, False otherwise.
         """
         correct_text = item["correct"]
-        # The identity of the question is derived from the original options,
-        # before they are shuffled for display, so the statistics of a question
-        # stay attached to it across replays.
-        qid = question_id(item["question"], item["options"])
+        # The question id comes from the mistake log, which is the single
+        # source of truth for it — it is never derived again here.
+        qid = item.get("question_id", "")
         options = list(item["options"])
         # Shuffle so the correct answer is not always at the same position
         if self.randomize:
@@ -153,14 +154,15 @@ class QuizEngine:
                 # Auto-log the repeated mistake
                 self._auto_log_mistake(item)
             # Record the outcome against the question, so it is rescheduled
-            self.stats.record_question(
-                qid,
-                RESULT_CORRECT if correct else RESULT_WRONG,
-                question=item["question"],
-                topic=self._topic_label(item),
-                level="L1",
-                source=SOURCE_MISTAKE,
-            )
+            if qid:
+                self.stats.record_question(
+                    qid,
+                    RESULT_CORRECT if correct else RESULT_WRONG,
+                    question=item["question"],
+                    topic=self._topic_label(item),
+                    level="L1",
+                    source=SOURCE_MISTAKE,
+                )
             return correct
         print("⚠️ Invalid input, please choose A/B/C")
         return False
@@ -184,10 +186,12 @@ class QuizEngine:
             correct_answer=item["correct"],
             key_point=item["key_point"],
             correct_conclusion="",
-            source=f"{item['subject']} > {item['module']}",
             module_name=item["module"],
             level="L1",
             options=item["options"],
+            # The re-logged copy keeps the id of the original question, so both
+            # records refer to the same question.
+            existing_question_id=item.get("question_id", ""),
         )
 
     def _get_fuzzy_topics(self) -> list[str]:

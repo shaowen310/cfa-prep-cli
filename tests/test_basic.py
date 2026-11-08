@@ -505,16 +505,16 @@ def test_quiz_stats_scheduling_and_selection():
             _ = os.environ.pop("CFA_PREP_HOME", None)
 
 
-def test_quiz_stats_question_identity():
+def test_question_identity():
     """Test the hashed question identity: stable, short and free of collisions"""
     import tempfile
     from datetime import date
 
+    from cfa_prep.mistake_analyzer import question_id
     from cfa_prep.quiz_stats import (
         RESULT_CORRECT,
         RESULT_WRONG,
         QuizStats,
-        question_id,
         topic_id,
     )
 
@@ -564,6 +564,86 @@ def test_quiz_stats_question_identity():
             assert stat["topic"] == topic
 
             print("  ✅ Quiz stats question identity works")
+        finally:
+            _ = os.environ.pop("CFA_PREP_HOME", None)
+
+
+def test_mistake_question_id():
+    """Test that a mistake stores its question id and that the quiz engine reuses it"""
+    import json
+    import tempfile
+
+    from cfa_prep.mistake_analyzer import MistakeAnalyzer, question_id
+    from cfa_prep.quiz_stats import QuizStats
+
+    question = "Which trade restriction is likely to result in the greatest welfare loss?"
+    options = ["A tariff", "An import quota", "A voluntary export restraint"]
+
+    with tempfile.TemporaryDirectory() as tmp:
+        os.environ["CFA_PREP_HOME"] = tmp
+        try:
+            analyzer = MistakeAnalyzer()
+            _ = analyzer.add_mistake(
+                subject="Economics",
+                question=question,
+                user_answer=options[0],
+                correct_answer=options[1],
+                key_point="Trade restrictions",
+                correct_conclusion="",
+                options=options,
+            )
+            records = json.loads(analyzer.data_file.read_text(encoding="utf-8"))["records"]
+            assert len(records) == 1
+            stored = records[0].get("question_id", "")
+            assert stored.startswith("q:"), "the record must carry a question id"
+            assert stored == question_id(question, options), (
+                "the id must be derived from the question text and its options"
+            )
+
+            # A re-logged copy keeps the id of the original question
+            _ = analyzer.add_mistake(
+                subject="Economics",
+                question=question,
+                user_answer=options[0],
+                correct_answer=options[1],
+                key_point="Trade restrictions",
+                correct_conclusion="",
+                options=options,
+                existing_question_id=stored,
+            )
+            records = json.loads(analyzer.data_file.read_text(encoding="utf-8"))["records"]
+            assert records[1]["question_id"] == stored, (
+                "a re-logged mistake must keep the id of the original question"
+            )
+
+            # The engine takes the id from the log, it does not derive it again
+            custom_id = "q:0123456789abcdef"
+            records[0]["question_id"] = custom_id
+            _ = analyzer.data_file.write_text(
+                json.dumps({"records": [records[0]]}, ensure_ascii=False), encoding="utf-8"
+            )
+
+            import cfa_prep.quiz_engine as qe
+
+            original_read_input = qe.read_input
+            qe.read_input = lambda prompt="": "A"
+            try:
+                engine = QuizEngine()
+                items = engine._get_mistake_questions()  # pyright: ignore[reportPrivateUsage]
+                assert len(items) == 1
+                assert items[0]["question_id"] == custom_id, (
+                    "the engine must read the id from mistakes.json"
+                )
+                _ = engine._run_mistake_mcq(items[0])  # pyright: ignore[reportPrivateUsage]
+            finally:
+                qe.read_input = original_read_input
+
+            questions = QuizStats().load()["questions"]
+            assert custom_id in questions, (
+                "the quiz statistics must be keyed by the id stored in mistakes.json"
+            )
+
+            print("  ✅ Mistake question id is stored and reused")
         finally:
             _ = os.environ.pop("CFA_PREP_HOME", None)
 
@@ -691,7 +771,8 @@ def run_all_tests():
         ("Curriculum subject normalization", test_curriculum_normalize_subject),
         ("Quiz uses curriculum", test_quiz_uses_curriculum),
         ("Quiz stats scheduling/selection", test_quiz_stats_scheduling_and_selection),
-        ("Quiz stats question identity", test_quiz_stats_question_identity),
+        ("Question identity", test_question_identity),
+        ("Mistake question id", test_mistake_question_id),
         ("Quiz stats file split", test_quiz_stats_file_split),
     ]
 

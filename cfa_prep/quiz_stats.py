@@ -7,13 +7,12 @@ Purpose: Persist per-question quiz statistics at <data_root>/progress/quiz_stats
          of questions the user has already learned.
 """
 
-import hashlib
 import random
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import TypedDict, cast
 
-from .utils import get_data_dir, load_json, save_json, today_iso
+from .utils import get_data_dir, hash_text, load_json, save_json, today_iso
 
 
 def local_today() -> date:
@@ -28,42 +27,7 @@ def local_today() -> date:
 
 # --- question identity ------------------------------------------------------
 
-HASH_LENGTH = 16
-QUESTION_PREFIX = "q:"   # identity derived from the question text
 TOPIC_PREFIX = "t:"     # identity derived from the topic (self-assessed prompt)
-
-
-def normalize_text(text: str) -> str:
-    """Collapse whitespace and case so cosmetic edits keep the same identity."""
-    return " ".join(text.split()).casefold()
-
-
-def hash_text(*parts: str) -> str:
-    """Return a short, stable hash for the given text parts."""
-    digest = hashlib.sha1()
-    for part in parts:
-        digest.update(normalize_text(part).encode("utf-8"))
-        digest.update(b"\x00")
-    return digest.hexdigest()[:HASH_LENGTH]
-
-
-def question_id(stem: str, options: list[str] | None = None) -> str:
-    """
-    Return the stable id of a question.
-
-    The id is a hash of the question text plus its options.  Hashing keeps the
-    statistics file small (a 12-character key instead of the whole question) and
-    makes the key immune to formatting changes, while the options are part of
-    the identity because two different questions can share the same stem.
-
-    The options are hashed in sorted order, so the identity does not depend on
-    the order the options happen to be displayed in.
-
-    The correct answer is deliberately NOT part of the id, so re-logging a
-    question with a corrected answer keeps its history attached.
-    """
-    normalized = sorted(normalize_text(option) for option in (options or []))
-    return QUESTION_PREFIX + hash_text(stem, "\n".join(normalized))
 
 
 def topic_id(topic: str, ref: str = "") -> str:

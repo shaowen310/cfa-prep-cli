@@ -183,6 +183,24 @@ its history attached. The hash ignores cosmetic whitespace and case and does not
 on the order the options are displayed in, so a question that was logged twice still
 counts as one question.
 
+The id is created **once**, when the mistake is logged, and stored with the record in
+`mistakes.json`:
+
+```json
+{
+  "date": "20261108",
+  "subject": "Financial Statement Analysis",
+  "question": "An independent audit report is most likely to provide:",
+  "question_id": "q:9d5498fe9b6bfe5f",
+  "options": ["absolute assurance ...", "a qualified opinion ...", "reasonable assurance ..."],
+  "..."
+}
+```
+
+`mistakes.json` is the single source of truth for the id: the quiz engine reads it from
+there instead of deriving it again, and a mistake that is re-logged after a wrong answer
+carries the id of the original question. The statistics file only refers to that id.
+
 The topic stays on the entry as metadata, which is what the topic selection and the
 subject breakdown are built from.
 

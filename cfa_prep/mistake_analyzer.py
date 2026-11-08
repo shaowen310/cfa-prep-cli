@@ -11,11 +11,34 @@ from typing import TypedDict, cast
 
 from .utils import (
     get_data_dir,
+    hash_text,
+    normalize_text,
     today_str,
     load_json,
     save_json,
 )
 from .curriculum import Curriculum
+
+QUESTION_PREFIX = "q:"   # identity derived from the question text
+
+
+def question_id(stem: str, options: list[str] | None = None) -> str:
+    """
+    Return the stable id of a question.
+
+    The id is a hash of the question text plus its options.  Hashing keeps the
+    stored key short (18 characters instead of the whole question) and makes it
+    immune to formatting changes, while the options are part of the identity
+    because two different questions can share the same stem.
+
+    The options are hashed in sorted order, so the identity does not depend on
+    the order the options happen to be displayed in.
+
+    The correct answer is deliberately NOT part of the id, so re-logging a
+    question with a corrected answer keeps its history attached.
+    """
+    normalized = sorted(normalize_text(option) for option in (options or []))
+    return QUESTION_PREFIX + hash_text(stem, "\n".join(normalized))
 
 
 class MistakeRecord(TypedDict):
@@ -24,12 +47,12 @@ class MistakeRecord(TypedDict):
     subject: str
     module: str
     question: str
+    question_id: str  # stable id of the question (hash of its text and options)
     options: list[str]  # [A text, B text, C text]
     user_answer: str     # the option text the user chose
     correct_answer: str  # the option text that is correct
     key_point: str
     correct_conclusion: str
-    source: str
 
 
 class MistakeAnalyzer:
@@ -100,10 +123,10 @@ class MistakeAnalyzer:
         correct_answer: str,
         key_point: str,
         correct_conclusion: str,
-        source: str = "",
         module_name: str = "",
         level: str = "L1",
         options: list[str] | None = None,
+        existing_question_id: str = "",
     ) -> str:
         """
         Add a mistake record to mistakes.json.
@@ -115,27 +138,35 @@ class MistakeAnalyzer:
             correct_answer: the correct answer
             key_point: knowledge point
             correct_conclusion: correct conclusion
-            source: source reference
             module_name: module within the subject
             level: exam level (L1/L2/L3)
             options: list of option texts [A, B, C] for MCQ (optional)
+            existing_question_id: id of an already known question (e.g. when a
+                record is re-logged); when empty it is derived from the question
+                text and options
 
         Returns:
             the path of the mistakes file
         """
         records = self._load()
+        # The question id is created once, here, and stored with the record.
+        # Everything downstream reads it from this file, so the id of a
+        # question is never derived twice from different texts.
+        qid = existing_question_id.strip()
+        if not qid and question.strip():
+            qid = question_id(question, options or [])
         records.append(MistakeRecord(
             date=today_str(),
             level=level,
             subject=subject,
             module=module_name,
             question=question,
+            question_id=qid,
             options=options or [],
             user_answer=user_answer,
             correct_answer=correct_answer,
             key_point=key_point,
             correct_conclusion=correct_conclusion,
-            source=source,
         ))
         self._save(records)
         return str(self.data_file)
@@ -304,7 +335,6 @@ class MistakeAnalyzer:
             correct_answer=correct_answer,
             key_point=key_point,
             correct_conclusion=correct_conclusion,
-            source=f"{subject} > {module_name}" if module_name else "",
             module_name=module_name,
             level=level,
         )
@@ -325,7 +355,6 @@ class MistakeAnalyzer:
             "correct_answer",
             "key_point",
             "correct_conclusion",
-            "source",
         ]
 
         # 1. Multi-line question (first field; blank finishes the session)
@@ -351,7 +380,6 @@ class MistakeAnalyzer:
             print("  ⏭️ Skipped — already logged. Enter a different question.")
 
         # 2. Remaining single-line fields, with \b back navigation
-        default_source = f"{subject} > {module_name}" if module_name else ""
         i = 0
         while i < len(fields):
             key = fields[i]
@@ -361,10 +389,8 @@ class MistakeAnalyzer:
                 prompt = "Correct answer: "
             elif key == "key_point":
                 prompt = "\nKey point (one-sentence summary): "
-            elif key == "correct_conclusion":
+            else:
                 prompt = "Correct conclusion (one-sentence summary): "
-            else:  # source
-                prompt = f"Source [{default_source}]: "
 
             raw = self._prompt(prompt).strip()
             if raw == r"\b":
@@ -377,8 +403,6 @@ class MistakeAnalyzer:
             data[key] = raw
             i += 1
 
-        source = data["source"] or default_source
-
         filepath = self.add_mistake(
             subject=subject,
             question=data["question"],
@@ -386,7 +410,6 @@ class MistakeAnalyzer:
             correct_answer=data["correct_answer"],
             key_point=data["key_point"],
             correct_conclusion=data["correct_conclusion"],
-            source=source,
             module_name=module_name,
             level=level,
         )
