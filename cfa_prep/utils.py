@@ -49,7 +49,7 @@ def _candidate_data_root() -> Path:
     """
     Determine the data root path WITHOUT creating anything, with this priority:
       1. CFA_PREP_HOME environment variable
-      2. ~/.cfa-prep/config/home.env (written by `cfa-prep config home --set`)
+      2. ~/.cfa-prep/config/home.env (written by `cfa-prep config home <path>`)
       3. ~/.cfa-prep (user home default)
     """
     env = os.environ.get("CFA_PREP_HOME")
@@ -69,7 +69,7 @@ def _candidate_data_root() -> Path:
 def load_home_env() -> None:
     """
     Source config/home.env to set CFA_PREP_HOME if it is not already set in the
-    process environment. This lets `cfa-prep config home --set` persist the data
+    process environment. This lets `cfa-prep config home <path>` persist the data
     root without storing it inside settings.json.
     """
     if os.environ.get("CFA_PREP_HOME"):

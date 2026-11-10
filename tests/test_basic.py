@@ -1148,8 +1148,8 @@ def test_data_root_env_override():
             _ = os.environ.pop("CFA_PREP_HOME", None)
 
 
-def test_config_home_set():
-    """Test that config home --set (set_home_env) persists and resolves via home.env.
+def test_config_home_persists():
+    """Test that the persisted data root (set_home_env) is written and resolved via home.env.
     home.env always lives in the fixed ~/.cfa-prep/config directory, independent of the
     currently-resolved data root."""
     import tempfile
@@ -1177,9 +1177,43 @@ def test_config_home_set():
             os.environ["CFA_PREP_HOME"] = str(other)
             load_home_env()
             assert get_data_root() == other, "CFA_PREP_HOME env must take precedence over home.env"
-            print(f"  ✅ config home --set persists via home.env: {home_dir}")
+            print(f"  ✅ config home <path> persists via home.env: {home_dir}")
     finally:
         _ = os.environ.pop("CFA_PREP_HOME", None)
+        if previous is not None:
+            _ = write_file_text(home_env_file, previous)
+        elif home_env_file.exists():
+            home_env_file.unlink()
+
+
+def test_config_home_command():
+    """Test that the `config home <path>` command sets the data root"""
+    import io
+    import tempfile
+    from contextlib import redirect_stdout
+    from types import SimpleNamespace
+
+    from cfa_prep.main import cmd_config
+
+    home_env_file = Path.home() / ".cfa-prep" / "config" / "home.env"
+    previous = home_env_file.read_text(encoding="utf-8") if home_env_file.exists() else None
+    try:
+        with tempfile.TemporaryDirectory() as base:
+            target = Path(base) / "mydata"
+            _ = target.mkdir()
+            buffer = io.StringIO()
+            with redirect_stdout(buffer):
+                cmd_config(SimpleNamespace(
+                    config_key="home",
+                    config_value=str(target),
+                ))  # pyright: ignore[reportArgumentType]
+            output = buffer.getvalue()
+            assert "Data root (home) set to" in output, output
+            assert home_env_file.exists(), "home.env should be written"
+            content = home_env_file.read_text(encoding="utf-8")
+            assert str(target) in content, content
+        print("  ✅ config home <path> sets the data root")
+    finally:
         if previous is not None:
             _ = write_file_text(home_env_file, previous)
         elif home_env_file.exists():
@@ -1207,7 +1241,8 @@ def run_all_tests():
         ("Flashcard review", test_flashcard_review),
         ("Config read/write", test_settings),
         ("Data root env override", test_data_root_env_override),
-        ("Config home set", test_config_home_set),
+        ("Config home persistence", test_config_home_persists),
+        ("Config home command", test_config_home_command),
         ("Curriculum seed/load", test_curriculum_seed_and_load),
         ("Curriculum nested-module import", test_curriculum_import_nested_modules),
         ("Curriculum subject normalization", test_curriculum_normalize_subject),

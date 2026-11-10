@@ -40,7 +40,6 @@ class CLIArgs(Protocol):
     command: str | None
     config_key: str | None
     config_value: str | None
-    set_path: str | None
     keyword: str | None
     regex: bool
     no_fuzzy: bool
@@ -133,11 +132,14 @@ def cmd_config(args: CLIArgs) -> None:
     """
     View or set configuration values.
 
+    Every key takes its new value as a positional argument, the same way for all
+    of them:
+
     Usage:
         cfa-prep config level              # show the current level
         cfa-prep config level L2           # set the default level (L1/L2/L3)
         cfa-prep config home               # show the resolved data root (home)
-        cfa-prep config home --set <path>  # persist the data root to an existing folder
+        cfa-prep config home <path>        # persist the data root to an existing folder
     """
     key = (args.config_key or "").lower()
 
@@ -156,8 +158,9 @@ def cmd_config(args: CLIArgs) -> None:
         return
 
     if key == "home":
-        if args.set_path:
-            target = Path(args.set_path).expanduser()
+        target_arg = args.config_value
+        if target_arg:
+            target = Path(target_arg).expanduser()
             if not target.exists():
                 print(f"❌ Path does not exist: {target}")
                 print("   Use 'cfa-prep init' to create a fresh data root, or point to an existing folder.")
@@ -184,7 +187,7 @@ def cmd_config(args: CLIArgs) -> None:
         return
 
     print("❌ Unknown config key. Choose one of: level, home")
-    print("   Usage: cfa-prep config <level|home> [value] [--set PATH]")
+    print("   Usage: cfa-prep config <level|home> [value]")
 
 
 def cmd_search(args: CLIArgs) -> None:
@@ -505,7 +508,7 @@ Examples:
   cfa-prep config level                  Show the current default level
   cfa-prep config level L2               Set the default level to L2
   cfa-prep config home                   Show the data root (home) path
-  cfa-prep config home --set /path/folder  Persist the data root to an existing folder
+  cfa-prep config home /path/folder      Persist the data root to an existing folder
   cfa-prep search "FCFE"                 Search the knowledge base
   cfa-prep search "FCFE" --regex         Use regex search
   cfa-prep quiz                          Start quizzing at the configured level (config level)
@@ -522,7 +525,7 @@ Examples:
   cfa-prep baii                          Launch the BA II Plus financial calculator
 
 Data root (default ~/.cfa-prep) can be set via:
-  cfa-prep config home --set /path/to/data, or the CFA_PREP_HOME environment variable.
+  cfa-prep config home /path/to/data, or the CFA_PREP_HOME environment variable.
         """,
     )
 
@@ -538,9 +541,7 @@ Data root (default ~/.cfa-prep) can be set via:
     _ = p_config.add_argument("config_key", choices=["level", "home"],
                               help="config key to view/set: level or home")
     _ = p_config.add_argument("config_value", nargs="?", default=None,
-                              help="new value for 'level' (L1/L2/L3)")
-    _ = p_config.add_argument("--set", dest="set_path", metavar="PATH",
-                              help="set the data root to an existing folder (for 'home')")
+                              help="new value: the level (L1/L2/L3) or the data root path (for 'home')")
 
     # mistake command (alias: mis)
     p_mistake = subparsers.add_parser("mistake", aliases=["mis"], help="Log and view mistakes")

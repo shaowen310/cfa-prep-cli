@@ -55,7 +55,7 @@ By default, all data is stored under `~/.cfa-prep`. You can relocate it in three
 | Method | Example |
 | ------ | ------- |
 | **`CFA_PREP_HOME` env var** | `export CFA_PREP_HOME=/path/to/data` |
-| **`config home --set`** | `cfa-prep config home --set D:\cfa\data` (persisted in `<data_root>/config/home.env`) |
+| **`config home <path>`** | `cfa-prep config home D:\cfa\data` (persisted in `<data_root>/config/home.env`) |
 
 The knowledge files live in the `kb/` subfolder of the data root:
 - File name format: `l1_vol1_p1-60.txt`
@@ -75,7 +75,7 @@ cfa-prep search "FCFE"
 | `config level`               | Show the current default level | `cfa-prep config level`                  |
 | `config level L2`            | Set the default level (L1/L2/L3) | `cfa-prep config level L2`               |
 | `config home`                | Show the data root directory path | `cfa-prep config home`                  |
-| `config home --set <path>`   | Set the data root to an existing folder | `cfa-prep config home --set D:\cfa\data` |
+| `config home <path>`         | Set the data root to an existing folder | `cfa-prep config home D:\cfa\data` |
 | `search <keyword>`           | Search the knowledge base    | `cfa-prep search "FCFE"`                       |
 | `search --regex`             | Regex search                 | `cfa-prep search "FCF[EF]" --regex`            |
 | `quiz`                       | Quiz at the configured level (set via `config level`) | `cfa-prep quiz`                          |
@@ -98,7 +98,7 @@ cfa-prep search "FCFE"
 | `curriculum import <file>`   | Replace curriculum from a JSON file | `cfa-prep curriculum import my.json`   |
 | `curriculum show`            | Display the current curriculum | `cfa-prep curriculum show`                   |
 
-> The data root can be set persistently with `cfa-prep config home --set ./my-data` or via the `CFA_PREP_HOME` environment variable, e.g. `cfa-prep config home --set ./my-data` or `export CFA_PREP_HOME=./my-data`.
+> The data root can be set persistently with `cfa-prep config home ./my-data` or via the `CFA_PREP_HOME` environment variable, e.g. `export CFA_PREP_HOME=./my-data`.
 
 ## Curriculum
 
@@ -430,7 +430,7 @@ Data files are stored under the configured data root (`~/.cfa-prep` by default):
 ├── templates/                # IPS templates
 └── config/
     ├── settings.json         # Configuration (level, directory names)
-    └── home.env              # Persisted data root (written by `config home --set`)
+    └── home.env              # Persisted data root (written by `config home <path>`)
 ```
 
 ## Knowledge File Format
