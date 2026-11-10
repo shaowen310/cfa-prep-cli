@@ -322,7 +322,7 @@ def cmd_mistake(args: CLIArgs) -> None:
     """
     Log and view mistakes.
     With -a/--add, interactively log a new mistake.
-    Without flags, show recent mistakes.
+    Without flags, show recent mistakes and the summary by subject and module.
     """
     analyzer = MistakeAnalyzer()
 
@@ -333,7 +333,7 @@ def cmd_mistake(args: CLIArgs) -> None:
         analyzer.add_mistake_interactive(curriculum=curriculum, level=level)
         return
 
-    # Default: show recent mistakes
+    # Default: show recent mistakes and the full summary by subject and module
     print_header("📝 Recent Mistakes")
     recent = analyzer.get_recent_mistakes(limit=10)
     if not recent:
@@ -341,6 +341,8 @@ def cmd_mistake(args: CLIArgs) -> None:
         return
     for m in recent:
         print(f"  [{m['date']}] {m['subject']} — {m.get('module', '')}")
+
+    analyzer.print_mistake_breakdown()
 
 
 def cmd_recap(args: CLIArgs) -> None:

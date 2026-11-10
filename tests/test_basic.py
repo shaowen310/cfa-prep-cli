@@ -923,14 +923,64 @@ def test_mistake_session_summary():
             with redirect_stdout(buffer):
                 analyzer.add_mistake_interactive(None, "L1")
             output = buffer.getvalue()
-            assert "✅ Session complete — 1 mistake saved." in output, output
-            assert "Mistake log by subject and module (1 mistake)" in output, output
-            assert "Economics > Module 6: International Trade — 1" in output, output
+            assert (
+                "✅ Session complete — 1 mistake saved for "
+                "Economics > Module 6: International Trade." in output
+            ), output
+            assert "Mistake log by subject and module" not in output, output
             records = json.loads(analyzer.data_file.read_text(encoding="utf-8"))["records"]
             assert len(records) == 1, "the count in the summary must match what was saved"
             print("  ✅ The session states how many mistakes were saved")
         finally:
             MistakeAnalyzer._prompt = staticmethod(original_prompt)  # pyright: ignore[reportPrivateUsage]
+            _ = os.environ.pop("CFA_PREP_HOME", None)
+
+
+def test_mistake_breakdown_view():
+    """Test that `cfa-prep mis` shows the mistake log by subject and module"""
+    import io
+    import tempfile
+    from contextlib import redirect_stdout
+    from types import SimpleNamespace
+
+    from cfa_prep.main import cmd_mistake
+    from cfa_prep.mistake_analyzer import MistakeAnalyzer
+
+    with tempfile.TemporaryDirectory() as tmp:
+        os.environ["CFA_PREP_HOME"] = tmp
+        try:
+            analyzer = MistakeAnalyzer()
+            for question in ("What is a tariff?", "What is an import quota?"):
+                _ = analyzer.add_mistake(
+                    subject="Economics",
+                    question=question,
+                    user_answer="An import quota",
+                    correct_answer="A tariff",
+                    explanation="",
+                    module_name="Module 6: International Trade",
+                    options=["A tariff", "An import quota", "A voluntary export restraint"],
+                )
+            _ = analyzer.add_mistake(
+                subject="Fixed Income",
+                question="What is duration?",
+                user_answer="A tax",
+                correct_answer="A weighted average maturity",
+                explanation="",
+                module_name="Module 1: Fixed-Income Instrument Features",
+                options=["A tax", "A weighted average maturity", "A subsidy"],
+            )
+
+            buffer = io.StringIO()
+            with redirect_stdout(buffer):
+                cmd_mistake(SimpleNamespace(add=False))  # pyright: ignore[reportArgumentType]
+            output = buffer.getvalue()
+            assert "Mistake log by subject and module (3 mistakes)" in output, output
+            assert "Economics > Module 6: International Trade — 2" in output, output
+            assert (
+                "Fixed Income > Module 1: Fixed-Income Instrument Features — 1" in output
+            ), output
+            print("  ✅ The mistake view shows the log by subject and module")
+        finally:
             _ = os.environ.pop("CFA_PREP_HOME", None)
 
 
@@ -1150,6 +1200,7 @@ def run_all_tests():
         ("Question identity", test_question_identity),
         ("Mistake question id", test_mistake_question_id),
         ("Mistake session summary", test_mistake_session_summary),
+        ("Mistake breakdown view", test_mistake_breakdown_view),
         ("Quiz stats file split", test_quiz_stats_file_split),
     ]
 

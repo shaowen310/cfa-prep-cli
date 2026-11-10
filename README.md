@@ -82,6 +82,7 @@ cfa-prep search "FCFE"
 | `quiz --no-randomize`        | Disable question/option shuffling | `cfa-prep quiz --no-randomize`             |
 | `stats`                      | Quiz statistics and review schedule | `cfa-prep stats`                        |
 | `stats --reset`              | Clear all stored quiz statistics | `cfa-prep stats --reset`                    |
+| `mistake`                    | Recent mistakes and the log by subject and module | `cfa-prep mistake`                    |
 | `mistake -a`                 | Interactive mistake entry    | `cfa-prep mistake -a`                          |
 | `recap`                      | View study progress          | `cfa-prep recap`                               |
 | `recap --update`             | Update study progress        | `cfa-prep recap --update`                      |
@@ -236,6 +237,25 @@ carries the score, and the quiz asks you about the modules you are weak in:
 
 Nothing is tracked per topic: the topic list of a module is material to work through,
 not a queue of items, so the whole list is shown every time.
+
+### Where the mistake log is summarized
+
+A logging session (`cfa-prep mistake -a`) covers a single subject and module and ends
+with one line that says what was added:
+
+```
+✅ Session complete — 1 mistake saved for Economics > Module 6: International Trade.
+```
+
+The **full summary** of the whole log — every subject and module, most mistakes first —
+belongs to `cfa-prep mistake` (alias `cfa-prep mis`):
+
+```
+   📊 Mistake log by subject and module (41 mistakes):
+     • Economics > Module 2: Understanding Business Cycles — 8
+     • Financial Statement Analysis > Module 1: Introduction to Financial Statement Analysis — 7
+     ...
+```
 
 ### How it works
 

@@ -41,6 +41,18 @@ def question_id(stem: str, options: list[str] | None = None) -> str:
     return QUESTION_PREFIX + hash_text(stem, "\n".join(normalized))
 
 
+def _session_label(subject: str, module_name: str) -> str:
+    """
+    Return the "Subject > Module" label of a mistake-logging session.
+
+    Either part may be missing, so the label falls back to whichever one is
+    known and is empty when neither is.
+    """
+    if subject and module_name:
+        return f"{subject} > {module_name}"
+    return subject or module_name
+
+
 class MistakeRecord(TypedDict):
     date: str
     level: str
@@ -194,6 +206,8 @@ class MistakeAnalyzer:
         Exits gracefully if the user stops inputting (Ctrl+C / Ctrl+D).
         """
         saved = 0
+        subject = ""
+        module_name = ""
         try:
             print("\n" + "=" * 50)
             is_mcq = level.upper() == "L1"
@@ -241,13 +255,17 @@ class MistakeAnalyzer:
             if saved > 0:
                 noun = "mistake" if saved == 1 else "mistakes"
                 verb = "was" if saved == 1 else "were"
-                print(f"  ℹ️  {saved} {noun} {verb} saved before aborting.")
+                label = _session_label(subject, module_name)
+                suffix = f" ({label})" if label else ""
+                print(f"  ℹ️  {saved} {noun} {verb} saved before aborting{suffix}.")
         else:
-            # The session ended normally: state how many mistakes were saved and
-            # where the mistake log stands, grouped by subject and module.
+            # The session ended normally: state the subject, the module and how
+            # many mistakes were added in this session. The full breakdown of
+            # the mistake log lives in `cfa-prep mis`.
             noun = "mistake" if saved == 1 else "mistakes"
-            print(f"\n✅ Session complete — {saved} {noun} saved.")
-            self._print_mistake_breakdown()
+            label = _session_label(subject, module_name)
+            suffix = f" for {label}" if label else ""
+            print(f"\n✅ Session complete — {saved} {noun} saved{suffix}.")
 
     def _log_mcq(
         self,
@@ -461,12 +479,13 @@ class MistakeAnalyzer:
         records.sort(key=lambda r: r.get("date", ""), reverse=True)
         return records[:limit]
 
-    def _print_mistake_breakdown(self) -> None:
+    def print_mistake_breakdown(self) -> None:
         """
         Print the mistake log grouped by subject and module, most mistakes first.
 
         A mistake belongs to a module, and the module is what the quiz reviews,
-        so this is the breakdown that says what is still weak.
+        so this is the breakdown that says what is still weak.  This is the full
+        summary shown by `cfa-prep mis`.
         """
         stats = self.get_mistake_stats()
         total_value = stats.get("total")
