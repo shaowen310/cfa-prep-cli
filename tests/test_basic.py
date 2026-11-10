@@ -937,18 +937,33 @@ def test_mistake_session_summary():
 
 
 def test_mistake_breakdown_view():
-    """Test that `cfa-prep mis` shows the mistake log by subject and module"""
+    """Test that `cfa-prep mis` shows the mistake log by subject and module, in curriculum order"""
     import io
     import tempfile
     from contextlib import redirect_stdout
     from types import SimpleNamespace
 
+    from cfa_prep.curriculum import Curriculum
     from cfa_prep.main import cmd_mistake
     from cfa_prep.mistake_analyzer import MistakeAnalyzer
 
     with tempfile.TemporaryDirectory() as tmp:
         os.environ["CFA_PREP_HOME"] = tmp
         try:
+            # The curriculum defines the order of the exam
+            curriculum = Curriculum()
+            curriculum.save({
+                "L1": {
+                    "Fixed Income": {
+                        "Module 1: Fixed-Income Instrument Features": ["Topic A"],
+                        "Module 2: Fixed-Income Valuation": ["Topic B"],
+                    },
+                    "Economics": {
+                        "Module 6: International Trade": ["Topic C"],
+                    },
+                }
+            })
+
             analyzer = MistakeAnalyzer()
             for question in ("What is a tariff?", "What is an import quota?"):
                 _ = analyzer.add_mistake(
@@ -975,11 +990,16 @@ def test_mistake_breakdown_view():
                 cmd_mistake(SimpleNamespace(add=False))  # pyright: ignore[reportArgumentType]
             output = buffer.getvalue()
             assert "Mistake log by subject and module (3 mistakes)" in output, output
-            assert "Economics > Module 6: International Trade — 2" in output, output
+            # The count comes first, right-aligned on the width of the largest one
+            assert "  2 — Economics > Module 6: International Trade" in output, output
             assert (
-                "Fixed Income > Module 1: Fixed-Income Instrument Features — 1" in output
+                "  1 — Fixed Income > Module 1: Fixed-Income Instrument Features" in output
             ), output
-            print("  ✅ The mistake view shows the log by subject and module")
+            # The curriculum order wins over the number of mistakes
+            fixed_income = output.index("Fixed Income > Module 1")
+            economics = output.index("Economics > Module 6")
+            assert fixed_income < economics, output
+            print("  ✅ The mistake view shows the log in curriculum order")
         finally:
             _ = os.environ.pop("CFA_PREP_HOME", None)
 

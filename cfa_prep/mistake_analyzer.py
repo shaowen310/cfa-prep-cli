@@ -482,11 +482,13 @@ class MistakeAnalyzer:
 
     def print_mistake_breakdown(self) -> None:
         """
-        Print the mistake log grouped by subject and module, most mistakes first.
+        Print the mistake log grouped by subject and module, in curriculum order.
 
         A mistake belongs to a module, and the module is what the quiz reviews,
-        so this is the breakdown that says what is still weak.  This is the full
-        summary shown by `cfa-prep mis`.
+        so this is the breakdown that says what is still weak.  The curriculum is
+        the source of truth for the order of the exam, so the summary follows it:
+        the subjects in curriculum order, and inside a subject the modules in
+        curriculum order.  This is the full summary shown by `cfa-prep mis`.
         """
         stats = self.get_mistake_stats()
         total_value = stats.get("total")
@@ -501,8 +503,54 @@ class MistakeAnalyzer:
             return
         noun = "mistake" if total == 1 else "mistakes"
         print_section(f"Mistake log by subject and module ({total} {noun})")
-        for group, count in sorted(modules.items(), key=lambda item: -item[1]):
-            print(f"  • {group} — {count}")
+        subject_rank, module_rank = self._curriculum_order()
+        ordered = sorted(
+            modules.items(),
+            key=lambda item: self._group_key(item[0], subject_rank, module_rank),
+        )
+        width = max(len(str(count)) for _group, count in ordered)
+        for group, count in ordered:
+            print(f"  {count:>{width}} — {group}")
+
+    @staticmethod
+    def _curriculum_order() -> tuple[dict[str, int], dict[str, dict[str, int]]]:
+        """
+        Return the curriculum position of every subject and module.
+
+        The first value maps a subject to its rank, the second maps a subject to
+        the rank of its modules.  A subject or module that is not part of the
+        curriculum has no rank and ends up at the end of the list.
+        """
+        data = Curriculum().load()
+        subject_rank: dict[str, int] = {}
+        module_rank: dict[str, dict[str, int]] = {}
+        for level in sorted(data.keys()):
+            for subject, modules in data[level].items():
+                if subject not in subject_rank:
+                    subject_rank[subject] = len(subject_rank)
+                    module_rank[subject] = {}
+                ranks = module_rank[subject]
+                for module in modules:
+                    if module not in ranks:
+                        ranks[module] = len(ranks)
+        return subject_rank, module_rank
+
+    @staticmethod
+    def _group_key(
+        group: str,
+        subject_rank: dict[str, int],
+        module_rank: dict[str, dict[str, int]],
+    ) -> tuple[int, int, str]:
+        """
+        Return the sort key of a "Subject > Module" group in curriculum order.
+
+        Groups that the curriculum does not know are sorted last, alphabetically.
+        """
+        subject, _, module = group.partition(" > ")
+        subject_key = subject_rank.get(subject, len(subject_rank))
+        ranks = module_rank.get(subject, {})
+        module_key = ranks.get(module, len(ranks))
+        return (subject_key, module_key, group)
 
     def get_mistake_stats(self) -> dict[str, object]:
         """

@@ -247,13 +247,18 @@ with one line that says what was added:
 ✅ Session complete — 1 mistake saved for Economics > Module 6: International Trade.
 ```
 
-The **full summary** of the whole log — every subject and module, most mistakes first —
-belongs to `cfa-prep mistake` (alias `cfa-prep mis`):
+The **full summary** of the whole log — every subject and module — belongs to
+`cfa-prep mistake` (alias `cfa-prep mis`). The order is the **curriculum order**: the
+subjects as they appear in the exam, and inside a subject the modules in their
+curriculum order:
 
 ```
 --- Mistake log by subject and module (41 mistakes) ---
-  • Economics > Module 2: Understanding Business Cycles — 8
-  • Financial Statement Analysis > Module 1: Introduction to Financial Statement Analysis — 7
+  8 — Economics > Module 2: Understanding Business Cycles
+  5 — Economics > Module 3: Fiscal Policy
+  5 — Economics > Module 6: International Trade
+  5 — Corporate Issuers > Module 1: Organizational Forms, Corporate Issuer Features, and Ownership
+  7 — Financial Statement Analysis > Module 1: Introduction to Financial Statement Analysis
   ...
 ```
 
