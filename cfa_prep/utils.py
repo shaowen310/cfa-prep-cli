@@ -234,7 +234,7 @@ def print_header(title: str) -> None:
     """Print a formatted header"""
     print(f"\n{'=' * 60}")
     print(f"  {title}")
-    print(f"{'=' * 60}\n")
+    print(f"{'=' * 60}")
 
 
 def print_section(title: str) -> None:

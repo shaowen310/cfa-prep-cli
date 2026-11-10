@@ -150,7 +150,7 @@ class ProgressTracker:
         fuzzy_entries = data.get("fuzzy", [])
         updated = data.get("updated", today_iso())
 
-        print(f"  Level: {level}")
+        print(f"\n  Level: {level}")
         print(f"  Updated: {updated}")
 
         self._print_grouped("✅ Mastered", mastered_entries, curriculum, level)
@@ -486,7 +486,7 @@ class ProgressTracker:
         fuzzy = data.get("fuzzy", [])
 
         if not mastered and not fuzzy:
-            print("No progress entries to remove.")
+            print("\nNo progress entries to remove.")
             return
 
         all_entries: list[tuple[str, str]] = []

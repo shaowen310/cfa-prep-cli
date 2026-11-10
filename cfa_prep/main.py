@@ -64,7 +64,7 @@ def cmd_init(_args: CLIArgs) -> None:
     print_header("🚀 CFA Prep CLI - Project Initialization")
 
     root = get_data_root()
-    print(f"  📁 Data root: {root}")
+    print(f"\n  📁 Data root: {root}")
 
     # Create the directory structure under the data root
     dirs = [
@@ -202,7 +202,7 @@ def cmd_search(args: CLIArgs) -> None:
 
     # Show the knowledge base status
     stats = kb.get_stats()
-    print(f"Knowledge base: {stats['total_files']} files, {stats['total_pages']} pages\n")
+    print(f"\nKnowledge base: {stats['total_files']} files, {stats['total_pages']} pages\n")
 
     results = kb.search(
         keyword=args.keyword,
@@ -257,14 +257,14 @@ def cmd_stats(args: CLIArgs) -> None:
 
     overall = stats.overall()
     if overall["total"] == 0:
-        print("  No quiz answers recorded yet.")
+        print("\n  No quiz answers recorded yet.")
         print("  💡 Take a quiz first: cfa-prep quiz")
         print(f"\n  📁 Stats file: {stats.stats_file}")
         print(f"  📁 Sessions file: {stats.sessions_file}")
         return
 
     accuracy = (overall["correct"] / overall["total"] * 100) if overall["total"] else 0.0
-    print(f"  Sessions: {overall['sessions']}")
+    print(f"\n  Sessions: {overall['sessions']}")
     print(f"  Questions answered: {overall['total']}")
     print(f"  ✅ Correct: {overall['correct']}")
     print(f"  ❌ Wrong: {overall['wrong']}")
@@ -334,7 +334,8 @@ def cmd_mistake(args: CLIArgs) -> None:
         return
 
     # Default: show recent mistakes and the full summary by subject and module
-    print_header("📝 Recent Mistakes")
+    print_header("📝 Mistakes")
+    print_section("Recent mistakes")
     recent = analyzer.get_recent_mistakes(limit=10)
     if not recent:
         print("  No mistakes logged yet.")
@@ -425,7 +426,7 @@ def cmd_ips(args: CLIArgs) -> None:
         filepath = builder.generate(ips_type, today)
         type_name = "Personal" if ips_type in ("personal", "p") else "Institutional"
         print_header(f"📄 Generate {type_name} IPS Template")
-        print(f"✅ Generated: {filepath}")
+        print(f"\n✅ Generated: {filepath}")
         print(f"\n💡 Use 'cfa-prep ips {ips_type} --show' to view the template content")
 
 
@@ -447,24 +448,24 @@ def cmd_curriculum(args: CLIArgs) -> None:
     if action == "seed":
         print_header("📚 Seed Curriculum")
         if curriculum.seed():
-            print(f"✅ Created empty curriculum at: {curriculum.path}")
+            print(f"\n✅ Created empty curriculum at: {curriculum.path}")
             print("   Use 'cfa-prep curriculum import <file.json>' to populate it.")
         else:
-            print(f"ℹ️  Curriculum already exists at: {curriculum.path}")
+            print(f"\nℹ️  Curriculum already exists at: {curriculum.path}")
             print("   Use 'cfa-prep curriculum show' to view it, or 'import' to replace it.")
         return
 
     if action == "import":
         print_header("📚 Import Curriculum")
         if not args.file:
-            print("❌ Please provide a JSON file: cfa-prep curriculum import <file.json>")
+            print("\n❌ Please provide a JSON file: cfa-prep curriculum import <file.json>")
             return
         try:
             curriculum.import_file(args.file)
         except (FileNotFoundError, ValueError, json.JSONDecodeError) as e:
-            print(f"❌ Import failed: {e}")
+            print(f"\n❌ Import failed: {e}")
             return
-        print(f"✅ Curriculum imported from: {args.file}")
+        print(f"\n✅ Curriculum imported from: {args.file}")
         print(f"   Saved to: {curriculum.path}")
         cmd_curriculum(cast(CLIArgs, cast(object, argparse.Namespace(action="show"))))
         return
