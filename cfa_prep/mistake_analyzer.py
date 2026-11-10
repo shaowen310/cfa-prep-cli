@@ -13,6 +13,7 @@ from .utils import (
     get_data_dir,
     hash_text,
     normalize_text,
+    print_section,
     today_str,
     load_json,
     save_json,
@@ -499,9 +500,9 @@ class MistakeAnalyzer:
         if not modules:
             return
         noun = "mistake" if total == 1 else "mistakes"
-        print(f"\n   📊 Mistake log by subject and module ({total} {noun}):")
+        print_section(f"Mistake log by subject and module ({total} {noun})")
         for group, count in sorted(modules.items(), key=lambda item: -item[1]):
-            print(f"     • {group} — {count}")
+            print(f"  • {group} — {count}")
 
     def get_mistake_stats(self) -> dict[str, object]:
         """

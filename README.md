@@ -251,10 +251,10 @@ The **full summary** of the whole log — every subject and module, most mistake
 belongs to `cfa-prep mistake` (alias `cfa-prep mis`):
 
 ```
-   📊 Mistake log by subject and module (41 mistakes):
-     • Economics > Module 2: Understanding Business Cycles — 8
-     • Financial Statement Analysis > Module 1: Introduction to Financial Statement Analysis — 7
-     ...
+--- Mistake log by subject and module (41 mistakes) ---
+  • Economics > Module 2: Understanding Business Cycles — 8
+  • Financial Statement Analysis > Module 1: Introduction to Financial Statement Analysis — 7
+  ...
 ```
 
 ### How it works
