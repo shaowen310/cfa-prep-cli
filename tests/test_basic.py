@@ -459,7 +459,7 @@ def test_quiz_module_attribution():
                 question="Which trade restriction costs the importing country most?",
                 user_answer=options[0],
                 correct_answer=options[1],
-                correct_conclusion="",
+                explanation="",
                 module_name="Module 1: Basics",
                 options=options,
             )
@@ -473,7 +473,7 @@ def test_quiz_module_attribution():
                     question="A question without a module",
                     user_answer=options[0],
                     correct_answer=options[1],
-                    correct_conclusion="",
+                    explanation="",
                     module_name="",
                     options=options,
                 )
@@ -562,7 +562,7 @@ def test_module_review_follows_the_questions():
                 question="Which trade restriction costs the importing country most?",
                 user_answer=options[0],
                 correct_answer=options[1],
-                correct_conclusion="",
+                explanation="",
                 module_name="Module 2: Policy",
                 options=options,
             )
@@ -613,7 +613,7 @@ def test_mistake_replay_module_cap():
                     question=f"A question of module one ({i})",
                     user_answer=options[0],
                     correct_answer=options[1],
-                    correct_conclusion="",
+                    explanation="",
                     module_name="Module 1: Basics",
                     options=options,
                 )
@@ -622,7 +622,7 @@ def test_mistake_replay_module_cap():
                 question="A question of module two",
                 user_answer=options[0],
                 correct_answer=options[1],
-                correct_conclusion="",
+                explanation="",
                 module_name="Module 2: Policy",
                 options=options,
             )
@@ -704,7 +704,7 @@ def test_quiz_records_only_questions():
                 question="Which trade restriction costs the importing country most?",
                 user_answer=options[0],
                 correct_answer=options[1],
-                correct_conclusion="",
+                explanation="",
                 module_name="Module 6: International Trade",
                 options=options,
             )
@@ -903,7 +903,7 @@ def test_mistake_question_id():
                 question=question,
                 user_answer=options[0],
                 correct_answer=options[1],
-                correct_conclusion="",
+                explanation="",
                 module_name="Module 6: International Trade",
                 options=options,
             )
@@ -921,7 +921,7 @@ def test_mistake_question_id():
                 question=question,
                 user_answer=options[0],
                 correct_answer=options[1],
-                correct_conclusion="",
+                explanation="",
                 module_name="Module 6: International Trade",
                 options=options,
                 existing_question_id=stored,

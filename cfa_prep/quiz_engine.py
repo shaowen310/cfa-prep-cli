@@ -272,7 +272,7 @@ class QuizEngine:
             question=item["question"],
             user_answer="",
             correct_answer=item["correct"],
-            correct_conclusion="",
+            explanation="",
             module_name=item["module"],
             level="L1",
             options=item["options"],

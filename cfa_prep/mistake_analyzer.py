@@ -51,7 +51,7 @@ class MistakeRecord(TypedDict):
     options: list[str]  # [A text, B text, C text]
     user_answer: str     # the option text the user chose
     correct_answer: str  # the option text that is correct
-    correct_conclusion: str
+    explanation: str
 
 
 class MistakeAnalyzer:
@@ -118,7 +118,7 @@ class MistakeAnalyzer:
         question: str,
         user_answer: str,
         correct_answer: str,
-        correct_conclusion: str,
+        explanation: str,
         module_name: str = "",
         level: str = "L1",
         options: list[str] | None = None,
@@ -132,7 +132,7 @@ class MistakeAnalyzer:
             question: question text (without options)
             user_answer: the user's incorrect answer
             correct_answer: the correct answer
-            correct_conclusion: correct conclusion
+            explanation: the explanation of the correct answer
             module_name: module within the subject (required)
             level: exam level (L1/L2/L3)
             options: list of option texts [A, B, C] for MCQ (optional)
@@ -165,7 +165,7 @@ class MistakeAnalyzer:
             options=options or [],
             user_answer=user_answer,
             correct_answer=correct_answer,
-            correct_conclusion=correct_conclusion,
+            explanation=explanation,
         ))
         self._save(records)
         return str(self.data_file)
@@ -188,7 +188,7 @@ class MistakeAnalyzer:
         """
         Interactively log a mistake.
         For L1 (MCQ mode): streamlined single-question, A/B/C answers.
-        For L2/L3: free-text question description, answers, conclusion.
+        For L2/L3: free-text question description, answers, explanation.
         The subject and module are required: they are the curriculum values that
         tie a mistake to the material it belongs to.
         Exits gracefully if the user stops inputting (Ctrl+C / Ctrl+D).
@@ -274,7 +274,7 @@ class MistakeAnalyzer:
             ("option_c", "    C: ", False),
             ("user_letter", "\nYour wrong answer (A/B/C): ", True),
             ("correct_letter", "Correct answer (A/B/C): ", True),
-            ("correct_conclusion", "Correct conclusion / explanation (optional): ", False),
+            ("explanation", "Explanation (optional): ", False),
         ]
 
         i = 0
@@ -317,7 +317,7 @@ class MistakeAnalyzer:
         user_answer = letter_to_text.get(user_letter, user_letter)
         correct_answer = letter_to_text.get(correct_letter, correct_letter)
 
-        correct_conclusion = data["correct_conclusion"]
+        explanation = data["explanation"]
 
         filepath = self.add_mistake(
             subject=subject,
@@ -325,7 +325,7 @@ class MistakeAnalyzer:
             options=[option_a, option_b, option_c],
             user_answer=user_answer,
             correct_answer=correct_answer,
-            correct_conclusion=correct_conclusion,
+            explanation=explanation,
             module_name=module_name,
             level=level,
         )
@@ -344,7 +344,7 @@ class MistakeAnalyzer:
         fields: list[str] = [
             "user_answer",
             "correct_answer",
-            "correct_conclusion",
+            "explanation",
         ]
 
         # 1. Multi-line question (first field; blank finishes the session)
@@ -378,7 +378,7 @@ class MistakeAnalyzer:
             elif key == "correct_answer":
                 prompt = "Correct answer: "
             else:
-                prompt = "Correct conclusion (one-sentence summary): "
+                prompt = "Explanation (one-sentence summary): "
 
             raw = self._prompt(prompt).strip()
             if raw == r"\b":
@@ -396,7 +396,7 @@ class MistakeAnalyzer:
             question=data["question"],
             user_answer=data["user_answer"],
             correct_answer=data["correct_answer"],
-            correct_conclusion=data["correct_conclusion"],
+            explanation=data["explanation"],
             module_name=module_name,
             level=level,
         )
