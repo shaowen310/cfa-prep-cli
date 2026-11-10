@@ -240,7 +240,14 @@ class MistakeAnalyzer:
             print("\n\n⚠️  Aborted — current mistake was NOT saved.")
             if saved > 0:
                 noun = "mistake" if saved == 1 else "mistakes"
-                print(f"  ℹ️  {saved} {noun} were saved before aborting.")
+                verb = "was" if saved == 1 else "were"
+                print(f"  ℹ️  {saved} {noun} {verb} saved before aborting.")
+        else:
+            # The session ended normally: state how many mistakes were saved and
+            # where the mistake log stands, grouped by subject and module.
+            noun = "mistake" if saved == 1 else "mistakes"
+            print(f"\n✅ Session complete — {saved} {noun} saved.")
+            self._print_mistake_breakdown()
 
     def _log_mcq(
         self,
@@ -453,6 +460,29 @@ class MistakeAnalyzer:
         records = self._load()
         records.sort(key=lambda r: r.get("date", ""), reverse=True)
         return records[:limit]
+
+    def _print_mistake_breakdown(self) -> None:
+        """
+        Print the mistake log grouped by subject and module, most mistakes first.
+
+        A mistake belongs to a module, and the module is what the quiz reviews,
+        so this is the breakdown that says what is still weak.
+        """
+        stats = self.get_mistake_stats()
+        total_value = stats.get("total")
+        total = total_value if isinstance(total_value, int) else 0
+        modules_value = stats.get("modules")
+        modules = (
+            cast(dict[str, int], modules_value)
+            if isinstance(modules_value, dict)
+            else {}
+        )
+        if not modules:
+            return
+        noun = "mistake" if total == 1 else "mistakes"
+        print(f"\n   📊 Mistake log by subject and module ({total} {noun}):")
+        for group, count in sorted(modules.items(), key=lambda item: -item[1]):
+            print(f"     • {group} — {count}")
 
     def get_mistake_stats(self) -> dict[str, object]:
         """

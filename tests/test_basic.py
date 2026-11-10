@@ -883,6 +883,57 @@ def test_question_identity():
             _ = os.environ.pop("CFA_PREP_HOME", None)
 
 
+def test_mistake_session_summary():
+    """Test that the logging session ends with a line stating how many mistakes were saved"""
+    import io
+    import json
+    import tempfile
+    from contextlib import redirect_stdout
+
+    from cfa_prep.mistake_analyzer import MistakeAnalyzer
+
+    question = "Which trade restriction is likely to result in the greatest welfare loss?"
+    options = ["A tariff", "An import quota", "A voluntary export restraint"]
+    answers = [
+        "Economics",                         # subject
+        "Module 6: International Trade",     # module
+        question,                            # question text
+        options[0],                          # option A
+        options[1],                          # option B
+        options[2],                          # option C
+        "A",                                 # the wrong answer
+        "B",                                 # the correct answer
+        "",                                  # explanation (optional)
+        "",                                  # a blank question ends the session
+    ]
+
+    with tempfile.TemporaryDirectory() as tmp:
+        os.environ["CFA_PREP_HOME"] = tmp
+        answer_iter = iter(answers)
+
+        def fake_prompt(prompt: str = "") -> str:
+            del prompt  # the scripted answers do not depend on the prompt
+            return next(answer_iter, "")
+
+        original_prompt = MistakeAnalyzer._prompt  # pyright: ignore[reportPrivateUsage]
+        MistakeAnalyzer._prompt = staticmethod(fake_prompt)  # pyright: ignore[reportPrivateUsage]
+        try:
+            analyzer = MistakeAnalyzer()
+            buffer = io.StringIO()
+            with redirect_stdout(buffer):
+                analyzer.add_mistake_interactive(None, "L1")
+            output = buffer.getvalue()
+            assert "✅ Session complete — 1 mistake saved." in output, output
+            assert "Mistake log by subject and module (1 mistake)" in output, output
+            assert "Economics > Module 6: International Trade — 1" in output, output
+            records = json.loads(analyzer.data_file.read_text(encoding="utf-8"))["records"]
+            assert len(records) == 1, "the count in the summary must match what was saved"
+            print("  ✅ The session states how many mistakes were saved")
+        finally:
+            MistakeAnalyzer._prompt = staticmethod(original_prompt)  # pyright: ignore[reportPrivateUsage]
+            _ = os.environ.pop("CFA_PREP_HOME", None)
+
+
 def test_mistake_question_id():
     """Test that a mistake stores its question id and that the quiz engine reuses it"""
     import json
@@ -1098,6 +1149,7 @@ def run_all_tests():
         ("Quiz stats scheduling/selection", test_quiz_stats_scheduling_and_selection),
         ("Question identity", test_question_identity),
         ("Mistake question id", test_mistake_question_id),
+        ("Mistake session summary", test_mistake_session_summary),
         ("Quiz stats file split", test_quiz_stats_file_split),
     ]
 
