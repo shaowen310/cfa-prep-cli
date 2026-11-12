@@ -8,6 +8,7 @@ Purpose: Provide project-level utility functions, including path management, fil
 import os
 import json
 import hashlib
+import re
 from pathlib import Path
 from datetime import datetime
 from typing import cast
@@ -176,12 +177,74 @@ def fuzzy_match(pattern: str, text: str) -> bool:
     return True
 
 
+def word_pattern(keyword: str) -> re.Pattern[str]:
+    """Build a case-insensitive regex that matches the keyword as a whole word."""
+    return re.compile(rf"\b{re.escape(keyword)}\b", re.IGNORECASE)
+
+
+def contains_word(text: str, keyword: str) -> bool:
+    """
+    Return True when the keyword appears in the text as a whole word.
+
+    "tariff" matches "a tariff" and "(tariffs are ...)" is not a match for
+    "tariff" — the keyword has to be a word of its own.
+    """
+    if not keyword.strip():
+        return False
+    return bool(word_pattern(keyword.strip()).search(text))
+
+
+def fuzzy_word_match(text: str, keyword: str) -> bool:
+    """
+    Return True when a whole word of the text fuzzy-matches the keyword.
+
+    The fuzzy match is applied per word, so an abbreviation still finds its
+    word ("FCFE" -> "Free Cash Flow to Equity") without matching every text
+    that happens to contain the letters in order.
+    """
+    keyword = keyword.strip()
+    if not keyword:
+        return False
+    for word in re.findall(r"\w+", text):
+        if fuzzy_match(keyword, word):
+            return True
+    return False
+
+
+def clean_keyword(words: list[str]) -> str:
+    """
+    Turn the words typed on the command line into one search keyword.
+
+    The words are joined with a space, so a phrase can be typed without quotes,
+    and the quotes are stripped when the shell kept them.
+    """
+    text = " ".join(word for word in words if word).strip()
+    if len(text) >= 2 and text[0] == text[-1] and text[0] in "\"'":
+        text = text[1:-1].strip()
+    return text
+
+
+def find_keyword(text: str, keyword: str) -> int:
+    """
+    Return the index of the keyword in the text, or -1.
+
+    A whole-word hit is preferred, so the snippet shows the word that matched
+    and not an occurrence inside another word.
+    """
+    keyword = keyword.strip()
+    if keyword:
+        match = word_pattern(keyword).search(text)
+        if match:
+            return match.start()
+    return text.lower().find(keyword.lower())
+
+
 def extract_context(text: str, keyword: str, window: int = 80) -> str:
     """
     Search for keyword in the text and return a context snippet around it.
     window: number of characters before/after the keyword.
     """
-    idx = text.lower().find(keyword.lower())
+    idx = find_keyword(text, keyword)
     if idx == -1:
         # Try fuzzy match
         lines = text.split("\n")

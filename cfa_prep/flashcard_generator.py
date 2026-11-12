@@ -37,6 +37,10 @@ class FlashcardGenerator:
         data = load_json(self.manual_file)
         return cast(list[dict[str, str]], data.get("cards", []))
 
+    def list_manual_cards(self) -> list[dict[str, str]]:
+        """Return the manually-added flashcards, as stored."""
+        return self._load_manual()
+
     def _save_manual(self, cards: list[dict[str, str]]) -> None:
         """Save the manually-added flashcards."""
         save_json(self.manual_file, {"cards": cards})

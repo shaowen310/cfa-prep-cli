@@ -24,6 +24,7 @@ from cfa_prep.mistake_analyzer import MistakeAnalyzer
 from cfa_prep.progress_tracker import ProgressTracker
 from cfa_prep.quiz_engine import QuizEngine
 from cfa_prep.utils import (
+    clean_keyword,
     extract_context,
     fuzzy_match,
     get_data_dir,
@@ -79,6 +80,98 @@ def test_knowledge_base():
     assert "total_files" in stats
     assert "total_pages" in stats
     print(f"  ✅ Knowledge base module is fine (files: {stats['total_files']})")
+
+
+def test_search_covers_all_sources():
+    """Test that the search looks into the flashcards and the mistake log, not just the kb"""
+    import tempfile
+
+    from cfa_prep.flashcard_generator import FlashcardGenerator
+    from cfa_prep.mistake_analyzer import MistakeAnalyzer
+    from cfa_prep.search import search_all
+
+    with tempfile.TemporaryDirectory() as tmp:
+        os.environ["CFA_PREP_HOME"] = tmp
+        try:
+            _ = FlashcardGenerator().add_manual(
+                question="What is an arbitrageur?",
+                answer="A trader who exploits price differences between markets.",
+                level="L1",
+                subject="Economics",
+                module="Module 3: Fiscal Policy",
+            )
+            analyzer = MistakeAnalyzer()
+            _ = analyzer.add_mistake(
+                subject="Economics",
+                question="What is a deflationary gap?",
+                user_answer="An expansionary gap",
+                correct_answer="A deflationary gap",
+                explanation="Aggregate demand falls below potential output.",
+                module_name="Module 3: Fiscal Policy",
+                options=["A deflationary gap", "An expansionary gap", "A stagflation"],
+            )
+
+            outcome = search_all("arbitrageur", use_fuzzy=False)
+            sources = {hit["source"] for hit in outcome["hits"]}
+            assert "flashcard" in sources, outcome
+            assert outcome["flashcards"] == 1, outcome
+            assert outcome["mistakes"] == 1, outcome
+
+            outcome = search_all("deflationary", use_fuzzy=False)
+            sources = {hit["source"] for hit in outcome["hits"]}
+            assert "mistake" in sources, outcome
+
+            # The knowledge base is empty here, so it contributes no hit
+            outcome = search_all("arbitrageur", use_fuzzy=False)
+            assert "kb" not in {hit["source"] for hit in outcome["hits"]}, outcome
+            print("  ✅ The search covers the flashcards and the mistake log")
+        finally:
+            _ = os.environ.pop("CFA_PREP_HOME", None)
+
+
+def test_search_whole_word():
+    """Test that the search matches the keyword as a whole word"""
+    import tempfile
+
+    from cfa_prep.flashcard_generator import FlashcardGenerator
+    from cfa_prep.search import search_all
+
+    with tempfile.TemporaryDirectory() as tmp:
+        os.environ["CFA_PREP_HOME"] = tmp
+        try:
+            _ = FlashcardGenerator().add_manual(
+                question="A tariff on imports",
+                answer="Corporates pay tariffs; the corporate burden matters.",
+                level="L1",
+                subject="Economics",
+                module="Module 6: International Trade",
+            )
+
+            # "tariff" is a word of the text, "tariffs" is not
+            hits = search_all("tariff", use_fuzzy=False)["hits"]
+            assert len(hits) == 1, hits
+            assert "tariff" in hits[0]["snippet"].lower(), hits
+
+            # "corporate" must not be found through "rate"
+            hits = search_all("rate", use_fuzzy=False)["hits"]
+            assert hits == [], hits
+
+            # The plural is a word of its own
+            hits = search_all("tariffs", use_fuzzy=False)["hits"]
+            assert len(hits) == 1, hits
+            print("  ✅ The search matches whole words")
+        finally:
+            _ = os.environ.pop("CFA_PREP_HOME", None)
+
+
+def test_clean_keyword():
+    """Test that the typed words become one keyword, with or without quotes"""
+    assert clean_keyword(["FCFE"]) == "FCFE"
+    assert clean_keyword(["free", "cash", "flow"]) == "free cash flow"
+    assert clean_keyword(['"free cash flow"']) == "free cash flow"
+    assert clean_keyword(["'free cash flow'"]) == "free cash flow"
+    assert clean_keyword([]) == ""
+    print("  ✅ The keyword is built from the typed words")
 
 
 def test_mistake_analyzer():
@@ -1233,6 +1326,9 @@ def run_all_tests():
         ("Context extraction", test_extract_context),
         ("Knowledge base", test_knowledge_base),
         ("Mistake analyzer", test_mistake_analyzer),
+        ("Search covers all sources", test_search_covers_all_sources),
+        ("Search whole word", test_search_whole_word),
+        ("Keyword from typed words", test_clean_keyword),
         ("Progress tracker", test_progress_tracker),
         ("IPS builder", test_ips_builder),
         ("Quiz engine", test_quiz_engine),

@@ -10,7 +10,7 @@ CFA Prep CLI is a pure-Python command-line CFA study assistant covering all prep
 
 | Feature            | Description                                                        |
 | ------------------ | ----------------------------------------------------------------- |
-| **Knowledge Search** | Search keywords across textbook/Notes slices, with regex and fuzzy matching |
+| **Knowledge Search** | Search keywords across textbook/Notes slices, your flashcards and your mistake log, with regex and fuzzy matching |
 | **Smart Quiz**      | L1 module review / L2 vignette / L3 scenario analysis, with mistake-priority questions |
 | **Mistake Analysis** | Logs mistakes (MCQ or free-form), tracks subjects and modules, generates review suggestions |
 | **Progress Tracking** | Maintains a study progress file, tracks mastered and fuzzy knowledge points |
@@ -64,7 +64,7 @@ The knowledge files live in the `kb/` subfolder of the data root:
 ### 4. Start using
 
 ```bash
-cfa-prep search "FCFE"
+cfa-prep search FCFE
 ```
 
 ## Command Reference
@@ -76,8 +76,9 @@ cfa-prep search "FCFE"
 | `config level L2`            | Set the default level (L1/L2/L3) | `cfa-prep config level L2`               |
 | `config home`                | Show the data root directory path | `cfa-prep config home`                  |
 | `config home <path>`         | Set the data root to an existing folder | `cfa-prep config home D:\cfa\data` |
-| `search <keyword>`           | Search the knowledge base    | `cfa-prep search "FCFE"`                       |
+| `search <keyword>`           | Search knowledge base, flashcards and mistakes | `cfa-prep search FCFE`              |
 | `search --regex`             | Regex search                 | `cfa-prep search "FCF[EF]" --regex`            |
+| `search --no-fuzzy`          | Exact matching only (higher precision) | `cfa-prep search FCFE --no-fuzzy`   |
 | `quiz`                       | Quiz at the configured level (set via `config level`) | `cfa-prep quiz`                          |
 | `quiz --no-randomize`        | Disable question/option shuffling | `cfa-prep quiz --no-randomize`             |
 | `stats`                      | Quiz statistics and review schedule | `cfa-prep stats`                        |
@@ -99,6 +100,45 @@ cfa-prep search "FCFE"
 | `curriculum show`            | Display the current curriculum | `cfa-prep curriculum show`                   |
 
 > The data root can be set persistently with `cfa-prep config home ./my-data` or via the `CFA_PREP_HOME` environment variable, e.g. `export CFA_PREP_HOME=./my-data`.
+
+## Search
+
+`cfa-prep search <keyword>` looks the keyword up in **every source you have written**, so
+one command covers your notes, your flashcards and the questions you got wrong:
+
+| Source | Where it lives | What is searched |
+| --- | --- | --- |
+| 📄 Knowledge base | `<data_root>/kb/*.txt` | the page text |
+| 🗂️ Flashcards | `<data_root>/flashcards/flashcards.json` | question and answer |
+| ❌ Mistake log | `<data_root>/mistakes/mistakes.json` | question, options and explanation |
+
+Every hit shows where it came from:
+
+```
+============================================================
+  🔍 Search: tariff
+============================================================
+
+Knowledge base: 0 files, 0 pages | Flashcards: 5 | Mistakes: 66
+
+Found 3 result(s):
+
+────────────────────────────────────────────────────────────
+  ❌ [1] Which of the following trade restrictions is likely to result in the
+      greatest welfare loss for the importing country? — Economics > Module 6:
+      International Trade
+────────────────────────────────────────────────────────────
+  ...s is likely to result in the greatest welfare loss for the importing country?
+  A tariff
+```
+
+The matches are **whole words**: `tariff` finds "a tariff" but not "tariffs" (use
+`--regex "tariffs?"` to catch both). A phrase can be typed **without quotes** —
+`cfa-prep search free cash flow` is the same as `cfa-prep search "free cash flow"`.
+Fuzzy matching (an approximate spelling or an abbreviation) is applied per word as a
+fallback; use `--no-fuzzy` for exact matching only, and `--regex` for a regular
+expression. `--max-results` caps the hits **per source**, so one source can never hide
+the others.
 
 ## Curriculum
 

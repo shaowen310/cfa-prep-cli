@@ -12,7 +12,8 @@ from typing import TypedDict
 
 from .utils import (
     get_data_dir,
-    fuzzy_match,
+    contains_word,
+    fuzzy_word_match,
     extract_context,
     read_file_text,
 )
@@ -143,19 +144,12 @@ class KnowledgeBase:
                         # Invalid regex; fall back to normal search
                         pass
 
-                if not matched and use_fuzzy:
-                    # First try exact containment matching
-                    if keyword.lower() in page_text.lower():
-                        matched = True
-                        snippet = extract_context(page_text, keyword)
-                    # Then try fuzzy matching
-                    elif fuzzy_match(keyword, page_text):
-                        matched = True
-                        snippet = extract_context(page_text, keyword)
-
                 if not matched:
-                    # Plain containment matching
-                    if keyword.lower() in page_text.lower():
+                    # The keyword has to be a whole word of the page
+                    if contains_word(page_text, keyword):
+                        matched = True
+                        snippet = extract_context(page_text, keyword)
+                    elif use_fuzzy and fuzzy_word_match(page_text, keyword):
                         matched = True
                         snippet = extract_context(page_text, keyword)
 

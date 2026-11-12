@@ -14,17 +14,18 @@ from .baii_calculator import run_repl as run_baii_repl
 from .curriculum import Curriculum
 from .flashcard_generator import FlashcardGenerator
 from .ips_builder import IPSBuilder
-from .knowledge_base import KnowledgeBase
 from .mistake_analyzer import MistakeAnalyzer
 from .progress_tracker import ProgressTracker
 from .quiz_engine import QuizEngine
 from .quiz_stats import QuizStats, describe, next_due_of
+from .search import SOURCE_ICONS, search_all
 from .utils import (
     get_data_dir,
     get_data_root,
     get_home_env_file,
     load_home_env,
     load_settings,
+    clean_keyword,
     print_header,
     print_section,
     save_settings,
@@ -40,7 +41,7 @@ class CLIArgs(Protocol):
     command: str | None
     config_key: str | None
     config_value: str | None
-    keyword: str | None
+    keyword: list[str]
     regex: bool
     no_fuzzy: bool
     max_results: int
@@ -192,30 +193,35 @@ def cmd_config(args: CLIArgs) -> None:
 
 def cmd_search(args: CLIArgs) -> None:
     """
-    Search the knowledge base: search for keywords across all files under data/kb/.
+    Search every source the user has written: the knowledge base, the manual
+    flashcards and the mistake log.  Each hit shows where it came from.
+
+    The keyword is matched as a whole word, and a phrase can be typed without
+    quotes: `cfa-prep search free cash flow`.
     """
-    if not args.keyword:
+    keyword = clean_keyword(args.keyword)
+    if not keyword:
         print("❌ Please provide a search keyword")
         print("Usage: cfa-prep search <keyword>")
         return
 
-    print_header(f"🔍 Search: {args.keyword}")
+    print_header(f"🔍 Search: {keyword}")
 
-    kb = KnowledgeBase()
-
-    # Show the knowledge base status
-    stats = kb.get_stats()
-    print(f"\nKnowledge base: {stats['total_files']} files, {stats['total_pages']} pages\n")
-
-    results = kb.search(
-        keyword=args.keyword,
+    outcome = search_all(
+        keyword=keyword,
         use_regex=args.regex,
         use_fuzzy=not args.no_fuzzy,
         max_results=args.max_results,
     )
 
-    if not results:
-        print(f"❌ No content matching「{args.keyword}」was found.")
+    print(
+        f"\nKnowledge base: {outcome['kb_files']} files, {outcome['kb_pages']} pages"
+        f" | Flashcards: {outcome['flashcards']} | Mistakes: {outcome['mistakes']}\n"
+    )
+
+    hits = outcome["hits"]
+    if not hits:
+        print(f"❌ No content matching「{keyword}」was found.")
         print("💡 Tips:")
         print("  - Check whether the data/kb/ directory contains .txt files")
         print("  - Try a shorter keyword")
@@ -223,12 +229,14 @@ def cmd_search(args: CLIArgs) -> None:
         print("  - Use --no-fuzzy to disable fuzzy matching for higher precision")
         return
 
-    print(f"Found {len(results)} result(s):\n")
-    for i, r in enumerate(results, 1):
+    print(f"Found {len(hits)} result(s):\n")
+    for i, hit in enumerate(hits, 1):
+        icon = SOURCE_ICONS.get(hit["source"], "📄")
+        location = f" — {hit['location']}" if hit["location"] else ""
         print(f"{'─' * 60}")
-        print(f"  📄 [{i}] {r['file']} - page {r['page']}")
+        print(f"  {icon} [{i}] {hit['title']}{location}")
         print(f"{'─' * 60}")
-        print(f"  {r['snippet']}")
+        print(f"  {hit['snippet']}")
         print()
 
 
@@ -509,8 +517,10 @@ Examples:
   cfa-prep config level L2               Set the default level to L2
   cfa-prep config home                   Show the data root (home) path
   cfa-prep config home /path/folder      Persist the data root to an existing folder
-  cfa-prep search "FCFE"                 Search the knowledge base
-  cfa-prep search "FCFE" --regex         Use regex search
+  cfa-prep search FCFE                   Search knowledge base, flashcards and mistakes
+  cfa-prep search free cash flow         A phrase can be typed without quotes
+  cfa-prep search FCFE --regex           Use regex search
+  cfa-prep search FCFE --no-fuzzy        Disable fuzzy matching for higher precision
   cfa-prep quiz                          Start quizzing at the configured level (config level)
   cfa-prep quiz --no-randomize           Disable question/option shuffling
   cfa-prep stats                        Show quiz statistics and the review schedule
@@ -549,10 +559,11 @@ Data root (default ~/.cfa-prep) can be set via:
 
     # search command
     p_search = subparsers.add_parser("search", help="Search the knowledge base")
-    _ = p_search.add_argument("keyword", nargs="?", help="search keyword")
+    _ = p_search.add_argument("keyword", nargs="*", help="search keyword (several words form one phrase)")
     _ = p_search.add_argument("--regex", action="store_true", help="search using regular expressions")
     _ = p_search.add_argument("--no-fuzzy", action="store_true", help="disable fuzzy matching")
-    _ = p_search.add_argument("--max-results", type=int, default=10, help="maximum number of results (default 10)")
+    _ = p_search.add_argument("--max-results", type=int, default=10,
+                              help="maximum number of results per source (default 10)")
 
     # quiz command
     p_quiz = subparsers.add_parser("quiz", help="Start quizzing (uses the configured level)")

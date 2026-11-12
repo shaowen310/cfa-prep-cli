@@ -480,6 +480,10 @@ class MistakeAnalyzer:
         records.sort(key=lambda r: r.get("date", ""), reverse=True)
         return records[:limit]
 
+    def all_mistakes(self) -> list[MistakeRecord]:
+        """Return every mistake record, as stored."""
+        return self._load()
+
     def print_mistake_breakdown(self) -> None:
         """
         Print the mistake log grouped by subject and module, in curriculum order.
