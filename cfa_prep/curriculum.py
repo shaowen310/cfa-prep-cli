@@ -3,8 +3,8 @@
 CFA Prep CLI - Curriculum module
 Author: CodeBuddy AI Assistant
 Purpose: Provide a single source of truth for the CFA exam curriculum (subjects + topics)
-         per level, stored at <data_root>/curriculum.json. Powers quiz topic selection,
-         input auto-correction, and progress coverage tracking.
+         per level, stored at <data_root>/curriculum/curriculum.json. Powers quiz topic
+         selection, input auto-correction, and progress coverage tracking.
 
 The curriculum is user-supplied via `curriculum import` — there is no bundled default
 scaffold. Imported curriculum text is provided by the user and should respect the
@@ -131,7 +131,7 @@ class Curriculum:
     """
     Load / save / query the CFA curriculum.
 
-    Stored as <data_root>/kb/curriculum.json with shape:
+    Stored as <data_root>/curriculum/curriculum.json with shape:
         {
             "L1": {
                 "<Subject>": {
@@ -156,7 +156,7 @@ class Curriculum:
     DEFAULT_MODULE: str = "General"
 
     def __init__(self):
-        self.path: Path = get_data_dir("kb") / "curriculum.json"
+        self.path: Path = get_data_dir("curriculum") / "curriculum.json"
 
     # --- persistence -------------------------------------------------------
 

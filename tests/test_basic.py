@@ -50,7 +50,7 @@ def test_project_root():
 
 def test_data_dirs():
     """Test data directory creation"""
-    dirs = ["kb", "mistakes", "progress", "flashcards", "templates"]
+    dirs = ["kb", "mistakes", "progress", "flashcards", "curriculum", "templates"]
     for d in dirs:
         p = get_data_dir(d)
         assert p.exists(), f"{d} directory creation failed"

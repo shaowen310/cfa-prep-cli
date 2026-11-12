@@ -148,12 +148,12 @@ auto-correction and progress-coverage percentages.
 
 There is **no bundled default scaffold** — the curriculum starts empty and is populated
 by you via `cfa-prep curriculum import`. `cfa-prep init` only creates an empty
-`curriculum.json`. Because actual CFA curriculum text is copyrighted by CFA Institute,
-you should provide your own legally-owned material (your notes, the `kb/` text you
-already own, or a topic list you export yourself).
+`curriculum/curriculum.json`. Because actual CFA curriculum text is copyrighted by CFA
+Institute, you should provide your own legally-owned material (your notes, the `kb/`
+text you already own, or a topic list you export yourself).
 
-The curriculum is stored at `<data_root>/kb/curriculum.json` with this shape — each subject
-maps to one or more **modules**, and each module maps to a list of topics:
+The curriculum is stored at `<data_root>/curriculum/curriculum.json` with this shape — each
+subject maps to one or more **modules**, and each module maps to a list of topics:
 
 ```json
 {
@@ -459,14 +459,26 @@ cfa-prep-cli/
 
 ### Data Root Layout
 
-Data files are stored under the configured data root (`~/.cfa-prep` by default):
+Data files are stored under the configured data root (`~/.cfa-prep` by default).
+Every folder belongs to one command:
+
+| Folder | Command | Content |
+| --- | --- | --- |
+| `kb/` | `cfa-prep search` | Knowledge files (`.txt`) |
+| `flashcards/` | `cfa-prep flashcard` | `flashcards.json` (manually added) |
+| `mistakes/` | `cfa-prep mistake` | `mistakes.json` (auto-generated) |
+| `curriculum/` | `cfa-prep curriculum` | `curriculum.json` (subjects, modules, topics) |
+| `progress/` | `cfa-prep recap` / `cfa-prep stats` | `progress.json`, `quiz_stats.json`, `quiz_sessions.json` |
+| `templates/` | `cfa-prep ips` | IPS templates |
+| `config/` | `cfa-prep config` | `settings.json`, `home.env` |
 
 ```
 ~/.cfa-prep/
-├── kb/                       # Knowledge files (.txt) and curriculum.json
+├── kb/                       # Knowledge files (.txt)
 ├── mistakes/                 # Mistake log (auto-generated)
 ├── progress/                 # Progress files (progress.json, quiz_stats.json, quiz_sessions.json — auto-generated)
 ├── flashcards/               # Flashcards (flashcards.json, manually added)
+├── curriculum/               # Curriculum (curriculum.json)
 ├── templates/                # IPS templates
 └── config/
     ├── settings.json         # Configuration (level, directory names)

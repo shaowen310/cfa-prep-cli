@@ -72,6 +72,7 @@ def cmd_init(_args: CLIArgs) -> None:
         "mistakes",
         "progress",
         "flashcards",
+        "curriculum",
         "templates",
         "config",
     ]
@@ -89,6 +90,7 @@ def cmd_init(_args: CLIArgs) -> None:
         "mistakes_dir": "mistakes",
         "progress_dir": "progress",
         "flashcards_dir": "flashcards",
+        "curriculum_dir": "curriculum",
         "templates_dir": "templates",
     }
     save_settings(cast(dict[str, object], settings))
@@ -170,7 +172,15 @@ def cmd_config(args: CLIArgs) -> None:
                 print(f"❌ Not a directory: {target}")
                 return
 
-            expected = ["kb", "mistakes", "progress", "flashcards", "templates", "config"]
+            expected = [
+                "kb",
+                "mistakes",
+                "progress",
+                "flashcards",
+                "curriculum",
+                "templates",
+                "config",
+            ]
             has_subdirs = any((target / d).is_dir() for d in expected)
 
             resolved = set_home_env(target)
