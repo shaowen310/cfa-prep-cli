@@ -129,11 +129,11 @@ Curriculum: 93 modules / 583 topics | Flashcards: 5 | Mistakes: 66
 Found 3 result(s):
 
 ────────────────────────────────────────────────────────────
-  📘 [1] Module 4: Monetary Policy — Economics > Module 4: Monetary Policy (L1)
+  📘 [1] Module 4: Monetary Policy | Economics > Module 4: Monetary Policy (L1)
 
 ────────────────────────────────────────────────────────────
   ❌ [1] Which of the following trade restrictions is likely to result in the
-      greatest welfare loss for the importing country? — Economics > Module 6:
+      greatest welfare loss for the importing country? | Economics > Module 6:
       International Trade
 ────────────────────────────────────────────────────────────
   ...s is likely to result in the greatest welfare loss for the importing country?
@@ -306,11 +306,11 @@ curriculum order:
 
 ```
 --- Mistake log by subject and module (41 mistakes) ---
-  8 — Economics > Module 2: Understanding Business Cycles
-  5 — Economics > Module 3: Fiscal Policy
-  5 — Economics > Module 6: International Trade
-  5 — Corporate Issuers > Module 1: Organizational Forms, Corporate Issuer Features, and Ownership
-  7 — Financial Statement Analysis > Module 1: Introduction to Financial Statement Analysis
+  8 | Economics > Module 2: Understanding Business Cycles
+  5 | Economics > Module 3: Fiscal Policy
+  5 | Economics > Module 6: International Trade
+  5 | Corporate Issuers > Module 1: Organizational Forms, Corporate Issuer Features, and Ownership
+  7 | Financial Statement Analysis > Module 1: Introduction to Financial Statement Analysis
   ...
 ```
 

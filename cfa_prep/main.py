@@ -238,7 +238,7 @@ def cmd_search(args: CLIArgs) -> None:
     print(f"Found {len(hits)} result(s):\n")
     for i, hit in enumerate(hits, 1):
         icon = SOURCE_ICONS.get(hit["source"], "📄")
-        location = f" — {hit['location']}" if hit["location"] else ""
+        location = f" | {hit['location']}" if hit["location"] else ""
         print(f"{'─' * 60}")
         print(f"  {icon} [{i}] {hit['title']}{location}")
         if hit["snippet"]:
@@ -359,7 +359,7 @@ def cmd_mistake(args: CLIArgs) -> None:
         print("  No mistakes logged yet.")
         return
     for m in recent:
-        print(f"  [{m['date']}] {m['subject']} — {m.get('module', '')}")
+        print(f"  [{m['date']}] {m['subject']} | {m.get('module', '')}")
 
     analyzer.print_mistake_breakdown()
 

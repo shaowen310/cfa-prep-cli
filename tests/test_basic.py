@@ -1087,9 +1087,9 @@ def test_mistake_breakdown_view():
             output = buffer.getvalue()
             assert "Mistake log by subject and module (3 mistakes)" in output, output
             # The count comes first, right-aligned on the width of the largest one
-            assert "  2 — Economics > Module 6: International Trade" in output, output
+            assert "  2 | Economics > Module 6: International Trade" in output, output
             assert (
-                "  1 — Fixed Income > Module 1: Fixed-Income Instrument Features" in output
+                "  1 | Fixed Income > Module 1: Fixed-Income Instrument Features" in output
             ), output
             # The curriculum order wins over the number of mistakes
             fixed_income = output.index("Fixed Income > Module 1")

@@ -514,7 +514,7 @@ class MistakeAnalyzer:
         )
         width = max(len(str(count)) for _group, count in ordered)
         for group, count in ordered:
-            print(f"  {count:>{width}} — {group}")
+            print(f"  {count:>{width}} | {group}")
 
     @staticmethod
     def _curriculum_order() -> tuple[dict[str, int], dict[str, dict[str, int]]]:
