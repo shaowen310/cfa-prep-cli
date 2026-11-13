@@ -73,9 +73,10 @@ def test_extract_context():
 
 
 def test_search_covers_all_sources():
-    """Test that the search looks into the flashcards and the mistake log"""
+    """Test that the search looks into the curriculum, the flashcards and the mistake log"""
     import tempfile
 
+    from cfa_prep.curriculum import Curriculum
     from cfa_prep.flashcard_generator import FlashcardGenerator
     from cfa_prep.mistake_analyzer import MistakeAnalyzer
     from cfa_prep.search import search_all
@@ -83,6 +84,13 @@ def test_search_covers_all_sources():
     with tempfile.TemporaryDirectory() as tmp:
         os.environ["CFA_PREP_HOME"] = tmp
         try:
+            _ = Curriculum().save({
+                "L1": {
+                    "Economics": {
+                        "Module 3: Fiscal Policy": ["The role of the arbitrageur"],
+                    }
+                }
+            })
             _ = FlashcardGenerator().add_manual(
                 question="What is an arbitrageur?",
                 answer="A trader who exploits price differences between markets.",
@@ -103,15 +111,23 @@ def test_search_covers_all_sources():
 
             outcome = search_all("arbitrageur", use_fuzzy=False)
             sources = {hit["source"] for hit in outcome["hits"]}
+            assert "curriculum" in sources, outcome
             assert "flashcard" in sources, outcome
+            assert outcome["curriculum_modules"] == 1, outcome
+            assert outcome["curriculum_topics"] == 1, outcome
             assert outcome["flashcards"] == 1, outcome
             assert outcome["mistakes"] == 1, outcome
+
+            # A curriculum hit carries no snippet: the title is the content
+            curriculum_hits = [h for h in outcome["hits"] if h["source"] == "curriculum"]
+            assert curriculum_hits, outcome
+            assert curriculum_hits[0]["snippet"] == "", curriculum_hits
 
             outcome = search_all("deflationary", use_fuzzy=False)
             sources = {hit["source"] for hit in outcome["hits"]}
             assert "mistake" in sources, outcome
 
-            print("  ✅ The search covers the flashcards and the mistake log")
+            print("  ✅ The search covers the curriculum, flashcards and mistakes")
         finally:
             _ = os.environ.pop("CFA_PREP_HOME", None)
 

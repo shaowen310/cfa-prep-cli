@@ -199,8 +199,8 @@ def cmd_config(args: CLIArgs) -> None:
 
 def cmd_search(args: CLIArgs) -> None:
     """
-    Search every source the user has written: the manual flashcards and the
-    mistake log.  Each hit shows where it came from.
+    Search every source the user has written: the curriculum, the manual
+    flashcards and the mistake log.  Each hit shows where it came from.
 
     The keyword is matched as a whole word, and a phrase can be typed without
     quotes: `cfa-prep search free cash flow`.
@@ -221,7 +221,9 @@ def cmd_search(args: CLIArgs) -> None:
     )
 
     print(
-        f"\nFlashcards: {outcome['flashcards']} | Mistakes: {outcome['mistakes']}\n"
+        f"\nCurriculum: {outcome['curriculum_modules']} modules"
+        f" / {outcome['curriculum_topics']} topics"
+        f" | Flashcards: {outcome['flashcards']} | Mistakes: {outcome['mistakes']}\n"
     )
 
     hits = outcome["hits"]
@@ -239,8 +241,9 @@ def cmd_search(args: CLIArgs) -> None:
         location = f" — {hit['location']}" if hit["location"] else ""
         print(f"{'─' * 60}")
         print(f"  {icon} [{i}] {hit['title']}{location}")
-        print(f"{'─' * 60}")
-        print(f"  {hit['snippet']}")
+        if hit["snippet"]:
+            print(f"{'─' * 60}")
+            print(f"  {hit['snippet']}")
         print()
 
 
@@ -521,7 +524,7 @@ Examples:
   cfa-prep config level L2               Set the default level to L2
   cfa-prep config home                   Show the data root (home) path
   cfa-prep config home /path/folder      Persist the data root to an existing folder
-  cfa-prep search FCFE                   Search your flashcards and mistakes
+  cfa-prep search FCFE                   Search your curriculum, flashcards and mistakes
   cfa-prep search free cash flow         A phrase can be typed without quotes
   cfa-prep search FCFE --regex           Use regex search
   cfa-prep search FCFE --no-fuzzy        Disable fuzzy matching for higher precision
@@ -562,7 +565,7 @@ Data root (default ~/.cfa-prep) can be set via:
     _ = p_mistake.add_argument("-a", "--add", action="store_true", help="interactively log a mistake")
 
     # search command
-    p_search = subparsers.add_parser("search", help="Search your flashcards and mistakes")
+    p_search = subparsers.add_parser("search", help="Search your curriculum, flashcards and mistakes")
     _ = p_search.add_argument("keyword", nargs="*", help="search keyword (several words form one phrase)")
     _ = p_search.add_argument("--regex", action="store_true", help="search using regular expressions")
     _ = p_search.add_argument("--no-fuzzy", action="store_true", help="disable fuzzy matching")

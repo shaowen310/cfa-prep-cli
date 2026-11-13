@@ -10,7 +10,7 @@ CFA Prep CLI is a pure-Python command-line CFA study assistant covering all prep
 
 | Feature            | Description                                                        |
 | ------------------ | ----------------------------------------------------------------- |
-| **Search** | Search your flashcards and your mistake log, with regex and fuzzy matching |
+| **Search** | Search your curriculum, your flashcards and your mistake log, with regex and fuzzy matching |
 | **Smart Quiz**      | L1 module review / L2 vignette / L3 scenario analysis, with mistake-priority questions |
 | **Mistake Analysis** | Logs mistakes (MCQ or free-form), tracks subjects and modules, generates review suggestions |
 | **Progress Tracking** | Maintains a study progress file, tracks mastered and fuzzy knowledge points |
@@ -81,7 +81,7 @@ cfa-prep search FCFE
 | `config level L2`            | Set the default level (L1/L2/L3) | `cfa-prep config level L2`               |
 | `config home`                | Show the data root directory path | `cfa-prep config home`                  |
 | `config home <path>`         | Set the data root to an existing folder | `cfa-prep config home D:\cfa\data` |
-| `search <keyword>`           | Search your flashcards and mistakes | `cfa-prep search FCFE`              |
+| `search <keyword>`           | Search your curriculum, flashcards and mistakes | `cfa-prep search FCFE`      |
 | `search --regex`             | Regex search                 | `cfa-prep search "FCF[EF]" --regex`            |
 | `search --no-fuzzy`          | Exact matching only (higher precision) | `cfa-prep search FCFE --no-fuzzy`   |
 | `quiz`                       | Quiz at the configured level (set via `config level`) | `cfa-prep quiz`                          |
@@ -109,10 +109,11 @@ cfa-prep search FCFE
 ## Search
 
 `cfa-prep search <keyword>` looks the keyword up in **every source you have written**, so
-one command covers your flashcards and the questions you got wrong:
+one command covers your curriculum, your flashcards and the questions you got wrong:
 
 | Source | Where it lives | What is searched |
 | --- | --- | --- |
+| 📘 Curriculum | `<data_root>/curriculum/curriculum.json` | module names and topic titles |
 | 🗂️ Flashcards | `<data_root>/flashcards/flashcards.json` | question and answer |
 | ❌ Mistake log | `<data_root>/mistakes/mistakes.json` | question, options and explanation |
 
@@ -123,9 +124,12 @@ Every hit shows where it came from:
   🔍 Search: tariff
 ============================================================
 
-Flashcards: 5 | Mistakes: 66
+Curriculum: 93 modules / 583 topics | Flashcards: 5 | Mistakes: 66
 
 Found 3 result(s):
+
+────────────────────────────────────────────────────────────
+  📘 [1] Module 4: Monetary Policy — Economics > Module 4: Monetary Policy (L1)
 
 ────────────────────────────────────────────────────────────
   ❌ [1] Which of the following trade restrictions is likely to result in the
@@ -143,6 +147,10 @@ Fuzzy matching (an approximate spelling or an abbreviation) is applied per word 
 fallback; use `--no-fuzzy` for exact matching only, and `--regex` for a regular
 expression. `--max-results` caps the hits **per source**, so one source can never hide
 the others.
+
+In the curriculum the **module is the unit**: a module whose name matches is one hit
+on its own, otherwise every matching topic of that module is a hit. A curriculum hit
+shows no detail block — the title already is the content.
 
 ## Curriculum
 
