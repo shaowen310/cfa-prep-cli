@@ -68,7 +68,6 @@ def cmd_init(_args: CLIArgs) -> None:
 
     # Create the directory structure under the data root
     dirs = [
-        "kb",
         "mistakes",
         "progress",
         "flashcards",
@@ -86,7 +85,6 @@ def cmd_init(_args: CLIArgs) -> None:
     settings = {
         "level": "L1",
         "version": "1.0",
-        "kb_dir": "kb",
         "mistakes_dir": "mistakes",
         "progress_dir": "progress",
         "flashcards_dir": "flashcards",
@@ -120,12 +118,11 @@ def cmd_init(_args: CLIArgs) -> None:
     print("  🎉 Initialization complete!")
     print("=" * 60)
     print("\n📋 Next steps:")
-    print("  1. Place knowledge files (.txt) into the kb/ directory under the data root")
-    print("     File name format: l1_vol1_p1-60.txt")
-    print("     Mark pages inside files with ===== PAGE N =====")
+    print("  1. Import your curriculum:")
+    print("     cfa-prep curriculum import <file.json>")
     print()
     print("  2. Start using:")
-    print("     cfa-prep search \"FCFE\"        # Search the knowledge base")
+    print("     cfa-prep search FCFE           # Search your flashcards and mistakes")
     print("     cfa-prep quiz                  # Start quizzing (configured level)")
     print("     cfa-prep recap                 # View progress")
     print()
@@ -173,7 +170,6 @@ def cmd_config(args: CLIArgs) -> None:
                 return
 
             expected = [
-                "kb",
                 "mistakes",
                 "progress",
                 "flashcards",
@@ -203,8 +199,8 @@ def cmd_config(args: CLIArgs) -> None:
 
 def cmd_search(args: CLIArgs) -> None:
     """
-    Search every source the user has written: the knowledge base, the manual
-    flashcards and the mistake log.  Each hit shows where it came from.
+    Search every source the user has written: the manual flashcards and the
+    mistake log.  Each hit shows where it came from.
 
     The keyword is matched as a whole word, and a phrase can be typed without
     quotes: `cfa-prep search free cash flow`.
@@ -225,15 +221,13 @@ def cmd_search(args: CLIArgs) -> None:
     )
 
     print(
-        f"\nKnowledge base: {outcome['kb_files']} files, {outcome['kb_pages']} pages"
-        f" | Flashcards: {outcome['flashcards']} | Mistakes: {outcome['mistakes']}\n"
+        f"\nFlashcards: {outcome['flashcards']} | Mistakes: {outcome['mistakes']}\n"
     )
 
     hits = outcome["hits"]
     if not hits:
         print(f"❌ No content matching「{keyword}」was found.")
         print("💡 Tips:")
-        print("  - Check whether the data/kb/ directory contains .txt files")
         print("  - Try a shorter keyword")
         print("  - Use --regex to enable regex search")
         print("  - Use --no-fuzzy to disable fuzzy matching for higher precision")
@@ -518,7 +512,7 @@ def cmd_curriculum(args: CLIArgs) -> None:
 def main():
     """Main entry function, parses command-line arguments and dispatches to the corresponding subcommand."""
     parser = argparse.ArgumentParser(
-        description="CFA Prep CLI - knowledge base search, quizzing, mistake analysis, progress tracking",
+        description="CFA Prep CLI - quizzing, mistake analysis, progress tracking, flashcards",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
@@ -527,7 +521,7 @@ Examples:
   cfa-prep config level L2               Set the default level to L2
   cfa-prep config home                   Show the data root (home) path
   cfa-prep config home /path/folder      Persist the data root to an existing folder
-  cfa-prep search FCFE                   Search knowledge base, flashcards and mistakes
+  cfa-prep search FCFE                   Search your flashcards and mistakes
   cfa-prep search free cash flow         A phrase can be typed without quotes
   cfa-prep search FCFE --regex           Use regex search
   cfa-prep search FCFE --no-fuzzy        Disable fuzzy matching for higher precision
@@ -568,7 +562,7 @@ Data root (default ~/.cfa-prep) can be set via:
     _ = p_mistake.add_argument("-a", "--add", action="store_true", help="interactively log a mistake")
 
     # search command
-    p_search = subparsers.add_parser("search", help="Search the knowledge base")
+    p_search = subparsers.add_parser("search", help="Search your flashcards and mistakes")
     _ = p_search.add_argument("keyword", nargs="*", help="search keyword (several words form one phrase)")
     _ = p_search.add_argument("--regex", action="store_true", help="search using regular expressions")
     _ = p_search.add_argument("--no-fuzzy", action="store_true", help="disable fuzzy matching")

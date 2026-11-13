@@ -1,6 +1,6 @@
 # CFA Prep CLI
 
-> CFA exam prep CLI tool — knowledge base search · smart quizzing · mistake analysis · progress tracking · flashcards · IPS templates
+> CFA exam prep CLI tool — smart quizzing · mistake analysis · progress tracking · flashcards · IPS templates
 
 ## Overview
 
@@ -10,7 +10,7 @@ CFA Prep CLI is a pure-Python command-line CFA study assistant covering all prep
 
 | Feature            | Description                                                        |
 | ------------------ | ----------------------------------------------------------------- |
-| **Knowledge Search** | Search keywords across textbook/Notes slices, your flashcards and your mistake log, with regex and fuzzy matching |
+| **Search** | Search your flashcards and your mistake log, with regex and fuzzy matching |
 | **Smart Quiz**      | L1 module review / L2 vignette / L3 scenario analysis, with mistake-priority questions |
 | **Mistake Analysis** | Logs mistakes (MCQ or free-form), tracks subjects and modules, generates review suggestions |
 | **Progress Tracking** | Maintains a study progress file, tracks mastered and fuzzy knowledge points |
@@ -57,11 +57,16 @@ By default, all data is stored under `~/.cfa-prep`. You can relocate it in three
 | **`CFA_PREP_HOME` env var** | `export CFA_PREP_HOME=/path/to/data` |
 | **`config home <path>`** | `cfa-prep config home D:\cfa\data` (persisted in `<data_root>/config/home.env`) |
 
-The knowledge files live in the `kb/` subfolder of the data root:
-- File name format: `l1_vol1_p1-60.txt`
-- Mark pages inside files with `===== PAGE N =====`
+The data of each command lives in its own subfolder of the data root — see
+[Data Root Layout](#data-root-layout).
 
-### 4. Start using
+### 4. Import your curriculum
+
+```bash
+cfa-prep curriculum import my-curriculum.json
+```
+
+### 5. Start using
 
 ```bash
 cfa-prep search FCFE
@@ -76,7 +81,7 @@ cfa-prep search FCFE
 | `config level L2`            | Set the default level (L1/L2/L3) | `cfa-prep config level L2`               |
 | `config home`                | Show the data root directory path | `cfa-prep config home`                  |
 | `config home <path>`         | Set the data root to an existing folder | `cfa-prep config home D:\cfa\data` |
-| `search <keyword>`           | Search knowledge base, flashcards and mistakes | `cfa-prep search FCFE`              |
+| `search <keyword>`           | Search your flashcards and mistakes | `cfa-prep search FCFE`              |
 | `search --regex`             | Regex search                 | `cfa-prep search "FCF[EF]" --regex`            |
 | `search --no-fuzzy`          | Exact matching only (higher precision) | `cfa-prep search FCFE --no-fuzzy`   |
 | `quiz`                       | Quiz at the configured level (set via `config level`) | `cfa-prep quiz`                          |
@@ -104,11 +109,10 @@ cfa-prep search FCFE
 ## Search
 
 `cfa-prep search <keyword>` looks the keyword up in **every source you have written**, so
-one command covers your notes, your flashcards and the questions you got wrong:
+one command covers your flashcards and the questions you got wrong:
 
 | Source | Where it lives | What is searched |
 | --- | --- | --- |
-| 📄 Knowledge base | `<data_root>/kb/*.txt` | the page text |
 | 🗂️ Flashcards | `<data_root>/flashcards/flashcards.json` | question and answer |
 | ❌ Mistake log | `<data_root>/mistakes/mistakes.json` | question, options and explanation |
 
@@ -119,7 +123,7 @@ Every hit shows where it came from:
   🔍 Search: tariff
 ============================================================
 
-Knowledge base: 0 files, 0 pages | Flashcards: 5 | Mistakes: 66
+Flashcards: 5 | Mistakes: 66
 
 Found 3 result(s):
 
@@ -149,8 +153,8 @@ auto-correction and progress-coverage percentages.
 There is **no bundled default scaffold** — the curriculum starts empty and is populated
 by you via `cfa-prep curriculum import`. `cfa-prep init` only creates an empty
 `curriculum/curriculum.json`. Because actual CFA curriculum text is copyrighted by CFA
-Institute, you should provide your own legally-owned material (your notes, the `kb/`
-text you already own, or a topic list you export yourself).
+Institute, you should provide your own legally-owned material (your notes, or a topic
+list you export yourself).
 
 The curriculum is stored at `<data_root>/curriculum/curriculum.json` with this shape — each
 subject maps to one or more **modules**, and each module maps to a list of topics:
@@ -443,7 +447,7 @@ cfa-prep-cli/
 │   ├── __init__.py
 │   ├── __main__.py              # enables `python -m cfa_prep`
 │   ├── main.py                  # CLI entry point
-│   ├── knowledge_base.py        # Knowledge base management
+│   ├── search.py                # Unified search (flashcards + mistake log)
 │   ├── quiz_engine.py           # Quiz engine
 │   ├── quiz_stats.py            # Quiz statistics, spaced-repetition scheduling, smart selection
 │   ├── mistake_analyzer.py      # Mistake analyzer
@@ -464,7 +468,6 @@ Every folder belongs to one command:
 
 | Folder | Command | Content |
 | --- | --- | --- |
-| `kb/` | `cfa-prep search` | Knowledge files (`.txt`) |
 | `flashcards/` | `cfa-prep flashcard` | `flashcards.json` (manually added) |
 | `mistakes/` | `cfa-prep mistake` | `mistakes.json` (auto-generated) |
 | `curriculum/` | `cfa-prep curriculum` | `curriculum.json` (subjects, modules, topics) |
@@ -474,7 +477,6 @@ Every folder belongs to one command:
 
 ```
 ~/.cfa-prep/
-├── kb/                       # Knowledge files (.txt)
 ├── mistakes/                 # Mistake log (auto-generated)
 ├── progress/                 # Progress files (progress.json, quiz_stats.json, quiz_sessions.json — auto-generated)
 ├── flashcards/               # Flashcards (flashcards.json, manually added)
@@ -483,23 +485,6 @@ Every folder belongs to one command:
 └── config/
     ├── settings.json         # Configuration (level, directory names)
     └── home.env              # Persisted data root (written by `config home <path>`)
-```
-
-## Knowledge File Format
-
-`.txt` files placed in the `kb/` folder of the data root (e.g. `~/.cfa-prep/kb/`) must follow this format:
-
-- **File name**: `l1_vol1_p1-60.txt` (level_volume_page-range)
-- **Page marker**: use `===== PAGE N =====` to mark the start of each page
-
-Example:
-
-```
-===== PAGE 1 =====
-Content of page 1 here...
-
-===== PAGE 2 =====
-Content of page 2 here...
 ```
 
 ## Running Tests

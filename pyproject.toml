@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "cfa-prep"
 version = "1.0.0"
-description = "CFA exam prep CLI: knowledge search, quizzing, mistake analysis, progress tracking, flashcards, IPS templates."
+description = "CFA exam prep CLI: quizzing, mistake analysis, progress tracking, flashcards, IPS templates."
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"

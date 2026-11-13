@@ -19,7 +19,6 @@ from cfa_prep.baii_calculator import (
 from cfa_prep.curriculum import Curriculum
 from cfa_prep.flashcard_generator import FlashcardGenerator
 from cfa_prep.ips_builder import IPSBuilder
-from cfa_prep.knowledge_base import KnowledgeBase
 from cfa_prep.mistake_analyzer import MistakeAnalyzer
 from cfa_prep.progress_tracker import ProgressTracker
 from cfa_prep.quiz_engine import QuizEngine
@@ -50,7 +49,7 @@ def test_project_root():
 
 def test_data_dirs():
     """Test data directory creation"""
-    dirs = ["kb", "mistakes", "progress", "flashcards", "curriculum", "templates"]
+    dirs = ["mistakes", "progress", "flashcards", "curriculum", "templates"]
     for d in dirs:
         p = get_data_dir(d)
         assert p.exists(), f"{d} directory creation failed"
@@ -73,17 +72,8 @@ def test_extract_context():
     print("  ✅ Context extraction is fine")
 
 
-def test_knowledge_base():
-    """Test knowledge base initialization"""
-    kb = KnowledgeBase()
-    stats = kb.get_stats()
-    assert "total_files" in stats
-    assert "total_pages" in stats
-    print(f"  ✅ Knowledge base module is fine (files: {stats['total_files']})")
-
-
 def test_search_covers_all_sources():
-    """Test that the search looks into the flashcards and the mistake log, not just the kb"""
+    """Test that the search looks into the flashcards and the mistake log"""
     import tempfile
 
     from cfa_prep.flashcard_generator import FlashcardGenerator
@@ -121,9 +111,6 @@ def test_search_covers_all_sources():
             sources = {hit["source"] for hit in outcome["hits"]}
             assert "mistake" in sources, outcome
 
-            # The knowledge base is empty here, so it contributes no hit
-            outcome = search_all("arbitrageur", use_fuzzy=False)
-            assert "kb" not in {hit["source"] for hit in outcome["hits"]}, outcome
             print("  ✅ The search covers the flashcards and the mistake log")
         finally:
             _ = os.environ.pop("CFA_PREP_HOME", None)
@@ -1324,7 +1311,6 @@ def run_all_tests():
         ("Data directories", test_data_dirs),
         ("Fuzzy matching", test_fuzzy_match),
         ("Context extraction", test_extract_context),
-        ("Knowledge base", test_knowledge_base),
         ("Mistake analyzer", test_mistake_analyzer),
         ("Search covers all sources", test_search_covers_all_sources),
         ("Search whole word", test_search_whole_word),

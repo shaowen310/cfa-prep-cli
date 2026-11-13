@@ -278,14 +278,6 @@ def write_file_lines(filepath: Path, lines: list[str]) -> None:
         f.writelines(lines)
 
 
-def read_file_text(filepath: Path) -> str:
-    """Read the entire text content of a file (UTF-8)"""
-    if not filepath.exists():
-        return ""
-    with open(filepath, "r", encoding="utf-8") as f:
-        return f.read()
-
-
 def write_file_text(filepath: Path, text: str) -> None:
     """Write text to a file (UTF-8)"""
     filepath.parent.mkdir(parents=True, exist_ok=True)

@@ -2,27 +2,24 @@
 """
 CFA Prep CLI - Unified search module
 Author: CodeBuddy AI Assistant
-Purpose: Look a keyword up in every source the user has written: the knowledge
-         base (data/kb/*.txt), the manual flashcards and the mistake log.
-         Every hit is tagged with the source it came from.
+Purpose: Look a keyword up in every source the user has written: the manual
+         flashcards and the mistake log.  Every hit is tagged with the source
+         it came from.
 """
 
 import re
 from typing import TypedDict
 
 from .flashcard_generator import FlashcardGenerator
-from .knowledge_base import KnowledgeBase
 from .mistake_analyzer import MistakeAnalyzer
 from .utils import contains_word, extract_context, fuzzy_word_match
 
 # Source tags used in a hit
-SOURCE_KB = "kb"
 SOURCE_FLASHCARD = "flashcard"
 SOURCE_MISTAKE = "mistake"
 
 # Icons shown in the CLI output
 SOURCE_ICONS = {
-    SOURCE_KB: "📄",
     SOURCE_FLASHCARD: "🗂️",
     SOURCE_MISTAKE: "❌",
 }
@@ -33,17 +30,15 @@ NO_CONTEXT = "(No matching content found)"
 
 class SearchHit(TypedDict):
     """A single search hit, tagged with the source it came from."""
-    source: str      # "kb" | "flashcard" | "mistake"
-    title: str       # file name / card question / mistake question
-    location: str    # "page 12" / "Economics > Module 3: Fiscal Policy"
+    source: str      # "flashcard" | "mistake"
+    title: str       # card question / mistake question
+    location: str    # "Economics > Module 3: Fiscal Policy"
     snippet: str     # the matched text
 
 
 class SearchOutcome(TypedDict):
     """The hits of a search plus the size of every searched source."""
     hits: list[SearchHit]
-    kb_files: int
-    kb_pages: int
     flashcards: int
     mistakes: int
 
@@ -88,27 +83,6 @@ def _snippet(text: str, keyword: str, use_regex: bool) -> str:
         # A fuzzy hit can span the whole text; show its beginning instead.
         return text[:160].strip() + ("..." if len(text) > 160 else "")
     return snippet
-
-
-def _search_kb(
-    keyword: str, use_regex: bool, use_fuzzy: bool, limit: int
-) -> list[SearchHit]:
-    """Search the .txt files under data/kb/."""
-    kb = KnowledgeBase()
-    hits: list[SearchHit] = []
-    for r in kb.search(
-        keyword=keyword,
-        use_regex=use_regex,
-        use_fuzzy=use_fuzzy,
-        max_results=limit,
-    ):
-        hits.append({
-            "source": SOURCE_KB,
-            "title": r["file"],
-            "location": f"page {r['page']}",
-            "snippet": r["snippet"],
-        })
-    return hits
 
 
 def _search_flashcards(
@@ -174,23 +148,18 @@ def search_all(
     Search every source for the keyword.
 
     `max_results` caps the hits of each source, so one source cannot hide the
-    others.  The hits come back grouped by source: knowledge base first, then
-    the flashcards, then the mistake log.
+    others.  The hits come back grouped by source: the flashcards first, then
+    the mistake log.
     """
-    kb = KnowledgeBase()
-    stats = kb.get_stats()
     cards = FlashcardGenerator().list_manual_cards()
     records = MistakeAnalyzer().all_mistakes()
 
     hits: list[SearchHit] = []
-    hits.extend(_search_kb(keyword, use_regex, use_fuzzy, max_results))
     hits.extend(_search_flashcards(keyword, use_regex, use_fuzzy, max_results))
     hits.extend(_search_mistakes(keyword, use_regex, use_fuzzy, max_results))
 
     return {
         "hits": hits,
-        "kb_files": stats["total_files"],
-        "kb_pages": stats["total_pages"],
         "flashcards": len(cards),
         "mistakes": len(records),
     }
