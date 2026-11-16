@@ -12,6 +12,7 @@ from typing import TypedDict
 
 from .mistake_analyzer import MistakeAnalyzer
 from .progress_tracker import ProgressTracker
+from .tables import Table, render_table
 from .curriculum import (
     Curriculum,
     module_group,
@@ -48,7 +49,12 @@ def read_input(prompt: str = "") -> str:
         return ""
 
 
-class MistakeQuestion(TypedDict):
+class _MistakeQuestionOptional(TypedDict, total=False):
+    """The optional part of a replayable mistake."""
+    table: Table | None
+
+
+class MistakeQuestion(_MistakeQuestionOptional):
     """A logged L1 MCQ mistake, replayable as a quiz question."""
     subject: str
     module: str
@@ -158,6 +164,7 @@ class QuizEngine:
                         question_id=qid,
                         options=[str(o) for o in options],
                         correct=str(correct),
+                        table=r.get("table"),
                     ),
                 ))
 
@@ -217,6 +224,11 @@ class QuizEngine:
         print(f"  Module: {label}")
         print(f"{'─' * 50}")
         print(f"\n  {item['question']}")
+        table = item.get("table")
+        if table:
+            for line in render_table(table, indent="  "):
+                print(line)
+            print()
         for i, opt in enumerate(options):
             print(f"    {labels[i]}. {opt}")
 

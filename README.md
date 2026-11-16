@@ -290,6 +290,33 @@ carries the score, and the quiz asks you about the modules you are weak in:
 Nothing is tracked per topic: the topic list of a module is material to work through,
 not a queue of items, so the whole list is shown every time.
 
+### Questions that come with a table
+
+A question often refers to a small table. While logging a mistake the table is pasted
+**right below the question** — one line per row, the columns separated by tabs, and a
+blank line ends it. There is no extra question to answer: without a table the first
+blank line simply ends the block.
+
+```
+Question text [Module 2: Analyzing Income Statements] (blank to finish): Based on the table below, which ratio improved the most?
+  Paste the table below the question (blank line if there is none):
+	Year 1	Year 2
+	Days sales outstanding	85	76
+	Days of inventory on hand	136	129
+	Days payable outstanding	29	13
+
+  📊 Table:
+                               Year 1  Year 2
+    ─────────────────────────  ──────  ──────
+    Days sales outstanding         85      76
+    Days of inventory on hand     136     129
+    Days payable outstanding       29      13
+```
+
+The table is stored with the mistake and shown aligned again every time the question
+comes back in the quiz. The first column holds the row labels, so its header cell is
+empty (a leading tab); a column of numbers is right-aligned.
+
 ### Where the mistake log is summarized
 
 A logging session (`cfa-prep mistake -a`) covers a single subject and module and ends

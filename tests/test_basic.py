@@ -994,6 +994,7 @@ def test_mistake_session_summary():
         "Economics",                         # subject
         "Module 6: International Trade",     # module
         question,                            # question text
+        "",                                  # no table below the question
         options[0],                          # option A
         options[1],                          # option B
         options[2],                          # option C
@@ -1029,6 +1030,56 @@ def test_mistake_session_summary():
             print("  ✅ The session states how many mistakes were saved")
         finally:
             MistakeAnalyzer._prompt = staticmethod(original_prompt)  # pyright: ignore[reportPrivateUsage]
+            _ = os.environ.pop("CFA_PREP_HOME", None)
+
+
+def test_mistake_with_table():
+    """Test that a table can be attached to a mistake and is stored with it"""
+    import json
+    import tempfile
+
+    from cfa_prep.tables import parse_table, render_table
+
+    pasted = [
+        "\tYear 1\tYear 2",
+        "Days sales outstanding\t85\t76",
+        "Days of inventory on hand\t136\t129",
+        "Days payable outstanding\t29\t13",
+    ]
+    table = parse_table(pasted)
+    assert table is not None
+    assert table["header"] == ["", "Year 1", "Year 2"], table
+    assert len(table["rows"]) == 3, table
+    assert table["rows"][0] == ["Days sales outstanding", "85", "76"], table
+
+    lines = render_table(table, indent="  ")
+    assert len(lines) == 5, lines  # header + rule + three rows
+    assert lines[2].strip().startswith("Days sales outstanding"), lines
+    assert lines[2].strip().endswith("76"), lines
+
+    with tempfile.TemporaryDirectory() as tmp:
+        os.environ["CFA_PREP_HOME"] = tmp
+        try:
+            analyzer = MistakeAnalyzer()
+            _ = analyzer.add_mistake(
+                subject="Financial Statement Analysis",
+                question="Based on the table, which ratio improved the most?",
+                user_answer="Days payable outstanding",
+                correct_answer="Days sales outstanding",
+                explanation="",
+                module_name="Module 2: Analyzing Income Statements",
+                options=[
+                    "Days sales outstanding",
+                    "Days of inventory on hand",
+                    "Days payable outstanding",
+                ],
+                table=table,
+            )
+            records = json.loads(analyzer.data_file.read_text(encoding="utf-8"))["records"]
+            assert records[0]["table"]["header"] == ["", "Year 1", "Year 2"], records
+            assert len(records[0]["table"]["rows"]) == 3, records
+            print("  ✅ A table can be attached to a mistake")
+        finally:
             _ = os.environ.pop("CFA_PREP_HOME", None)
 
 
@@ -1353,6 +1404,7 @@ def run_all_tests():
         ("Question identity", test_question_identity),
         ("Mistake question id", test_mistake_question_id),
         ("Mistake session summary", test_mistake_session_summary),
+        ("Mistake with table", test_mistake_with_table),
         ("Mistake breakdown view", test_mistake_breakdown_view),
         ("Quiz stats file split", test_quiz_stats_file_split),
     ]

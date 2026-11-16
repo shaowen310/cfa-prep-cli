@@ -19,6 +19,7 @@ from .utils import (
     save_json,
 )
 from .curriculum import Curriculum
+from .tables import Table, parse_table, render_table, split_row
 
 QUESTION_PREFIX = "q:"   # identity derived from the question text
 
@@ -54,7 +55,12 @@ def _session_label(subject: str, module_name: str) -> str:
     return subject or module_name
 
 
-class MistakeRecord(TypedDict):
+class _MistakeRecordOptional(TypedDict, total=False):
+    """The optional part of a mistake record."""
+    table: Table | None
+
+
+class MistakeRecord(_MistakeRecordOptional):
     date: str
     level: str
     subject: str
@@ -118,6 +124,10 @@ class MistakeAnalyzer:
             if options:
                 for letter, opt in zip("ABC", options):
                     print(f"      {letter}. {opt}")
+            table = r.get("table")
+            if table:
+                for row in render_table(table, indent="      "):
+                    print(row)
             if r.get("correct_answer"):
                 print(f"      ✅ Correct: {r['correct_answer']}")
             if r.get("date"):
@@ -136,6 +146,7 @@ class MistakeAnalyzer:
         level: str = "L1",
         options: list[str] | None = None,
         existing_question_id: str = "",
+        table: Table | None = None,
     ) -> str:
         """
         Add a mistake record to mistakes.json.
@@ -152,6 +163,7 @@ class MistakeAnalyzer:
             existing_question_id: id of an already known question (e.g. when a
                 record is re-logged); when empty it is derived from the question
                 text and options
+            table: the table the question refers to (optional)
 
         Returns:
             the path of the mistakes file
@@ -168,7 +180,7 @@ class MistakeAnalyzer:
         qid = existing_question_id.strip()
         if not qid and question.strip():
             qid = question_id(question, options or [])
-        records.append(MistakeRecord(
+        record = MistakeRecord(
             date=today_str(),
             level=level,
             subject=subject,
@@ -179,7 +191,10 @@ class MistakeAnalyzer:
             user_answer=user_answer,
             correct_answer=correct_answer,
             explanation=explanation,
-        ))
+        )
+        if table:
+            record["table"] = table
+        records.append(record)
         self._save(records)
         return str(self.data_file)
 
@@ -194,6 +209,39 @@ class MistakeAnalyzer:
         except (KeyboardInterrupt, EOFError):
             print()
             raise
+
+    def _read_table(self) -> Table | None:
+        """
+        Read the table that follows the question.
+
+        The table is pasted right below the question: one line per row, the
+        columns separated by tabs (or by two or more spaces).  The first line is
+        the header, a blank line ends the table.  A question without a table
+        ends the block right away, so there is nothing extra to answer.
+
+        A block that is not a table (no second column) is ignored.
+        """
+        print("  Paste the table below the question (blank line if there is none):")
+        lines: list[str] = []
+        while True:
+            line = self._prompt("")
+            if not line.strip():
+                break
+            lines.append(line)
+        if not lines:
+            return None
+        if len(split_row(lines[0])) < 2:
+            # Not a table: a question has more than one column
+            print("  (ignored — a table needs at least two columns)")
+            return None
+        table = parse_table(lines)
+        if table is None:
+            return None
+        print("\n  📊 Table:")
+        for row in render_table(table, indent="    "):
+            print(row)
+        print()
+        return table
 
     def add_mistake_interactive(
         self, curriculum: Curriculum | None = None, level: str = "L1"
@@ -291,6 +339,7 @@ class MistakeAnalyzer:
             print("\n  (Enter \\b on any field to go back and edit the previous one)")
         module_label = f" [{module_name}]" if module_name else ""
         data: dict[str, str] = {}
+        table: Table | None = None
 
         fields: list[tuple[str, str, bool]] = [
             # (key, prompt, uppercase?)
@@ -328,6 +377,8 @@ class MistakeAnalyzer:
                         return "skipped"
                 data["question"] = raw
                 i += 1
+                # A question may refer to a table: it is pasted right below
+                table = self._read_table()
                 continue
 
             data[key] = raw.upper() if upper else raw
@@ -354,6 +405,7 @@ class MistakeAnalyzer:
             explanation=explanation,
             module_name=module_name,
             level=level,
+            table=table,
         )
         print(f"\n✅ Mistake saved to: {filepath}")
         return "saved"
@@ -395,6 +447,9 @@ class MistakeAnalyzer:
                 break
             print("  ⏭️ Skipped — already logged. Enter a different question.")
 
+        # 1b. The table the question refers to, pasted right below it
+        table = self._read_table()
+
         # 2. Remaining single-line fields, with \b back navigation
         i = 0
         while i < len(fields):
@@ -425,6 +480,7 @@ class MistakeAnalyzer:
             explanation=data["explanation"],
             module_name=module_name,
             level=level,
+            table=table,
         )
         print(f"\n✅ Mistake saved to: {filepath}")
         return True
