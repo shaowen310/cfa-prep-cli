@@ -594,6 +594,13 @@ class MistakeAnalyzer:
         order, each with the number of questions it holds; every question of the
         chosen module is then shown in full.
         """
+        try:
+            self._browse_mistakes()
+        except (KeyboardInterrupt, EOFError):
+            print("\n  (cancelled)")
+
+    def _browse_mistakes(self) -> None:
+        """The picker of browse_mistakes, separated so Ctrl+C can be caught."""
         groups = self._mistake_groups()
         if not groups:
             print("\n  No mistakes logged yet.")

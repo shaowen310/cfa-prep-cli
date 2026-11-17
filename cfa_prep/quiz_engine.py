@@ -439,6 +439,10 @@ class QuizEngine:
                 self._do_l3_quiz()
             else:
                 print(f"❌ Unsupported level: {level}, please use L1/L2/L3")
+        except KeyboardInterrupt:
+            # Ctrl+C ends the quiz, but the answers given so far still count
+            print("\n👋 Quiz exited")
+            self._show_quiz_summary(level)
         finally:
             self.stats.flush()
 

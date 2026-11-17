@@ -7,6 +7,7 @@ Purpose: Provide a command-line interface that orchestrates all submodule functi
 
 import argparse
 import json
+import sys
 from pathlib import Path
 from typing import Protocol, cast
 
@@ -650,7 +651,12 @@ Data root (default ~/.cfa-prep) can be set via:
     }
 
     if args.command in commands:
-        commands[args.command](args)
+        try:
+            commands[args.command](args)
+        except KeyboardInterrupt:
+            # Ctrl+C anywhere ends the command without a traceback
+            print("\n👋 Cancelled.")
+            sys.exit(130)
     else:
         parser.print_help()
 

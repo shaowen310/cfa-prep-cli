@@ -1155,6 +1155,48 @@ def test_mistake_browse():
             _ = os.environ.pop("CFA_PREP_HOME", None)
 
 
+def test_ctrl_c_exits_gracefully():
+    """Test that Ctrl+C ends a command without a traceback"""
+    import io
+    import tempfile
+    from contextlib import redirect_stdout
+
+    from cfa_prep.mistake_analyzer import MistakeAnalyzer
+
+    with tempfile.TemporaryDirectory() as tmp:
+        os.environ["CFA_PREP_HOME"] = tmp
+        try:
+            analyzer = MistakeAnalyzer()
+            _ = analyzer.add_mistake(
+                subject="Economics",
+                question="Which trade restriction costs the importing country most?",
+                user_answer="A tariff",
+                correct_answer="An import quota",
+                explanation="",
+                module_name="Module 6: International Trade",
+                options=["An import quota", "A tariff", "A voluntary export restraint"],
+            )
+
+            def interrupted(prompt: str = "") -> str:
+                del prompt
+                raise KeyboardInterrupt
+
+            original_prompt = MistakeAnalyzer._prompt  # pyright: ignore[reportPrivateUsage]
+            MistakeAnalyzer._prompt = staticmethod(interrupted)  # pyright: ignore[reportPrivateUsage]
+            try:
+                buffer = io.StringIO()
+                with redirect_stdout(buffer):
+                    analyzer.browse_mistakes()
+            finally:
+                MistakeAnalyzer._prompt = staticmethod(original_prompt)  # pyright: ignore[reportPrivateUsage]
+            output = buffer.getvalue()
+            assert "Traceback" not in output, output
+            assert "(cancelled)" in output, output
+            print("  ✅ Ctrl+C ends the command without a traceback")
+        finally:
+            _ = os.environ.pop("CFA_PREP_HOME", None)
+
+
 def test_mistake_breakdown_view():
     """Test that `cfa-prep mis` shows the mistake log by subject and module, in curriculum order"""
     import io
@@ -1477,6 +1519,7 @@ def run_all_tests():
         ("Mistake question id", test_mistake_question_id),
         ("Mistake session summary", test_mistake_session_summary),
         ("Mistake browse", test_mistake_browse),
+        ("Ctrl+C exits gracefully", test_ctrl_c_exits_gracefully),
         ("Mistake with table", test_mistake_with_table),
         ("Mistake breakdown view", test_mistake_breakdown_view),
         ("Quiz stats file split", test_quiz_stats_file_split),
