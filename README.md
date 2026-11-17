@@ -532,7 +532,18 @@ cfa-prep-cli/
 │   ├── baii_calculator.py       # BA II Plus financial calculator emulator
 │   └── utils.py                 # General utility functions (incl. data-root resolution)
 └── tests/
-    └── test_basic.py            # Basic tests
+    ├── run_all.py               # Standalone runner (works without pytest)
+    ├── test_utils.py            # Data root, fuzzy match, context, keywords
+    ├── test_config.py           # Settings and the data root (home.env)
+    ├── test_curriculum.py       # Curriculum seed/load and normalization
+    ├── test_mistake_analyzer.py # Mistake log, browsing, Ctrl+C, tables
+    ├── test_quiz.py             # Quiz engine, replay, stats
+    ├── test_search.py           # Unified search
+    ├── test_flashcard.py        # Flashcards and review
+    ├── test_progress.py         # Progress tracker
+    ├── test_ips_builder.py      # IPS template builder
+    ├── test_baii_calculator.py  # BA II Plus emulator
+    └── test_tables.py           # Table parsing and aligned rendering
 ```
 
 ### Data Root Layout
@@ -573,11 +584,20 @@ pytest
 Pytest discovers tests in `tests/` (configured via `[tool.pytest.ini_options]`
 in `pyproject.toml`, including the project-root `pythonpath` so imports resolve).
 This is also what the VS Code Python Test Explorer uses to discover and run the
-tests. Alternatively, run the standalone script:
+tests.
+
+The suite is split by module: one test file per source module
+(`test_mistake_analyzer.py`, `test_quiz.py`, `test_tables.py`, ...), so a failure
+points straight at the module it comes from.
+
+If you prefer to run the tests without pytest, use the standalone runner:
 
 ```bash
-python -m tests.test_basic
+python tests/run_all.py
 ```
+
+It walks every `tests/test_*.py` file, runs each `test_*` function and prints a
+summary line (`Test results: N passed / M failed / T total`).
 
 ## Tech Stack
 
