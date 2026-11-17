@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 CFA Prep CLI - BA II Plus Financial Calculator emulator
 Author: CodeBuddy AI Assistant
@@ -10,7 +9,7 @@ from __future__ import annotations
 
 import ast
 import math
-from typing import Callable
+from collections.abc import Callable
 
 NPV_TOL = 1e-6
 

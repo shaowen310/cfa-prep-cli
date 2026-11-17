@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 CFA Prep CLI - Mistake analyzer module
 Author: CodeBuddy AI Assistant
@@ -9,17 +8,17 @@ Purpose: Log and analyze mistakes, stored as JSON at <data_root>/mistakes/mistak
 from pathlib import Path
 from typing import TypedDict, cast
 
+from .curriculum import Curriculum
+from .tables import Table, parse_table, render_table, split_row
 from .utils import (
     get_data_dir,
     hash_text,
+    load_json,
     normalize_text,
     print_section,
-    today_str,
-    load_json,
     save_json,
+    today_str,
 )
-from .curriculum import Curriculum
-from .tables import Table, parse_table, render_table, split_row
 
 QUESTION_PREFIX = "q:"   # identity derived from the question text
 
@@ -370,11 +369,10 @@ class MistakeAnalyzer:
             if key == "question":
                 if not raw:
                     return "finished"
-                if raw != data.get("question"):
+                if raw != data.get("question") and not self._confirm_duplicate(raw):
                     # Re-enter duplicate check whenever the question text changes
-                    if not self._confirm_duplicate(raw):
-                        print("  ⏭️ Skipped — already logged.")
-                        return "skipped"
+                    print("  ⏭️ Skipped — already logged.")
+                    return "skipped"
                 data["question"] = raw
                 i += 1
                 # A question may refer to a table: it is pasted right below

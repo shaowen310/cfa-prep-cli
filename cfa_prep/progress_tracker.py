@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 CFA Prep CLI - Progress tracking module
 Author: CodeBuddy AI Assistant
@@ -12,13 +11,13 @@ import re
 from pathlib import Path
 from typing import TypedDict, cast
 
+from .curriculum import Curriculum
 from .utils import (
     get_data_dir,
     load_json,
     save_json,
     today_iso,
 )
-from .curriculum import Curriculum
 
 
 class ProgressData(TypedDict):
@@ -197,8 +196,8 @@ class ProgressTracker:
         """
         if total <= 0:
             return ""
-        pct = int(round(done / total * 100))
-        filled = int(round(width * done / total))
+        pct = round(done / total * 100)
+        filled = round(width * done / total)
         bar = "█" * filled + "░" * (width - filled)
         return f"  {bar} {pct}%"
 
@@ -272,7 +271,7 @@ class ProgressTracker:
                     print(f"        ⤷ {module} (0/{module_total})")
 
         if unparsed:
-            print(f"    📝 Not in curriculum:")
+            print("    📝 Not in curriculum:")
             for entry in sorted(unparsed):
                 print(f"        • {cls._label_to_topic(entry)}")
 
@@ -299,7 +298,7 @@ class ProgressTracker:
                     print(f"            • {topic}")
 
         if unparsed:
-            print(f"    📝 Uncategorized:")
+            print("    📝 Uncategorized:")
             for entry in unparsed:
                 print(f"        • {cls._label_to_topic(entry)}")
 
@@ -408,7 +407,7 @@ class ProgressTracker:
                 continue
 
             print(f"\n     📁 {module} ({len(topics)} topics)")
-            print(f"       Add all? [y]es / [n]o (pick individually) / [s]kip")
+            print("       Add all? [y]es / [n]o (pick individually) / [s]kip")
             choice = input("     > ").strip().lower()
 
             if choice == "s" or choice == "skip":
@@ -416,7 +415,7 @@ class ProgressTracker:
 
             if choice == "n" or choice == "no":
                 # Show individual topics to pick
-                print(f"       Pick topic(s) (space-separated numbers, or 'all'):")
+                print("       Pick topic(s) (space-separated numbers, or 'all'):")
                 for i, t in enumerate(topics, 1):
                     print(f"         [{i}] {t}")
                 pick = input("       > ").strip().lower()
@@ -473,7 +472,7 @@ class ProgressTracker:
             return [resolved]
 
         # 3. No match; reject
-        print(f"     ❌ Not in curriculum — skipped.")
+        print("     ❌ Not in curriculum — skipped.")
         return []
 
     def remove_interactive(self) -> None:

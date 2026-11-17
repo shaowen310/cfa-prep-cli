@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 CFA Prep CLI - IPS builder module
 Author: CodeBuddy AI Assistant
@@ -12,7 +11,6 @@ from .utils import (
     get_data_dir,
     write_file_text,
 )
-
 
 # Personal IPS template content
 IPS_PERSONAL_TEMPLATE = """# Individual Investment Policy Statement (Individual IPS)

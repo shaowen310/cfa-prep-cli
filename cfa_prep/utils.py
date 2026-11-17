@@ -1,16 +1,15 @@
-# -*- coding: utf-8 -*-
 """
 CFA Prep CLI - General utility functions
 Author: CodeBuddy AI Assistant
 Purpose: Provide project-level utility functions, including path management, file I/O, and formatted output.
 """
 
-import os
-import json
 import hashlib
+import json
+import os
 import re
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
 from typing import cast
 
 HASH_LENGTH = 16  # number of hex characters kept from a hash
@@ -153,12 +152,12 @@ def save_settings(settings: dict[str, object]) -> None:
 
 def today_str() -> str:
     """Return today's date string YYYYMMDD"""
-    return datetime.now().strftime("%Y%m%d")
+    return datetime.now().astimezone().strftime("%Y%m%d")
 
 
 def today_iso() -> str:
     """Return today's date string YYYY-MM-DD"""
-    return datetime.now().strftime("%Y-%m-%d")
+    return datetime.now().astimezone().strftime("%Y-%m-%d")
 
 
 def fuzzy_match(pattern: str, text: str) -> bool:

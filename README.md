@@ -14,7 +14,7 @@ CFA Prep CLI is a pure-Python command-line CFA study assistant covering all prep
 | **Smart Quiz**      | L1 module review / L2 vignette / L3 scenario analysis, with mistake-priority questions |
 | **Mistake Analysis** | Logs mistakes (MCQ or free-form), tracks subjects and modules, generates review suggestions |
 | **Progress Tracking** | Maintains a study progress file, tracks mastered and fuzzy knowledge points |
-| **Flashcards** | Manually add Q&A flashcards, selecting the subject/module from the curriculum |
+| **Flashcards** | Manually add Q&A flashcards, selecting the subject/module from the curriculum, optionally with an image (a diagram or a chart) |
 | **IPS Templates**    | L3 personal and institutional IPS templates with full frameworks |
 
 ## Quick Start
@@ -445,6 +445,36 @@ cfa-prep flashcard -a    # or: cfa-prep flashcard -a
 Cards are stored at `<data_root>/flashcards/flashcards.json`. You can add several cards
 in one session — after saving one, the subject/module picker is shown again.
 
+### Flashcards with an image
+
+A card can carry a **picture** (a diagram, a chart, a formula sheet). After the answer you
+are asked for an image path and a caption:
+
+```
+Answer: Spot rates by maturity
+Image path (blank for none): C:\Users\you\Pictures\curve.png
+Caption (blank for none): Spot vs forward curve
+  📷 Image attached: images/e3865f2a9bbd8fdc.png
+```
+
+- The path may be **pasted** (Windows Terminal puts it in quotes — the quotes are removed).
+- The file is **copied** into `<data_root>/flashcards/images/` under a content-hash name,
+  so the card keeps working when the data root moves. Only the relative path is stored.
+- PNG, JPG, JPEG, WEBP and BMP are accepted (max 10 MB).
+- The picture belongs to the **question**, so it is listed before the answer is revealed.
+
+The picture is **never redrawn in the terminal** — a drawing of a diagram is not
+reliable enough to study from (the labels inside it become unreadable). The card only
+shows where the file is, and the picture itself is opened in the **image viewer of the system**:
+
+```
+  📷 1 image(s) attached
+
+     📁 C:\Users\you\.cfa-prep\flashcards\images\e3865f2a9bbd8fdc.png
+     🖼️  Spot vs forward curve
+     (press 'o' to open it in the image viewer)
+```
+
 ### Reviewing flashcards
 
 Review the cards you've saved — see each question, reveal the answer, or skip to the
@@ -462,6 +492,11 @@ You can optionally filter by **subject** (blank reviews all). For each card:
 - `[n]` skips to the next card without revealing the answer
 - `[b]` goes back to the previous card
 - `[q]` quits the review
+
+For a card **with an image** these keys are added:
+
+- `[o]` opens the picture in the image viewer of the system (the only way to see it)
+- `[s]` prints the path of the picture (for `code <path>` or copying it)
 
 ## BA II Plus Calculator
 
@@ -527,6 +562,7 @@ cfa-prep-cli/
 │   ├── mistake_analyzer.py      # Mistake analyzer
 │   ├── progress_tracker.py      # Progress tracking
 │   ├── flashcard_generator.py   # Manual flashcard management
+│   ├── images.py                # Image attachment: copy the picture into the data root, open it in the viewer
 │   ├── ips_builder.py           # IPS template building
 │   ├── curriculum.py            # Curriculum module (subjects + topics per level)
 │   ├── baii_calculator.py       # BA II Plus financial calculator emulator
@@ -540,6 +576,7 @@ cfa-prep-cli/
     ├── test_quiz.py             # Quiz engine, replay, stats
     ├── test_search.py           # Unified search
     ├── test_flashcard.py        # Flashcards and review
+    ├── test_images.py           # Image attachment: copying the picture, cleaning a path, opening the viewer
     ├── test_progress.py         # Progress tracker
     ├── test_ips_builder.py      # IPS template builder
     ├── test_baii_calculator.py  # BA II Plus emulator
@@ -553,7 +590,7 @@ Every folder belongs to one command:
 
 | Folder | Command | Content |
 | --- | --- | --- |
-| `flashcards/` | `cfa-prep flashcard` | `flashcards.json` (manually added) |
+| `flashcards/` | `cfa-prep flashcard` | `flashcards.json` (manually added), `images/` (the pictures of the cards) |
 | `mistakes/` | `cfa-prep mistake` | `mistakes.json` (auto-generated) |
 | `curriculum/` | `cfa-prep curriculum` | `curriculum.json` (subjects, modules, topics) |
 | `progress/` | `cfa-prep recap` / `cfa-prep stats` | `progress.json`, `quiz_stats.json`, `quiz_sessions.json` |
@@ -565,6 +602,7 @@ Every folder belongs to one command:
 ├── mistakes/                 # Mistake log (auto-generated)
 ├── progress/                 # Progress files (progress.json, quiz_stats.json, quiz_sessions.json — auto-generated)
 ├── flashcards/               # Flashcards (flashcards.json, manually added)
+│   └── images/               # The pictures of the flashcards (manually added)
 ├── curriculum/               # Curriculum (curriculum.json)
 ├── templates/                # IPS templates
 └── config/

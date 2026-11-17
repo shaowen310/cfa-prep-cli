@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 CFA Prep CLI - Manual flashcard module
 Author: CodeBuddy AI Assistant
@@ -7,16 +6,33 @@ Purpose: Manually add Q&A flashcards, optionally selecting the subject/module
 """
 
 from pathlib import Path
-from typing import cast
+from typing import TypedDict, cast
 
+from .curriculum import Curriculum
+from .images import attach_image, clean_pasted_path, image_lines, open_externally
 from .utils import (
     get_data_dir,
-    write_file_text,
-    today_str,
     load_json,
     save_json,
+    today_str,
+    write_file_text,
 )
-from .curriculum import Curriculum
+
+
+class _FlashcardOptional(TypedDict, total=False):
+    """The optional part of a flashcard: its picture and the caption of it."""
+    images: list[str]        # relative to the flashcards folder
+    image_caption: str
+
+
+class Flashcard(_FlashcardOptional):
+    """One flashcard: the fields that every card holds are the required ones."""
+    date: str
+    level: str
+    subject: str
+    module: str
+    question: str
+    answer: str
 
 
 class FlashcardGenerator:
@@ -28,20 +44,21 @@ class FlashcardGenerator:
     def __init__(self):
         self.flashcards_dir: Path = get_data_dir("flashcards")
         self.manual_file: Path = self.flashcards_dir / "flashcards.json"
+        self.images_dir: Path = self.flashcards_dir / "images"
         self.curriculum: Curriculum = Curriculum()
 
     # --- manual flashcards ------------------------------------------------
 
-    def _load_manual(self) -> list[dict[str, str]]:
+    def _load_manual(self) -> list[Flashcard]:
         """Load the manually-added flashcards."""
         data = load_json(self.manual_file)
-        return cast(list[dict[str, str]], data.get("cards", []))
+        return cast(list[Flashcard], data.get("cards", []))
 
-    def list_manual_cards(self) -> list[dict[str, str]]:
+    def list_manual_cards(self) -> list[Flashcard]:
         """Return the manually-added flashcards, as stored."""
         return self._load_manual()
 
-    def _save_manual(self, cards: list[dict[str, str]]) -> None:
+    def _save_manual(self, cards: list[Flashcard]) -> None:
         """Save the manually-added flashcards."""
         save_json(self.manual_file, {"cards": cards})
 
@@ -52,6 +69,8 @@ class FlashcardGenerator:
         level: str = "L1",
         subject: str = "",
         module: str = "",
+        images: list[str] | None = None,
+        image_caption: str = "",
     ) -> str:
         """
         Add a manually-created flashcard and persist it to flashcards.json.
@@ -62,19 +81,27 @@ class FlashcardGenerator:
             level: exam level (L1/L2/L3)
             subject: subject from the curriculum (optional)
             module: module within the subject (optional)
+            images: the images of the card, relative to the flashcards folder
+                (for example "images/9f2c1a7b.png") (optional)
+            image_caption: the caption shown under the images (optional)
 
         Returns:
             the path of the manual flashcard file
         """
         cards = self._load_manual()
-        cards.append({
+        card: Flashcard = {
             "date": today_str(),
             "level": level,
             "subject": subject,
             "module": module,
             "question": question,
             "answer": answer,
-        })
+        }
+        if images:
+            card["images"] = images
+        if image_caption:
+            card["image_caption"] = image_caption
+        cards.append(card)
         self._save_manual(cards)
         return str(self.manual_file)
 
@@ -86,7 +113,7 @@ class FlashcardGenerator:
         if not cards:
             return ""
         out_path = self.flashcards_dir / f"{today_str()}_manual_flashcards.md"
-        lines = [f"# Manual CFA Flashcards\n", f"> Generated: {today_str()}\n\n"]
+        lines = ["# Manual CFA Flashcards\n", f"> Generated: {today_str()}\n\n"]
         for i, card in enumerate(cards, 1):
             location = " / ".join(
                 part for part in (card.get("subject", ""), card.get("module", "")) if part
@@ -94,6 +121,9 @@ class FlashcardGenerator:
             lines.append(f"## Flashcard {i}\n")
             lines.append(f"**Q**: {card['question']}\n\n")
             lines.append(f"**A**: {card['answer']}\n\n")
+            for relative in card.get("images", []):
+                caption = card.get("image_caption", "")
+                lines.append(f"![{caption}]({relative})\n\n")
             if location:
                 lines.append(f"*Location: {location}*\n\n")
             lines.append("---\n\n")
@@ -108,6 +138,27 @@ class FlashcardGenerator:
         except (KeyboardInterrupt, EOFError):
             print()
             raise
+
+    def _read_image(self) -> tuple[list[str], str]:
+        """
+        Ask for an image to attach to the card.
+
+        The path may be pasted (Windows Terminal puts it in quotes) and the file
+        is copied into the images folder of the data root, so the card keeps
+        working when the data root moves.
+        """
+        raw = self._prompt("Image path (blank for none): ").strip()
+        if not raw:
+            return [], ""
+        source = Path(clean_pasted_path(raw)).expanduser()
+        try:
+            relative = attach_image(source, self.images_dir)
+        except ValueError as exc:
+            print(f"  ❌ {exc}")
+            return [], ""
+        caption = self._prompt("Caption (blank for none): ").strip()
+        print(f"  📷 Image attached: {relative}")
+        return [relative], caption
 
     def _pick_subject_and_module(
         self, level: str = "L1"
@@ -178,12 +229,17 @@ class FlashcardGenerator:
                     print("  ❌ Answer cannot be empty — skipping this card.")
                     continue
 
+                # An image (a diagram, a chart) may belong to the card
+                images, caption = self._read_image()
+
                 filepath = self.add_manual(
                     question=question,
                     answer=answer,
                     level=level,
                     subject=subject,
                     module=module,
+                    images=images,
+                    image_caption=caption,
                 )
                 added += 1
                 print(f"  ✅ Saved to: {filepath}\n")
@@ -244,7 +300,11 @@ class FlashcardGenerator:
                 cards = filtered
 
             total = len(cards)
-            print(f"\n  {total} flashcard(s). [Enter] to reveal answer, [n] next, [q] quit.\n")
+            if any(card.get("images") for card in cards):
+                keys = "[Enter] reveal answer, [o] open image, [s] path, [n] next, [q] quit"
+            else:
+                keys = "[Enter] reveal answer, [n] next, [q] quit"
+            print(f"\n  {total} flashcard(s). {keys}.\n")
 
             i = 0
             while i < total:
@@ -254,7 +314,38 @@ class FlashcardGenerator:
                 )
                 print(f"{'─' * 50}")
                 print(f"  [{i + 1}/{total}] Q: {card['question']}\n")
-                action = self._prompt("  [Enter] reveal answer, [n] next, [q] quit: ").strip().lower()
+
+                # The images of the card belong to the question, so they are
+                # shown before the answer is revealed.  The picture itself is
+                # opened in the image viewer of the system.
+                images = list(card.get("images") or [])
+                caption = card.get("image_caption", "")
+                if images:
+                    print(f"  📷 {len(images)} image(s) attached\n")
+                    for relative in images:
+                        for line in image_lines(self.flashcards_dir / relative, caption):
+                            print(line)
+
+                # The image keys keep the card on the screen, so the header is
+                # not printed again after them.
+                while True:
+                    action = self._prompt(
+                        "  [Enter] reveal answer, [o] open image, [s] path, [n] next, [q] quit: "
+                    ).strip().lower()
+
+                    if action == "o":
+                        for relative in images:
+                            target = self.flashcards_dir / relative
+                            if open_externally(target):
+                                print(f"  🖼️  Opened: {target}")
+                            else:
+                                print(f"  ❌ Could not open: {target}")
+                        continue
+                    if action == "s":
+                        for relative in images:
+                            print(f"  📁 {self.flashcards_dir / relative}")
+                        continue
+                    break
 
                 if action == "q":
                     break

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 CFA Prep CLI - Unified search module
 Author: CodeBuddy AI Assistant
@@ -148,9 +147,11 @@ def _search_flashcards(
         subject = card.get("subject", "")
         module = card.get("module", "")
         location = f"{subject} > {module}" if subject and module else (subject or module)
+        # A card with an image is marked, so a hit on a diagram is noticed
+        title = f"{question}  📷" if card.get("images") else question
         hits.append({
             "source": SOURCE_FLASHCARD,
-            "title": question,
+            "title": title,
             "location": location,
             "snippet": _snippet(text, keyword, use_regex),
         })

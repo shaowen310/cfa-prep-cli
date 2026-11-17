@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 CFA Prep CLI - Quiz engine module
 Author: CodeBuddy AI Assistant
@@ -10,9 +9,6 @@ Purpose: Provide quiz modes for the three CFA exam levels (L1/L2/L3),
 import random
 from typing import TypedDict
 
-from .mistake_analyzer import MistakeAnalyzer
-from .progress_tracker import ProgressTracker
-from .tables import Table, render_table
 from .curriculum import (
     Curriculum,
     module_group,
@@ -20,6 +16,8 @@ from .curriculum import (
     subject_of,
     topic_of,
 )
+from .mistake_analyzer import MistakeAnalyzer
+from .progress_tracker import ProgressTracker
 from .quiz_stats import (
     RESULT_CORRECT,
     RESULT_SKIPPED,
@@ -28,6 +26,7 @@ from .quiz_stats import (
     QuizStats,
     describe,
 )
+from .tables import Table, render_table
 
 BOOST_AMOUNT = 1.5    # extra priority for topics in the mistake/fuzzy lists
 
@@ -217,7 +216,7 @@ class QuizEngine:
         valid_answers = ("A", "B", "C")
 
         print(f"{'─' * 50}")
-        print(f"  🔁 Mistake review")
+        print("  🔁 Mistake review")
         subject = item.get("subject", "")
         module = item.get("module", "")
         label = f"{subject} > {module}" if subject and module else subject or "Mistake"
@@ -509,7 +508,7 @@ class QuizEngine:
         print(f"📋 Format: {quiz['format']}")
         print("\nPlease read the following case scenario (get the full vignette from the official curriculum):")
         print(f"  Topic: {quiz['vignette_topic']}")
-        print(f"  Sub-questions:")
+        print("  Sub-questions:")
         for i, q in enumerate(quiz["sub_questions"], 1):
             print(f"    {i}. {q}")
 
@@ -523,7 +522,7 @@ class QuizEngine:
             if read_input("Press Enter for the next sub-question ('q' quits): ").strip().upper() == "Q":
                 print("👋 Quiz exited")
                 break
-            print(f"  💡 Check against the standard answer; log mistakes with 'mistake -a'.")
+            print("  💡 Check against the standard answer; log mistakes with 'mistake -a'.")
 
         self._show_quiz_summary(level)
 
@@ -533,7 +532,7 @@ class QuizEngine:
         print(f"\n📋 Scenario type: {quiz['scenario']}")
         print(f"📋 Format: {quiz['format']}")
         print(f"📋 {quiz['instructions']}")
-        print(f"\nWrite your analysis below (enter a blank line to finish):\n")
+        print("\nWrite your analysis below (enter a blank line to finish):\n")
 
         lines = []
         while True:
@@ -559,7 +558,7 @@ class QuizEngine:
         """
         # Provide direction hints for the question
         print(f"\n  📖 Please select a question related to「{topic}」from the question bank for practice.")
-        print(f"  We recommend using end-of-chapter questions from the official curriculum or QBank questions on this topic.")
+        print("  We recommend using end-of-chapter questions from the official curriculum or QBank questions on this topic.")
 
     def _show_quiz_summary(self, level: str = "L1") -> None:
         """Show the quiz summary, persist the session and report the statistics."""
@@ -570,7 +569,7 @@ class QuizEngine:
         accuracy = (self.correct / self.total * 100) if self.total else 0.0
 
         print(f"\n{'=' * 50}")
-        print(f"  📊 Quiz Summary")
+        print("  📊 Quiz Summary")
         print(f"{'=' * 50}")
         print(f"  Level: {level}")
         print(f"  Questions completed: {self.total}")
@@ -587,7 +586,7 @@ class QuizEngine:
 
         weakest = self.stats.weakest_questions(limit=3)
         if weakest:
-            print(f"\n  🔁 Questions to review next (most wrong answers):")
+            print("\n  🔁 Questions to review next (most wrong answers):")
             for _key, stat in weakest:
                 print(
                     f"     • {describe(stat)}"
@@ -596,14 +595,14 @@ class QuizEngine:
 
         due = self.stats.due_questions(limit=3)
         if due:
-            print(f"\n  📅 Due for review:")
+            print("\n  📅 Due for review:")
             for _key, stat, overdue in due:
                 when = "overdue" if overdue > 0 else "due today"
                 print(f"     • {describe(stat)} ({when})")
 
-        print(f"  📝 For any mistakes, log them with the following command:")
-        print(f"     cfa-prep mistake -a")
-        print(f"  📊 View progress:")
-        print(f"     cfa-prep recap")
-        print(f"  📊 View quiz statistics:")
-        print(f"     cfa-prep stats")
+        print("  📝 For any mistakes, log them with the following command:")
+        print("     cfa-prep mistake -a")
+        print("  📊 View progress:")
+        print("     cfa-prep recap")
+        print("  📊 View quiz statistics:")
+        print("     cfa-prep stats")

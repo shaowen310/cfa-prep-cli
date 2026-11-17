@@ -21,12 +21,12 @@ from .quiz_engine import QuizEngine
 from .quiz_stats import QuizStats, describe, next_due_of
 from .search import SOURCE_ICONS, search_all
 from .utils import (
+    clean_keyword,
     get_data_dir,
     get_data_root,
     get_home_env_file,
     load_home_env,
     load_settings,
-    clean_keyword,
     print_header,
     print_section,
     save_settings,
@@ -487,7 +487,7 @@ def cmd_curriculum(args: CLIArgs) -> None:
             return
         try:
             curriculum.import_file(args.file)
-        except (FileNotFoundError, ValueError, json.JSONDecodeError) as e:
+        except (FileNotFoundError, TypeError, ValueError, json.JSONDecodeError) as e:
             print(f"\n❌ Import failed: {e}")
             return
         print(f"\n✅ Curriculum imported from: {args.file}")

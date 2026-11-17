@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 CFA Prep CLI - Curriculum module
 Author: CodeBuddy AI Assistant
@@ -15,7 +14,7 @@ import json
 from pathlib import Path
 from typing import cast
 
-from .utils import get_data_dir, load_json, save_json, fuzzy_match
+from .utils import fuzzy_match, get_data_dir, load_json, save_json
 
 
 def subject_of(label: str) -> str:
@@ -197,7 +196,7 @@ class Curriculum:
             raw = cast(object, json.load(f))
 
         if not isinstance(raw, dict):
-            raise ValueError("Curriculum file must be a JSON object mapping level -> subject -> topics")
+            raise TypeError("Curriculum file must be a JSON object mapping level -> subject -> topics")
 
         data = cast(dict[str, object], raw)
 
@@ -205,7 +204,7 @@ class Curriculum:
         cleaned: dict[str, dict[str, dict[str, list[str]]]] = {}
         for level, subjects_raw in data.items():
             if not isinstance(subjects_raw, dict):
-                raise ValueError(f"Level {level!r} must map to a dictionary of subjects")
+                raise TypeError(f"Level {level!r} must map to a dictionary of subjects")
             subjects = cast(dict[str, object], subjects_raw)
             level_key = str(level).upper()
             cleaned[level_key] = {}
@@ -234,7 +233,7 @@ class Curriculum:
             modules: dict[str, list[str]] = {}
             for module, items in modules_map.items():
                 if not isinstance(items, list):
-                    raise ValueError(
+                    raise TypeError(
                         f"Module {module!r} in {level_key} / {subject!r} must map to a list of topics"
                     )
                 module_topics = cast(list[object], items)
