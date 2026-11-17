@@ -547,14 +547,22 @@ class MistakeAnalyzer:
             groups.setdefault(subject, {}).setdefault(module, []).append(record)
         return groups
 
+    @staticmethod
+    def _option_letter(options: list[str], text: str) -> str:
+        """Return the letter of the option with that text, or the text itself."""
+        for letter, option in zip("ABC", options):
+            if option == text:
+                return letter
+        return text
+
     def print_mistake(self, record: MistakeRecord, show_wrong: bool = True) -> None:
         """
         Print one mistake with everything it holds: the question, its table, the
-        options with the wrong and the correct answer marked, and the
-        explanation.
+        options, the answer and the explanation.
 
-        With show_wrong=False only the correct answer is marked, so the browse
-        view does not point at the answer that was chosen before.
+        The answer is named on its own line ("Answer: B"), so the options stay
+        clean.  With show_wrong=False the answer that was chosen is left out,
+        so the browse view does not point at the old mistake.
         """
         rule = "─" * 60
         subject = record.get("subject", "")
@@ -570,20 +578,19 @@ class MistakeAnalyzer:
             for row in render_table(table, indent="  "):
                 print(row)
         options = record.get("options") or []
+        correct = record.get("correct_answer", "")
         if options:
             print()
             for letter, opt in zip("ABC", options):
-                marks = []
-                if show_wrong and opt == record.get("user_answer"):
-                    marks.append("your answer")
-                if opt == record.get("correct_answer"):
-                    marks.append("correct")
-                suffix = f"  ← {', '.join(marks)}" if marks else ""
-                print(f"    {letter}. {opt}{suffix}")
-        else:
+                print(f"    {letter}. {opt}")
+            print(f"\n    Answer: {self._option_letter(options, correct)}")
             if show_wrong:
-                print(f"\n    Your answer: {record.get('user_answer', '')}")
-            print(f"    Correct answer: {record.get('correct_answer', '')}")
+                wrong = record.get("user_answer", "")
+                print(f"    Your answer: {self._option_letter(options, wrong)}")
+        else:
+            print(f"\n    Answer: {correct}")
+            if show_wrong:
+                print(f"    Your answer: {record.get('user_answer', '')}")
         if record.get("explanation"):
             print(f"\n  💡 {record['explanation']}")
         print(rule)

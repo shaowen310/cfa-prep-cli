@@ -322,7 +322,7 @@ empty (a leading tab); a column of numbers is right-aligned.
 
 `cfa-prep mistake -b` (alias `cfa-prep mis -b`) lets you pick the **subject and the
 module** and then shows every question of that module in full — the question, its
-table, the options with **the correct one marked**, and the explanation.
+table, the options, the **answer** (`Answer: B`) and the explanation.
 
 Only the subjects and modules that have questions are listed, in **curriculum order**,
 and each of them shows how many questions it holds:
@@ -349,8 +349,10 @@ and each of them shows how many questions it holds:
   The interest rate spread between 10-year treasury yields and overnight borrowing rates most likely
 
     A. is a lagging economic indicator
-    B. decreases when the market expects an economic downturn  ← correct
+    B. decreases when the market expects an economic downturn
     C. increases as the market expects future short-term interest rates to decrease
+
+    Answer: B
 
   💡 long-term yields express market expectations about the direction of short-term interest rates…
 ────────────────────────────────────────────────────────────
