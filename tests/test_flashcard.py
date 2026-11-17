@@ -14,6 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from cfa_prep.curriculum import Curriculum
 from cfa_prep.flashcard_generator import FlashcardGenerator
+from cfa_prep.tables import Table
 
 
 def test_flashcard_generator():
@@ -113,7 +114,7 @@ def test_flashcard_missing_image():
 
             old_stdin = sys.stdin
             try:
-                sys.stdin = io.StringIO("q\n")  # quit the review
+                sys.stdin = io.StringIO("\n\nq\n")  # all subjects, reveal, quit
                 buffer = io.StringIO()
                 with contextlib.redirect_stdout(buffer):
                     generator.view_flashcards("L1")
@@ -154,12 +155,13 @@ def test_flashcard_image_prompt():
             generator = FlashcardGenerator()
             old_stdin = sys.stdin
             try:
-                # subject, module, question, answer, image path, caption, end
+                # subject, module, question, answer, table, image path, caption, end
                 answers = [
                     "1",
                     "1",
                     "What is demand?",
                     "Desire backed by ability",
+                    "",
                     f'"{source}"',
                     "A demand curve",
                     "",
@@ -181,6 +183,105 @@ def test_flashcard_image_prompt():
             assert copied.is_file(), copied
             assert copied.read_bytes() == source.read_bytes()
             print("  ✅ An image is attached through the prompt")
+        finally:
+            _ = os.environ.pop("CFA_PREP_HOME", None)
+
+
+def test_flashcard_with_table():
+    """Test that a card can carry a table and that it is shown again"""
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as tmp:
+        os.environ["CFA_PREP_HOME"] = tmp
+        try:
+            generator = FlashcardGenerator()
+            table: Table = {
+                "header": ["", "Year 1", "Year 2"],
+                "rows": [["DSO", "85", "76"], ["DIO", "45", "38"]],
+            }
+            _ = generator.add_manual(
+                question="What happens to the working capital?",
+                answer="It falls, because the cash cycle shortens",
+                level="L1",
+                subject="Economics",
+                module="Module 1: Intro",
+                table=table,
+            )
+
+            cards = generator._load_manual()  # pyright: ignore[reportPrivateUsage]
+            assert len(cards) == 1
+            assert cards[0].get("table") == table, cards[0]
+
+            # The review shows the table again, aligned
+            import io
+            from contextlib import redirect_stdout
+
+            old_stdin = sys.stdin
+            try:
+                sys.stdin = io.StringIO("\n\nq\n")  # all subjects, reveal, quit
+                buffer = io.StringIO()
+                with redirect_stdout(buffer):
+                    generator.view_flashcards("L1")
+            finally:
+                sys.stdin = old_stdin
+            output = buffer.getvalue()
+            assert "DSO" in output, output
+            assert "Year 1" in output, output
+
+            # The markdown export holds the table
+            out = Path(generator.export_manual_markdown())
+            text = out.read_text(encoding="utf-8")
+            assert "| Year 1 | Year 2 |" in text, text
+            assert "| DSO | 85 | 76 |" in text, text
+            print("  ✅ A flashcard can carry a table")
+        finally:
+            _ = os.environ.pop("CFA_PREP_HOME", None)
+
+
+def test_flashcard_table_prompt():
+    """Test that a table is pasted below the question of a card"""
+    import io
+    import json
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as tmp:
+        os.environ["CFA_PREP_HOME"] = tmp
+        try:
+            # A small curriculum, so the subject and module can be picked
+            c = Curriculum()
+            cur = Path(tmp) / "cur.json"
+            _ = cur.write_text(
+                json.dumps({"L1": {"Economics": {"Module 1: Intro": ["Demand"]}}}),
+                encoding="utf-8",
+            )
+            c.import_file(str(cur))
+
+            generator = FlashcardGenerator()
+            old_stdin = sys.stdin
+            try:
+                # subject, module, question, answer, table lines, end
+                answers = [
+                    "1",
+                    "1",
+                    "What is the cash cycle?",
+                    "It shortens the cycle",
+                    "\tYear 1\tYear 2",
+                    "DSO\t85\t76",
+                    "",
+                    "",
+                ]
+                sys.stdin = io.StringIO("\n".join(answers) + "\n")
+                generator.manual_flashcard("L1")
+            finally:
+                sys.stdin = old_stdin
+
+            cards = generator._load_manual()  # pyright: ignore[reportPrivateUsage]
+            assert len(cards) == 1, cards
+            table = cards[0].get("table")
+            assert table is not None, cards[0]
+            assert table["header"] == ["", "Year 1", "Year 2"], table
+            assert table["rows"] == [["DSO", "85", "76"]], table
+            print("  ✅ A table is pasted below the question of a card")
         finally:
             _ = os.environ.pop("CFA_PREP_HOME", None)
 

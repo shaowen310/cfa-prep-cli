@@ -7,6 +7,7 @@ Purpose: Store and display the small data tables a question may refer to
 """
 
 import re
+from collections.abc import Callable
 from typing import TypedDict
 
 
@@ -98,9 +99,64 @@ def render_table(table: Table, indent: str = "  ", rule: str = "─") -> list[st
                 parts.append(cell.ljust(widths[index]))
         return (indent + "  ".join(parts)).rstrip()
 
-    lines = []
+    lines: list[str] = []
     if any(header):
         lines.append(format_row(header))
         lines.append(indent + "  ".join(rule * width for width in widths))
     lines.extend(format_row(row) for row in rows)
     return lines
+
+
+def read_table(
+    prompt: Callable[[str], str],
+    message: str = "  Paste the table below the question (blank line if there is none):",
+) -> Table | None:
+    """
+    Read a table that is pasted below a question.
+
+    The table is pasted right below the question: one line per row, the
+    columns separated by tabs (or by two or more spaces).  The first line is
+    the header, a blank line ends the table.  A question without a table ends
+    the block right away, so there is nothing extra to answer.
+
+    A block that is not a table (no second column) is ignored.
+    """
+    print(message)
+    lines: list[str] = []
+    while True:
+        line = prompt("")
+        if not line.strip():
+            break
+        lines.append(line)
+    if not lines:
+        return None
+    if len(split_row(lines[0])) < 2:
+        # Not a table: a question has more than one column
+        print("  (ignored — a table needs at least two columns)")
+        return None
+    table = parse_table(lines)
+    if table is None:
+        return None
+    print("\n  📊 Table:")
+    for row in render_table(table, indent="    "):
+        print(row)
+    print()
+    return table
+
+
+def render_markdown_table(table: Table) -> str:
+    """Return the table as a Markdown table."""
+    header = [cell.strip() for cell in table.get("header", [])]
+    rows = [[cell.strip() for cell in row] for row in table.get("rows", [])]
+    if not header and not rows:
+        return ""
+    columns = max([len(header)] + [len(row) for row in rows])
+    header = header + [""] * (columns - len(header))
+    rows = [row + [""] * (columns - len(row)) for row in rows]
+
+    lines = [
+        "| " + " | ".join(header) + " |",
+        "| " + " | ".join("---" for _ in range(columns)) + " |",
+    ]
+    lines.extend("| " + " | ".join(row) + " |" for row in rows)
+    return "\n".join(lines)

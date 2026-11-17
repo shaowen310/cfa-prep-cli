@@ -10,6 +10,7 @@ from typing import TypedDict, cast
 
 from .curriculum import Curriculum
 from .images import attach_image, clean_pasted_path, image_lines, open_externally
+from .tables import Table, read_table, render_markdown_table, render_table
 from .utils import (
     get_data_dir,
     load_json,
@@ -20,9 +21,10 @@ from .utils import (
 
 
 class _FlashcardOptional(TypedDict, total=False):
-    """The optional part of a flashcard: its picture and the caption of it."""
+    """The optional part of a flashcard: its picture, the caption and its table."""
     images: list[str]        # relative to the flashcards folder
     image_caption: str
+    table: Table | None      # the table the question refers to
 
 
 class Flashcard(_FlashcardOptional):
@@ -71,6 +73,7 @@ class FlashcardGenerator:
         module: str = "",
         images: list[str] | None = None,
         image_caption: str = "",
+        table: Table | None = None,
     ) -> str:
         """
         Add a manually-created flashcard and persist it to flashcards.json.
@@ -84,6 +87,7 @@ class FlashcardGenerator:
             images: the images of the card, relative to the flashcards folder
                 (for example "images/9f2c1a7b.png") (optional)
             image_caption: the caption shown under the images (optional)
+            table: the table the question refers to (optional)
 
         Returns:
             the path of the manual flashcard file
@@ -101,6 +105,8 @@ class FlashcardGenerator:
             card["images"] = images
         if image_caption:
             card["image_caption"] = image_caption
+        if table:
+            card["table"] = table
         cards.append(card)
         self._save_manual(cards)
         return str(self.manual_file)
@@ -120,6 +126,11 @@ class FlashcardGenerator:
             )
             lines.append(f"## Flashcard {i}\n")
             lines.append(f"**Q**: {card['question']}\n\n")
+            table = card.get("table")
+            if table:
+                markdown = render_markdown_table(table)
+                if markdown:
+                    lines.append(f"\n{markdown}\n\n")
             lines.append(f"**A**: {card['answer']}\n\n")
             for relative in card.get("images", []):
                 caption = card.get("image_caption", "")
@@ -229,6 +240,12 @@ class FlashcardGenerator:
                     print("  ❌ Answer cannot be empty — skipping this card.")
                     continue
 
+                # A card may refer to a table: it is pasted after the answer
+                table = read_table(
+                    self._prompt,
+                    "  Paste the table of the card (blank line if there is none):",
+                )
+
                 # An image (a diagram, a chart) may belong to the card
                 images, caption = self._read_image()
 
@@ -240,6 +257,7 @@ class FlashcardGenerator:
                     module=module,
                     images=images,
                     image_caption=caption,
+                    table=table,
                 )
                 added += 1
                 print(f"  ✅ Saved to: {filepath}\n")
@@ -277,23 +295,24 @@ class FlashcardGenerator:
 
     def _review_keys(self, images: list[str]) -> str:
         """
-        Return the keys of the review prompt for a set of pictures.
+        Return the keys of the review prompt that follows the answer.
 
         The option to open a picture only shows up when the file is really
         there - a picture that is gone cannot be opened, so it is not offered.
         """
-        keys = "[Enter] reveal answer"
+        keys = "[Enter] next"
         if any((self.flashcards_dir / relative).is_file() for relative in images):
             keys += ", [o] open image"
         if images:
             keys += ", [s] path"
-        keys += ", [n] next, [q] quit"
+        keys += ", [b] back, [q] quit"
         return keys
 
     def view_flashcards(self, level: str = "L1") -> None:
         """
         Interactively review flashcards: show each question, then reveal its
-        answer or skip to the next card. Optionally filter by subject.
+        answer - with the table and the picture of the card - or skip to the
+        next card. Optionally filter by subject.
         Aborts cleanly on Ctrl+C/Ctrl+D.
         """
         try:
@@ -315,12 +334,14 @@ class FlashcardGenerator:
                 cards = filtered
 
             total = len(cards)
-            keys = self._review_keys([
+            print(f"\n  {total} flashcard(s). [Enter] reveal answer, [n] next, [q] quit.\n")
+            all_images = [
                 relative
                 for card in cards
                 for relative in (card.get("images") or [])
-            ])
-            print(f"\n  {total} flashcard(s). {keys}.\n")
+            ]
+            if any((self.flashcards_dir / relative).is_file() for relative in all_images):
+                print("  The pictures of the cards are shown after the answer.\n")
 
             i = 0
             while i < total:
@@ -331,9 +352,28 @@ class FlashcardGenerator:
                 print(f"{'─' * 50}")
                 print(f"  [{i + 1}/{total}] Q: {card['question']}\n")
 
-                # The images of the card belong to the question, so they are
-                # shown before the answer is revealed.  The picture itself is
-                # opened in the image viewer of the system.
+                action = self._prompt(
+                    "  [Enter] reveal answer, [n] next, [q] quit: "
+                ).strip().lower()
+                if action == "q":
+                    break
+                if action == "n":
+                    i += 1
+                    continue
+
+                # The answer, and with it the table and the picture of the card
+                print(f"  A: {card['answer']}")
+                if location:
+                    print(f"      ({location})")
+                print()
+
+                table = card.get("table")
+                if table:
+                    for row in render_table(table, indent="  "):
+                        print(row)
+                    print()
+
+                # The picture itself is opened in the image viewer of the system
                 images = list(card.get("images") or [])
                 caption = card.get("image_caption", "")
                 if images:
@@ -364,18 +404,6 @@ class FlashcardGenerator:
                         continue
                     break
 
-                if action == "q":
-                    break
-                if action == "n":
-                    i += 1
-                    continue
-
-                # Reveal the answer (and the card's subject/module location)
-                print(f"  A: {card['answer']}")
-                if location:
-                    print(f"      ({location})")
-                print()
-                action = self._prompt("  [Enter] next, [b] back, [q] quit: ").strip().lower()
                 if action == "q":
                     break
                 if action == "b":

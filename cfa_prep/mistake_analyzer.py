@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import TypedDict, cast
 
 from .curriculum import Curriculum
-from .tables import Table, parse_table, render_table, split_row
+from .tables import Table, read_table, render_table
 from .utils import (
     get_data_dir,
     hash_text,
@@ -220,27 +220,7 @@ class MistakeAnalyzer:
 
         A block that is not a table (no second column) is ignored.
         """
-        print("  Paste the table below the question (blank line if there is none):")
-        lines: list[str] = []
-        while True:
-            line = self._prompt("")
-            if not line.strip():
-                break
-            lines.append(line)
-        if not lines:
-            return None
-        if len(split_row(lines[0])) < 2:
-            # Not a table: a question has more than one column
-            print("  (ignored — a table needs at least two columns)")
-            return None
-        table = parse_table(lines)
-        if table is None:
-            return None
-        print("\n  📊 Table:")
-        for row in render_table(table, indent="    "):
-            print(row)
-        print()
-        return table
+        return read_table(self._prompt)
 
     def add_mistake_interactive(
         self, curriculum: Curriculum | None = None, level: str = "L1"

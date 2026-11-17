@@ -447,10 +447,35 @@ cfa-prep flashcard -a    # or: cfa-prep flashcard -a
 Cards are stored at `<data_root>/flashcards/flashcards.json`. You can add several cards
 in one session — after saving one, the subject/module picker is shown again.
 
+### Flashcards with a table
+
+A card may refer to a **table**. It is pasted after the answer, one line per row, the
+columns separated by tabs (or by two or more spaces); the first line is the header and
+a blank line ends the table:
+
+```
+Question (blank to finish): Compare the working capital of the two years
+Answer: It falls, because the cash cycle shortens
+  Paste the table of the card (blank line if there is none):
+	        	Year 1	Year 2
+	DSO	85	76
+	DIO	45	38
+
+  📊 Table:
+         Year 1  Year 2
+    ───  ──────  ──────
+    DSO      85      76
+    DIO      45      38
+```
+
+The table is stored with the card and shown again — aligned — every time the card is
+reviewed, **together with the answer**. In the Markdown export it becomes a real
+Markdown table.
+
 ### Flashcards with an image
 
-A card can carry a **picture** (a diagram, a chart, a formula sheet). After the answer you
-are asked for an image path and a caption:
+A card can carry a **picture** (a diagram, a chart, a formula sheet). After the answer
+(and the table, if there is one) you are asked for an image path and a caption:
 
 ```
 Answer: Spot rates by maturity
@@ -490,12 +515,12 @@ cfa-prep flashcard --review    # or: cfa-prep flashcard -r
 
 You can optionally filter by **subject** (blank reviews all). For each card:
 
-- `[Enter]` reveals the answer (then `[Enter]` moves on)
+- `[Enter]` reveals the answer — **with it come the table and the picture** of the card
 - `[n]` skips to the next card without revealing the answer
 - `[b]` goes back to the previous card
 - `[q]` quits the review
 
-For a card **with an image** these keys are added:
+After the answer was revealed, these keys are added for a card **with an image**:
 
 - `[o]` opens the picture in the image viewer of the system (the only way to see it)
 - `[s]` prints the path of the picture (for `code <path>` or copying it)
