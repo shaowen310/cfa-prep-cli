@@ -48,6 +48,7 @@ class CLIArgs(Protocol):
     randomize: bool
     reset: bool
     add: bool
+    browse: bool
     remove: bool
     update: bool
     type: str | None
@@ -340,6 +341,7 @@ def cmd_mistake(args: CLIArgs) -> None:
     """
     Log and view mistakes.
     With -a/--add, interactively log a new mistake.
+    With -b/--browse, pick a subject and a module and show its questions.
     Without flags, show recent mistakes and the summary by subject and module.
     """
     analyzer = MistakeAnalyzer()
@@ -349,6 +351,10 @@ def cmd_mistake(args: CLIArgs) -> None:
         settings = load_settings()
         level = cast(str, settings.get("level", "L1"))
         analyzer.add_mistake_interactive(curriculum=curriculum, level=level)
+        return
+
+    if args.browse:
+        analyzer.browse_mistakes()
         return
 
     # Default: show recent mistakes and the full summary by subject and module
@@ -532,6 +538,7 @@ Examples:
   cfa-prep quiz --no-randomize           Disable question/option shuffling
   cfa-prep stats                        Show quiz statistics and the review schedule
   cfa-prep mistake -a                    Log a mistake
+  cfa-prep mistake -b                    Browse the questions by subject and module
   cfa-prep recap                         View progress
   cfa-prep recap --update                Update progress
   cfa-prep recap --remove                Remove progress entries
@@ -563,6 +570,8 @@ Data root (default ~/.cfa-prep) can be set via:
     # mistake command (alias: mis)
     p_mistake = subparsers.add_parser("mistake", aliases=["mis"], help="Log and view mistakes")
     _ = p_mistake.add_argument("-a", "--add", action="store_true", help="interactively log a mistake")
+    _ = p_mistake.add_argument("-b", "--browse", action="store_true",
+                               help="browse the questions by subject and module")
 
     # search command
     p_search = subparsers.add_parser("search", help="Search your curriculum, flashcards and mistakes")

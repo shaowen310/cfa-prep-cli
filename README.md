@@ -90,6 +90,7 @@ cfa-prep search FCFE
 | `stats --reset`              | Clear all stored quiz statistics | `cfa-prep stats --reset`                    |
 | `mistake`                    | Recent mistakes and the log by subject and module | `cfa-prep mistake`                    |
 | `mistake -a`                 | Interactive mistake entry    | `cfa-prep mistake -a`                          |
+| `mistake -b`                 | Browse the questions by subject and module | `cfa-prep mistake -b`              |
 | `recap`                      | View study progress          | `cfa-prep recap`                               |
 | `recap --update`             | Update study progress        | `cfa-prep recap --update`                      |
 | `recap --remove`             | Remove progress entries      | `cfa-prep recap --remove`                      |
@@ -316,6 +317,44 @@ Question text [Module 2: Analyzing Income Statements] (blank to finish): Based o
 The table is stored with the mistake and shown aligned again every time the question
 comes back in the quiz. The first column holds the row labels, so its header cell is
 empty (a leading tab); a column of numbers is right-aligned.
+
+### Browsing your questions
+
+`cfa-prep mistake -b` (alias `cfa-prep mis -b`) lets you pick the **subject and the
+module** and then shows every question of that module in full — the question, its
+table, the options with your answer and the correct one marked, and the explanation.
+
+Only the subjects and modules that have questions are listed, in **curriculum order**,
+and each of them shows how many questions it holds:
+
+```
+  Subject:
+    [1] Quantitative Methods (4)
+    [2] Economics (18)
+    [3] Corporate Issuers (22)
+    ...
+    > 2
+
+  Module:
+    [1] Module 2: Understanding Business Cycles (8)
+    [2] Module 3: Fiscal Policy (5)
+    [3] Module 6: International Trade (5)
+    > 1
+
+  📝 8 in Economics | Module 2: Understanding Business Cycles
+
+────────────────────────────────────────────────────────────
+  📅 20260811  |  Economics | Module 2: Understanding Business Cycles  |  L1
+
+  The interest rate spread between 10-year treasury yields and overnight borrowing rates most likely
+
+    A. is a lagging economic indicator
+    B. decreases when the market expects an economic downturn  ← correct
+    C. increases as the market expects future short-term interest rates to decrease  ← your answer
+
+  💡 long-term yields express market expectations about the direction of short-term interest rates…
+────────────────────────────────────────────────────────────
+```
 
 ### Where the mistake log is summarized
 

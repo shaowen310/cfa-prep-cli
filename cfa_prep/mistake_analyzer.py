@@ -540,6 +540,109 @@ class MistakeAnalyzer:
         """Return every mistake record, as stored."""
         return self._load()
 
+    def _mistake_groups(self) -> dict[str, dict[str, list[MistakeRecord]]]:
+        """Group the logged mistakes by subject and by module."""
+        groups: dict[str, dict[str, list[MistakeRecord]]] = {}
+        for record in self._load():
+            subject = record.get("subject", "")
+            module = record.get("module", "")
+            groups.setdefault(subject, {}).setdefault(module, []).append(record)
+        return groups
+
+    def print_mistake(self, record: MistakeRecord) -> None:
+        """
+        Print one mistake with everything it holds: the question, its table, the
+        options with the wrong and the correct answer marked, and the
+        explanation.
+        """
+        rule = "─" * 60
+        subject = record.get("subject", "")
+        module = record.get("module", "")
+        location = f"{subject} | {module}" if subject and module else (subject or module)
+        print(rule)
+        print(f"  📅 {record.get('date', '')}  |  {location}  |  {record.get('level', '')}")
+        print()
+        print(f"  {record.get('question', '')}")
+        table = record.get("table")
+        if table:
+            print()
+            for row in render_table(table, indent="  "):
+                print(row)
+        options = record.get("options") or []
+        if options:
+            print()
+            for letter, opt in zip("ABC", options):
+                marks = []
+                if opt == record.get("user_answer"):
+                    marks.append("your answer")
+                if opt == record.get("correct_answer"):
+                    marks.append("correct")
+                suffix = f"  ← {', '.join(marks)}" if marks else ""
+                print(f"    {letter}. {opt}{suffix}")
+        else:
+            print(f"\n    Your answer: {record.get('user_answer', '')}")
+            print(f"    Correct answer: {record.get('correct_answer', '')}")
+        if record.get("explanation"):
+            print(f"\n  💡 {record['explanation']}")
+        print(rule)
+
+    def browse_mistakes(self) -> None:
+        """
+        Show the logged mistakes of one module, chosen by subject and module.
+
+        The subjects and the modules that have mistakes are offered in curriculum
+        order, each with the number of questions it holds; every question of the
+        chosen module is then shown in full.
+        """
+        groups = self._mistake_groups()
+        if not groups:
+            print("\n  No mistakes logged yet.")
+            return
+
+        subject_rank, module_rank = self._curriculum_order()
+        subjects = sorted(
+            groups.keys(),
+            key=lambda subject: (subject_rank.get(subject, len(subject_rank)), subject),
+        )
+
+        print("\n  Subject:")
+        for i, subject in enumerate(subjects, 1):
+            count = sum(len(records) for records in groups[subject].values())
+            print(f"    [{i}] {subject} ({count})")
+        choice = self._prompt("    > ").strip()
+        if not choice.isdigit():
+            return
+        index = int(choice) - 1
+        if index < 0 or index >= len(subjects):
+            print("  (no such subject)")
+            return
+        subject = subjects[index]
+
+        modules = groups[subject]
+        ranks = module_rank.get(subject, {})
+        module_names = sorted(
+            modules.keys(),
+            key=lambda module: (ranks.get(module, len(ranks)), module),
+        )
+        print("\n  Module:")
+        for i, module in enumerate(module_names, 1):
+            count = len(modules[module])
+            print(f"    [{i}] {module} ({count})")
+        choice = self._prompt("    > ").strip()
+        if not choice.isdigit():
+            return
+        index = int(choice) - 1
+        if index < 0 or index >= len(module_names):
+            print("  (no such module)")
+            return
+        module = module_names[index]
+
+        records = modules[module]
+        print(f"\n  📝 {len(records)} in {subject} | {module}\n")
+        for record in records:
+            self.print_mistake(record)
+            print()
+
     def print_mistake_breakdown(self) -> None:
         """
         Print the mistake log grouped by subject and module, in curriculum order.

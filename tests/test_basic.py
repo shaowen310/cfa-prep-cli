@@ -1083,6 +1083,78 @@ def test_mistake_with_table():
             _ = os.environ.pop("CFA_PREP_HOME", None)
 
 
+def test_mistake_browse():
+    """Test that the questions of a module can be browsed by subject and module"""
+    import io
+    import tempfile
+    from contextlib import redirect_stdout
+
+    from cfa_prep.mistake_analyzer import MistakeAnalyzer
+
+    with tempfile.TemporaryDirectory() as tmp:
+        os.environ["CFA_PREP_HOME"] = tmp
+        try:
+            analyzer = MistakeAnalyzer()
+            for question, correct in (
+                (
+                    "Which trade restriction costs the importing country most?",
+                    "An import quota",
+                ),
+                (
+                    "Which restriction is voluntary?",
+                    "A voluntary export restraint",
+                ),
+            ):
+                _ = analyzer.add_mistake(
+                    subject="Economics",
+                    question=question,
+                    user_answer="A tariff",
+                    correct_answer=correct,
+                    explanation="The quota raises the domestic price.",
+                    module_name="Module 6: International Trade",
+                    options=[
+                        "An import quota",
+                        "A tariff",
+                        "A voluntary export restraint",
+                    ],
+                )
+            _ = analyzer.add_mistake(
+                subject="Equity",
+                question="What is the beta of a defensive stock?",
+                user_answer="1.5",
+                correct_answer="0.8",
+                explanation="",
+                module_name="Module 1: Overview of Equity Securities",
+                options=["0.8", "1.5", "2.0"],
+            )
+
+            answers = iter(["1", "1"])  # subject 1 (Economics), module 1
+            original_prompt = MistakeAnalyzer._prompt  # pyright: ignore[reportPrivateUsage]
+
+            def fake_prompt(prompt: str = "") -> str:
+                del prompt  # the scripted answers do not depend on the prompt
+                return next(answers, "")
+
+            MistakeAnalyzer._prompt = staticmethod(fake_prompt)  # pyright: ignore[reportPrivateUsage]
+            try:
+                buffer = io.StringIO()
+                with redirect_stdout(buffer):
+                    analyzer.browse_mistakes()
+            finally:
+                MistakeAnalyzer._prompt = staticmethod(original_prompt)  # pyright: ignore[reportPrivateUsage]
+            output = buffer.getvalue()
+            assert "Subject:" in output, output
+            assert "[1] Economics (2)" in output, output
+            assert "Module:" in output, output
+            assert "[1] Module 6: International Trade (2)" in output, output
+            assert "Which trade restriction costs the importing country most?" in output, output
+            assert "← correct" in output, output
+            assert "← your answer" in output, output
+            print("  ✅ The questions of a module can be browsed by subject and module")
+        finally:
+            _ = os.environ.pop("CFA_PREP_HOME", None)
+
+
 def test_mistake_breakdown_view():
     """Test that `cfa-prep mis` shows the mistake log by subject and module, in curriculum order"""
     import io
@@ -1134,7 +1206,7 @@ def test_mistake_breakdown_view():
 
             buffer = io.StringIO()
             with redirect_stdout(buffer):
-                cmd_mistake(SimpleNamespace(add=False))  # pyright: ignore[reportArgumentType]
+                cmd_mistake(SimpleNamespace(add=False, browse=False))  # pyright: ignore[reportArgumentType]
             output = buffer.getvalue()
             assert "Mistake log by subject and module (3 mistakes)" in output, output
             # The count comes first, right-aligned on the width of the largest one
@@ -1404,6 +1476,7 @@ def run_all_tests():
         ("Question identity", test_question_identity),
         ("Mistake question id", test_mistake_question_id),
         ("Mistake session summary", test_mistake_session_summary),
+        ("Mistake browse", test_mistake_browse),
         ("Mistake with table", test_mistake_with_table),
         ("Mistake breakdown view", test_mistake_breakdown_view),
         ("Quiz stats file split", test_quiz_stats_file_split),
