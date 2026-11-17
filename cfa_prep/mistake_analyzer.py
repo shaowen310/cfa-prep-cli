@@ -6,17 +6,16 @@ Purpose: Log and analyze mistakes, stored as JSON at <data_root>/mistakes/mistak
 """
 
 from pathlib import Path
-from typing import TypedDict, cast
+from typing import cast
 
 from .curriculum import Curriculum
+from .mistake_store import DB_NAME, LEGACY_NAME, MistakeRecord, MistakeStore
 from .tables import Table, read_table, render_table
 from .utils import (
     get_data_dir,
     hash_text,
-    load_json,
     normalize_text,
     print_section,
-    save_json,
     today_str,
 )
 
@@ -55,50 +54,34 @@ def _session_label(subject: str, module_name: str) -> str:
     return subject or module_name
 
 
-class _MistakeRecordOptional(TypedDict, total=False):
-    """The optional part of a mistake record."""
-    table: Table | None
-    attempts: int          # how often the mistake was logged
-    last_date: str         # the date of the last attempt
-    wrong_answers: list[str]  # the answers that were given wrong so far
-
-
-class MistakeRecord(_MistakeRecordOptional):
-    date: str
-    level: str
-    subject: str
-    module: str
-    question: str
-    question_id: str  # stable id of the question (hash of its text and options)
-    options: list[str]  # [A text, B text, C text]
-    user_answer: str     # the option text the user chose
-    correct_answer: str  # the option text that is correct
-    explanation: str
-
-
 class MistakeAnalyzer:
     """
     Mistake analyzer.
     Manages the entry, categorization, storage, and retrieval of mistakes.
-    All records stored in a single mistakes.json file.
+    All records are stored in an SQLite database (mistakes.db); the old JSON
+    file is imported once and then kept as a backup.
     """
 
     def __init__(self):
         self.mistakes_dir: Path = get_data_dir("mistakes")
-        self.data_file: Path = self.mistakes_dir / "mistakes.json"
+        self.data_file: Path = self.mistakes_dir / LEGACY_NAME
+        self.db_file: Path = self.mistakes_dir / DB_NAME
+        self.store: MistakeStore = MistakeStore(self.db_file, self.data_file)
+        imported = self.store.import_legacy()
+        if imported:
+            print(
+                f"\n  📥 Imported {imported} mistake(s) from {self.data_file.name} "
+                f"into {self.db_file.name} (the old file is kept as "
+                f"{self.data_file.name}.imported)."
+            )
 
     def _load(self) -> list[MistakeRecord]:
         """Load all mistake records."""
-        data = load_json(self.data_file)
-        records = data.get("records", [])
-        if not isinstance(records, list):
-            return []
-        records_typed = cast(list[MistakeRecord], records)
-        return list(records_typed)
+        return self.store.load_all()
 
     def _save(self, records: list[MistakeRecord]) -> None:
         """Save all mistake records."""
-        save_json(self.data_file, {"records": list(records)})
+        self.store.replace_all(records)
 
     def _find_duplicates(self, question: str) -> list[MistakeRecord]:
         """
@@ -106,10 +89,9 @@ class MistakeAnalyzer:
         (case-insensitive). Used to warn the user before re-adding a question,
         since the same title may have different options.
         """
-        q = question.strip().lower()
-        if not q:
+        if not question.strip():
             return []
-        return [r for r in self._load() if r.get("question", "").strip().lower() == q]
+        return self.store.load_by_question(question.strip())
 
     def _confirm_duplicate(self, question: str) -> bool:
         """
@@ -181,9 +163,8 @@ class MistakeAnalyzer:
         # without a module cannot be attributed, so it is rejected.
         if not module_name.strip():
             raise ValueError("A mistake needs a module to belong to.")
-        records = self._load()
         # The question id is created once, here, and stored with the record.
-        # Everything downstream reads it from this file, so the id of a
+        # Everything downstream reads it from the log, so the id of a
         # question is never derived twice from different texts.
         qid = existing_question_id.strip()
         if not qid and question.strip():
@@ -205,17 +186,17 @@ class MistakeAnalyzer:
 
         # A question that is already logged is updated, not written a second
         # time: the log grows with the questions, not with the attempts.
-        existing = self._find_by_id(records, qid)
+        existing = self.store.get(qid)
         if existing is None:
             record["attempts"] = 1
             if record.get("user_answer"):
                 # The history of the wrong answers starts with this one
                 record["wrong_answers"] = [record["user_answer"]]
-            records.append(record)
+            self.store.upsert(record)
         else:
             self._update_mistake(existing, record)
-        self._save(records)
-        return str(self.data_file)
+            self.store.upsert(existing)
+        return str(self.db_file)
 
     @staticmethod
     def _find_by_id(
@@ -575,22 +556,29 @@ class MistakeAnalyzer:
         Get the most recent N mistake records.
         Sorted by date in descending order.
         """
-        records = self._load()
-        records.sort(key=lambda r: r.get("date", ""), reverse=True)
-        return records[:limit]
+        return self.store.load_recent(limit)
 
     def all_mistakes(self) -> list[MistakeRecord]:
         """Return every mistake record, as stored."""
-        return self._load()
+        return self.store.load_all()
 
-    def _mistake_groups(self) -> dict[str, dict[str, list[MistakeRecord]]]:
-        """Group the logged mistakes by subject and by module."""
-        groups: dict[str, dict[str, list[MistakeRecord]]] = {}
-        for record in self._load():
-            subject = record.get("subject", "")
-            module = record.get("module", "")
-            groups.setdefault(subject, {}).setdefault(module, []).append(record)
+    def _mistake_groups(self) -> dict[str, dict[str, int]]:
+        """
+        The number of logged questions per subject and per module.
+
+        The counts come from the database, so the log does not have to be
+        loaded to know which subjects and modules hold mistakes.
+        """
+        groups: dict[str, dict[str, int]] = {}
+        for subject, module, questions, _attempts in self.store.grouped_counts():
+            _ = groups.setdefault(subject, {})
+            if module:
+                groups[subject][module] = groups[subject].get(module, 0) + questions
         return groups
+
+    def _module_records(self, subject: str, module: str) -> list[MistakeRecord]:
+        """Return the questions of one module, as stored."""
+        return self.store.load_by_subject_module(subject, module)
 
     @staticmethod
     def _option_letter(options: list[str], text: str) -> str:
@@ -677,7 +665,7 @@ class MistakeAnalyzer:
 
         print("\n  Subject:")
         for i, subject in enumerate(subjects, 1):
-            count = sum(len(records) for records in groups[subject].values())
+            count = sum(groups[subject].values())
             print(f"    [{i}] {subject} ({count})")
         choice = self._prompt("    > ").strip()
         if not choice.isdigit():
@@ -696,8 +684,7 @@ class MistakeAnalyzer:
         )
         print("\n  Module:")
         for i, module in enumerate(module_names, 1):
-            count = len(modules[module])
-            print(f"    [{i}] {module} ({count})")
+            print(f"    [{i}] {module} ({modules[module]})")
         choice = self._prompt("    > ").strip()
         if not choice.isdigit():
             return
@@ -707,7 +694,8 @@ class MistakeAnalyzer:
             return
         module = module_names[index]
 
-        records = modules[module]
+        # Only the questions of the chosen module are loaded
+        records = self._module_records(subject, module)
         attempts = sum(r.get("attempts", 1) for r in records)
         header = f"📝 {len(records)} in {subject} | {module}"
         if attempts > len(records):
@@ -812,8 +800,9 @@ class MistakeAnalyzer:
         The attempts are counted as well: a question that was logged again is
         one mistake, but several attempts.
         """
-        records = self._load()
-        total = len(records)
+        groups = self.store.grouped_counts()
+        total = sum(questions for _s, _m, questions, _a in groups)
+        attempts = sum(tries for _s, _m, _q, tries in groups)
         if total == 0:
             return {
                 "total": 0,
@@ -826,17 +815,13 @@ class MistakeAnalyzer:
         subj_count: dict[str, int] = {}
         module_count: dict[str, int] = {}
         module_attempts: dict[str, int] = {}
-        attempts = 0
-        for r in records:
-            subj = r.get("subject", "Unknown")
-            subj_count[subj] = subj_count.get(subj, 0) + 1
-            count = r.get("attempts", 1)
-            attempts += count
-            module = r.get("module", "")
+        for subject, module, questions, tries in groups:
+            subj = subject or "Unknown"
+            subj_count[subj] = subj_count.get(subj, 0) + questions
             if module:
                 key = f"{subj} > {module}"
-                module_count[key] = module_count.get(key, 0) + 1
-                module_attempts[key] = module_attempts.get(key, 0) + count
+                module_count[key] = module_count.get(key, 0) + questions
+                module_attempts[key] = module_attempts.get(key, 0) + tries
 
         return {
             "total": total,
@@ -847,7 +832,15 @@ class MistakeAnalyzer:
         }
 
     def list_mistake_files(self) -> list[Path]:
-        """List the mistakes data file if it exists."""
+        """List the mistakes data files that exist."""
+        files: list[Path] = []
+        if self.db_file.exists():
+            files.append(self.db_file)
         if self.data_file.exists():
-            return [self.data_file]
-        return []
+            files.append(self.data_file)
+        return files
+
+    def export_mistakes(self, path: Path) -> Path:
+        """Write the log as a JSON file, the format that can be read by hand."""
+        self.store.export_json(path)
+        return path

@@ -60,7 +60,7 @@ def test_quiz_module_attribution():
                 module_name="Module 1: Basics",
                 options=options,
             )
-            records = json.loads(analyzer.data_file.read_text(encoding="utf-8"))["records"]
+            records = analyzer.all_mistakes()
             assert "key_point" not in records[0], "the typed topic must not be recorded"
             assert records[0]["module"] == "Module 1: Basics"
             # A mistake without a module cannot be attributed, so it is rejected
@@ -180,7 +180,6 @@ def test_question_identity():
 
 def test_mistake_upsert():
     """Test that a question that is logged again updates its record"""
-    import json
     import tempfile
 
     question = "Which trade restriction costs the importing country most?"
@@ -210,7 +209,7 @@ def test_mistake_upsert():
                 options=options,
             )
 
-            records = json.loads(analyzer.data_file.read_text(encoding="utf-8"))["records"]
+            records = analyzer.all_mistakes()
             # The log holds the question once
             assert len(records) == 1, records
             record = records[0]
@@ -234,7 +233,7 @@ def test_mistake_upsert():
                 module_name="Module 6: International Trade",
                 options=options,
             )
-            records = json.loads(analyzer.data_file.read_text(encoding="utf-8"))["records"]
+            records = analyzer.all_mistakes()
             assert len(records) == 1, records
             assert records[0].get("attempts") == 3, records[0]
             assert records[0].get("wrong_answers") == [options[0], options[2]], records[0]
@@ -245,7 +244,6 @@ def test_mistake_upsert():
 
 def test_mistake_question_id():
     """Test that a mistake stores its question id and that the quiz engine reuses it"""
-    import json
     import tempfile
 
     from cfa_prep.mistake_analyzer import MistakeAnalyzer, question_id
@@ -267,7 +265,7 @@ def test_mistake_question_id():
                 module_name="Module 6: International Trade",
                 options=options,
             )
-            records = json.loads(analyzer.data_file.read_text(encoding="utf-8"))["records"]
+            records = analyzer.all_mistakes()
             assert len(records) == 1
             stored = records[0].get("question_id", "")
             assert stored.startswith("q:"), "the record must carry a question id"
@@ -286,7 +284,7 @@ def test_mistake_question_id():
                 options=options,
                 existing_question_id=stored,
             )
-            records = json.loads(analyzer.data_file.read_text(encoding="utf-8"))["records"]
+            records = analyzer.all_mistakes()
             assert len(records) == 1, "the log must not grow with every attempt"
             assert records[0]["question_id"] == stored, (
                 "a re-logged mistake must keep the id of the original question"
@@ -296,9 +294,7 @@ def test_mistake_question_id():
             # The engine takes the id from the log, it does not derive it again
             custom_id = "q:0123456789abcdef"
             records[0]["question_id"] = custom_id
-            _ = analyzer.data_file.write_text(
-                json.dumps({"records": [records[0]]}, ensure_ascii=False), encoding="utf-8"
-            )
+            analyzer.store.replace_all([records[0]])
 
             import cfa_prep.quiz_engine as qe
 
@@ -328,7 +324,6 @@ def test_mistake_question_id():
 def test_mistake_session_summary():
     """Test that the logging session ends with a line stating how many mistakes were saved"""
     import io
-    import json
     import tempfile
     from contextlib import redirect_stdout
 
@@ -371,7 +366,7 @@ def test_mistake_session_summary():
                 "Economics > Module 6: International Trade." in output
             ), output
             assert "Mistake log by subject and module" not in output, output
-            records = json.loads(analyzer.data_file.read_text(encoding="utf-8"))["records"]
+            records = analyzer.all_mistakes()
             assert len(records) == 1, "the count in the summary must match what was saved"
             print("  ✅ The session states how many mistakes were saved")
         finally:
@@ -541,7 +536,6 @@ def test_ctrl_c_exits_gracefully():
 
 def test_mistake_with_table():
     """Test that a table can be attached to a mistake and is stored with it"""
-    import json
     import tempfile
 
     from cfa_prep.tables import parse_table, render_table
@@ -581,9 +575,11 @@ def test_mistake_with_table():
                 ],
                 table=table,
             )
-            records = json.loads(analyzer.data_file.read_text(encoding="utf-8"))["records"]
-            assert records[0]["table"]["header"] == ["", "Year 1", "Year 2"], records
-            assert len(records[0]["table"]["rows"]) == 3, records
+            records = analyzer.all_mistakes()
+            table = records[0].get("table")
+            assert table is not None, records[0]
+            assert table["header"] == ["", "Year 1", "Year 2"], records
+            assert len(table["rows"]) == 3, records
             print("  ✅ A table can be attached to a mistake")
         finally:
             _ = os.environ.pop("CFA_PREP_HOME", None)
@@ -640,7 +636,7 @@ def test_mistake_breakdown_view():
 
             buffer = io.StringIO()
             with redirect_stdout(buffer):
-                cmd_mistake(SimpleNamespace(add=False, browse=False))  # pyright: ignore[reportArgumentType]
+                cmd_mistake(SimpleNamespace(add=False, browse=False, export=None))  # pyright: ignore[reportArgumentType]
             output = buffer.getvalue()
             assert "Mistake log by subject and module (3 mistakes)" in output, output
             # The count comes first, right-aligned on the width of the largest one

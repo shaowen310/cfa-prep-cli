@@ -50,6 +50,7 @@ class CLIArgs(Protocol):
     reset: bool
     add: bool
     browse: bool
+    export: str | None
     remove: bool
     update: bool
     type: str | None
@@ -358,6 +359,16 @@ def cmd_mistake(args: CLIArgs) -> None:
         analyzer.browse_mistakes()
         return
 
+    if args.export is not None:
+        # The log lives in a database; a JSON copy can be written for reading
+        target = Path(args.export) if args.export else analyzer.mistakes_dir / "mistakes-export.json"
+        out = analyzer.export_mistakes(target)
+        count = analyzer.store.count()
+        print_header("📤 Mistake log exported")
+        print(f"  📄 {out}")
+        print(f"  📊 {count} question(s)")
+        return
+
     # Default: show recent mistakes and the full summary by subject and module
     print_header("📝 Mistakes")
     print_section("Recent mistakes")
@@ -572,7 +583,10 @@ Data root (default ~/.cfa-prep) can be set via:
     p_mistake = subparsers.add_parser("mistake", aliases=["mis"], help="Log and view mistakes")
     _ = p_mistake.add_argument("-a", "--add", action="store_true", help="interactively log a mistake")
     _ = p_mistake.add_argument("-b", "--browse", action="store_true",
-                               help="browse the questions by subject and module")
+                              help="browse the questions by subject and module")
+    _ = p_mistake.add_argument("-e", "--export", nargs="?", const="", default=None,
+                              metavar="PATH",
+                              help="export the mistake log as JSON (default: the data root)")
 
     # search command
     p_search = subparsers.add_parser("search", help="Search your curriculum, flashcards and mistakes")

@@ -91,6 +91,7 @@ cfa-prep search FCFE
 | `mistake`                    | Recent mistakes and the log by subject and module | `cfa-prep mistake`                    |
 | `mistake -a`                 | Interactive mistake entry    | `cfa-prep mistake -a`                          |
 | `mistake -b`                 | Browse the questions by subject and module | `cfa-prep mistake -b`              |
+| `mistake --export`           | Export the mistake log to a readable JSON file | `cfa-prep mistake --export`      |
 | `recap`                      | View study progress          | `cfa-prep recap`                               |
 | `recap --update`             | Update study progress        | `cfa-prep recap --update`                      |
 | `recap --remove`             | Remove progress entries      | `cfa-prep recap --remove`                      |
@@ -116,7 +117,7 @@ one command covers your curriculum, your flashcards and the questions you got wr
 | --- | --- | --- |
 | 📘 Curriculum | `<data_root>/curriculum/curriculum.json` | module names and topic titles |
 | 🗂️ Flashcards | `<data_root>/flashcards/flashcards.json` | question and answer |
-| ❌ Mistake log | `<data_root>/mistakes/mistakes.json` | question, options and explanation |
+| ❌ Mistake log | `<data_root>/mistakes/mistakes.db` | question, options and explanation |
 
 Every hit shows where it came from:
 
@@ -242,8 +243,8 @@ its history attached. The hash ignores cosmetic whitespace and case and does not
 on the order the options are displayed in, so a question that was logged twice still
 counts as one question.
 
-The id is created **once**, when the mistake is logged, and stored with the record in
-`mistakes.json`:
+The id is created **once**, when the mistake is logged, and stored as the primary key of
+its row in the database (`mistakes.db`):
 
 ```json
 {
@@ -257,7 +258,7 @@ The id is created **once**, when the mistake is logged, and stored with the reco
 }
 ```
 
-`mistakes.json` is the single source of truth for the id: the quiz engine reads it from
+The database is the single source of truth for the id: the quiz engine reads it from
 there instead of deriving it again, and a mistake that is re-logged after a wrong answer
 carries the id of the original question. The statistics file only refers to that id.
 
@@ -283,6 +284,27 @@ its record** instead of writing a second copy of it:
 
 The log therefore grows with the **questions**, not with the attempts, and the
 breakdown shows both: `3 | Economics > Module 6 (7 attempts)`.
+
+### Storage: a database, not a growing JSON file
+
+The mistake log lives in `<data_root>/mistakes/mistakes.db`, a SQLite database that ships
+with Python (no extra dependency). One row per question, keyed by `question_id`, so a
+new attempt is a single `INSERT … ON CONFLICT DO UPDATE` instead of reading and
+rewriting the whole file. Lookups (by subject and module, by question text) use indexes,
+so the browse view and the search only touch the rows they need.
+
+An older `mistakes.json` is imported **once**, automatically, the first time the
+database is used; the file is then kept as `mistakes.json.imported` so nothing is lost.
+The import never runs again, even if the database is emptied, because the backup no
+longer has the original name.
+
+To look at the log with your own tools — or to move it to another machine — export it as
+a readable JSON file:
+
+```
+cfa-prep mistake --export                # <data_root>/mistakes/mistakes-export.json
+cfa-prep mistake --export my-log.json    # a file of your choice
+```
 
 Every JSON file of the data root is written to a temporary file first and then moved
 over the old one, so an interrupted write can never destroy the file that was there.
@@ -647,7 +669,7 @@ Every folder belongs to one command:
 | Folder | Command | Content |
 | --- | --- | --- |
 | `flashcards/` | `cfa-prep flashcard` | `flashcards.json` (manually added), `images/` (the pictures of the cards) |
-| `mistakes/` | `cfa-prep mistake` | `mistakes.json` (auto-generated) |
+| `mistakes/` | `cfa-prep mistake` | `mistakes.db` (auto-generated), `mistakes-export.json` (optional export), `mistakes.json.imported` (backup of an imported JSON log) |
 | `curriculum/` | `cfa-prep curriculum` | `curriculum.json` (subjects, modules, topics) |
 | `progress/` | `cfa-prep recap` / `cfa-prep stats` | `progress.json`, `quiz_stats.json`, `quiz_sessions.json` |
 | `templates/` | `cfa-prep ips` | IPS templates |
@@ -655,7 +677,7 @@ Every folder belongs to one command:
 
 ```
 ~/.cfa-prep/
-├── mistakes/                 # Mistake log (auto-generated)
+├── mistakes/                 # Mistake log (mistakes.db — auto-generated)
 ├── progress/                 # Progress files (progress.json, quiz_stats.json, quiz_sessions.json — auto-generated)
 ├── flashcards/               # Flashcards (flashcards.json, manually added)
 │   └── images/               # The pictures of the flashcards (manually added)
