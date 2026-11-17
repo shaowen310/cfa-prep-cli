@@ -378,8 +378,50 @@ def test_mistake_browse():
             assert "[1] Module 6: International Trade (2)" in output, output
             assert "Which trade restriction costs the importing country most?" in output, output
             assert "← correct" in output, output
-            assert "← your answer" in output, output
+            # While browsing, the answer that was chosen is not marked
+            assert "← your answer" not in output, output
             print("  ✅ The questions of a module can be browsed by subject and module")
+        finally:
+            _ = os.environ.pop("CFA_PREP_HOME", None)
+
+
+def test_print_mistake_hides_the_wrong_answer():
+    """Test that the browse view shows the correct answer only"""
+    import io
+    import tempfile
+    from contextlib import redirect_stdout
+
+    from cfa_prep.mistake_analyzer import MistakeAnalyzer
+
+    with tempfile.TemporaryDirectory() as tmp:
+        os.environ["CFA_PREP_HOME"] = tmp
+        try:
+            analyzer = MistakeAnalyzer()
+            # A free-form mistake, so the answers are printed as text
+            _ = analyzer.add_mistake(
+                subject="Economics",
+                question="What is the impact of a tariff on the domestic price?",
+                user_answer="4.2%",
+                correct_answer="4.0%",
+                explanation="",
+                module_name="Module 2: Policy",
+            )
+            record = analyzer.all_mistakes()[-1]
+
+            # The full view shows both answers
+            buffer = io.StringIO()
+            with redirect_stdout(buffer):
+                analyzer.print_mistake(record)
+            assert "Your answer: 4.2%" in buffer.getvalue(), buffer.getvalue()
+
+            # The browse view shows the correct answer only
+            buffer = io.StringIO()
+            with redirect_stdout(buffer):
+                analyzer.print_mistake(record, show_wrong=False)
+            output = buffer.getvalue()
+            assert "Your answer" not in output, output
+            assert "Correct answer: 4.0%" in output, output
+            print("  ✅ The browse view shows the correct answer only")
         finally:
             _ = os.environ.pop("CFA_PREP_HOME", None)
 

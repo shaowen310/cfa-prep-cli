@@ -547,11 +547,14 @@ class MistakeAnalyzer:
             groups.setdefault(subject, {}).setdefault(module, []).append(record)
         return groups
 
-    def print_mistake(self, record: MistakeRecord) -> None:
+    def print_mistake(self, record: MistakeRecord, show_wrong: bool = True) -> None:
         """
         Print one mistake with everything it holds: the question, its table, the
         options with the wrong and the correct answer marked, and the
         explanation.
+
+        With show_wrong=False only the correct answer is marked, so the browse
+        view does not point at the answer that was chosen before.
         """
         rule = "─" * 60
         subject = record.get("subject", "")
@@ -571,14 +574,15 @@ class MistakeAnalyzer:
             print()
             for letter, opt in zip("ABC", options):
                 marks = []
-                if opt == record.get("user_answer"):
+                if show_wrong and opt == record.get("user_answer"):
                     marks.append("your answer")
                 if opt == record.get("correct_answer"):
                     marks.append("correct")
                 suffix = f"  ← {', '.join(marks)}" if marks else ""
                 print(f"    {letter}. {opt}{suffix}")
         else:
-            print(f"\n    Your answer: {record.get('user_answer', '')}")
+            if show_wrong:
+                print(f"\n    Your answer: {record.get('user_answer', '')}")
             print(f"    Correct answer: {record.get('correct_answer', '')}")
         if record.get("explanation"):
             print(f"\n  💡 {record['explanation']}")
@@ -645,7 +649,9 @@ class MistakeAnalyzer:
         records = modules[module]
         print(f"\n  📝 {len(records)} in {subject} | {module}\n")
         for record in records:
-            self.print_mistake(record)
+            # While browsing, only the correct answer is marked: the point is
+            # to read the question again, not to look at the old mistake.
+            self.print_mistake(record, show_wrong=False)
             print()
 
     def print_mistake_breakdown(self) -> None:
