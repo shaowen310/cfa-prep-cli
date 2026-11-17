@@ -5,6 +5,7 @@ Purpose: Check the helpers of the utils module: the data root, the search helper
 """
 
 import sys
+import tempfile
 from pathlib import Path
 
 # Add the project root to the path
@@ -16,6 +17,8 @@ from cfa_prep.utils import (
     fuzzy_match,
     get_data_dir,
     get_project_root,
+    load_json,
+    save_json,
 )
 
 
@@ -60,3 +63,27 @@ def test_clean_keyword():
     assert clean_keyword(["'free cash flow'"]) == "free cash flow"
     assert clean_keyword([]) == ""
     print("  ✅ The keyword is built from the typed words")
+
+
+def test_save_json_is_atomic():
+    """Test that a JSON file is written safely and never half-written"""
+    with tempfile.TemporaryDirectory() as tmp:
+        target = Path(tmp) / "data.json"
+
+        # The file is written and read back
+        save_json(target, {"records": [{"question": "A question"}]})
+        assert target.is_file()
+        assert load_json(target).get("records") == [{"question": "A question"}]
+        # No half-written file is left behind
+        assert not target.with_name(target.name + ".tmp").exists()
+
+        # A write that fails leaves the old file alone
+        try:
+            save_json(target, {"records": {1, 2}})  # a set cannot be written
+        except TypeError:
+            pass
+        else:
+            raise AssertionError("a value that cannot be written must raise")
+        assert load_json(target).get("records") == [{"question": "A question"}]
+        assert not target.with_name(target.name + ".tmp").exists()
+    print("  ✅ A JSON file is written safely and never half-written")

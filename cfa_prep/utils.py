@@ -134,10 +134,24 @@ def load_json(filepath: Path) -> dict[str, object]:
 
 
 def save_json(filepath: Path, data: dict[str, object]) -> None:
-    """Save data as a JSON file (UTF-8, 2-space indent)"""
+    """
+    Save data as a JSON file (UTF-8, 2-space indent).
+
+    The file is written next to the target and then moved over it, so an
+    interrupted write never destroys the file that was there before.
+    """
     filepath.parent.mkdir(parents=True, exist_ok=True)
-    with open(filepath, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+    temp = filepath.with_name(filepath.name + ".tmp")
+    try:
+        with open(temp, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(temp, filepath)
+    except BaseException:
+        # The old file is still there, so only the half-written one is removed
+        temp.unlink(missing_ok=True)
+        raise
 
 
 def load_settings() -> dict[str, object]:

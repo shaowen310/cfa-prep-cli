@@ -266,11 +266,14 @@ def test_quiz_stores_the_chosen_answer():
             _ = engine._run_mistake_mcq(items[0])  # pyright: ignore[reportPrivateUsage]
 
             records = analyzer.all_mistakes()
-            assert len(records) == before + 1, "the wrong answer must be logged again"
+            # The record is updated, so the log does not grow
+            assert len(records) == before, "the log must not grow with every attempt"
             logged = records[-1]
             # The quiz knows which answer was chosen, so it is stored
             assert logged.get("user_answer") == options[0], logged
             assert logged.get("correct_answer") == options[1], logged
+            # The attempt is counted on the record that was already there
+            assert logged.get("attempts") == 2, logged
             print("  ✅ The quiz stores the answer that was chosen")
         finally:
             qe.read_input = original_read_input

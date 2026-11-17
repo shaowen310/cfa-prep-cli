@@ -261,6 +261,32 @@ The id is created **once**, when the mistake is logged, and stored with the reco
 there instead of deriving it again, and a mistake that is re-logged after a wrong answer
 carries the id of the original question. The statistics file only refers to that id.
 
+Because the id is the identity of a question, a question that is logged again **updates
+its record** instead of writing a second copy of it:
+
+```json
+{
+  "date": "20261108",
+  "last_date": "20261118",
+  "attempts": 4,
+  "wrong_answers": ["a qualified opinion", "absolute assurance"],
+  "..."
+}
+```
+
+- `attempts` counts how often the question was answered wrong.
+- `last_date` is the date of the last attempt; `date` stays the first one.
+- `wrong_answers` holds the answers that were wrong, each one once — it shows the
+  traps that were taken.
+- What was typed by hand (the explanation, the options, the table) is kept, so an
+  automatic entry — the quiz re-logging a repeated mistake — never wipes it.
+
+The log therefore grows with the **questions**, not with the attempts, and the
+breakdown shows both: `3 | Economics > Module 6 (7 attempts)`.
+
+Every JSON file of the data root is written to a temporary file first and then moved
+over the old one, so an interrupted write can never destroy the file that was there.
+
 The topic is **not** stored with the entry. A question belongs to a topic, but that link
 lives where the truth is: the curriculum owns the curriculum topics, and the mistake
 log owns the logged mistakes. The quiz engine joins the two when it selects what to

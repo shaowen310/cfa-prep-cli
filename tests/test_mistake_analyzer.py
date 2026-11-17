@@ -178,6 +178,71 @@ def test_question_identity():
             _ = os.environ.pop("CFA_PREP_HOME", None)
 
 
+def test_mistake_upsert():
+    """Test that a question that is logged again updates its record"""
+    import json
+    import tempfile
+
+    question = "Which trade restriction costs the importing country most?"
+    options = ["A tariff", "An import quota", "A voluntary export restraint"]
+
+    with tempfile.TemporaryDirectory() as tmp:
+        os.environ["CFA_PREP_HOME"] = tmp
+        try:
+            analyzer = MistakeAnalyzer()
+            _ = analyzer.add_mistake(
+                subject="Economics",
+                question=question,
+                user_answer=options[0],
+                correct_answer=options[1],
+                explanation="A quota costs the importing country the most.",
+                module_name="Module 6: International Trade",
+                options=options,
+            )
+            # The same question, logged again with another wrong answer
+            _ = analyzer.add_mistake(
+                subject="Economics",
+                question=question,
+                user_answer=options[2],
+                correct_answer=options[1],
+                explanation="",
+                module_name="Module 6: International Trade",
+                options=options,
+            )
+
+            records = json.loads(analyzer.data_file.read_text(encoding="utf-8"))["records"]
+            # The log holds the question once
+            assert len(records) == 1, records
+            record = records[0]
+            assert record.get("attempts") == 2, record
+            assert record.get("last_date"), record
+            # The last wrong answer is the one that was given
+            assert record.get("user_answer") == options[2], record
+            # Both wrong answers are kept
+            assert record.get("wrong_answers") == [options[0], options[2]], record
+            # What was written by hand is not wiped by an empty new attempt
+            assert record.get("explanation"), record
+            assert record.get("correct_answer") == options[1], record
+
+            # A third attempt with the same answer does not repeat the history
+            _ = analyzer.add_mistake(
+                subject="Economics",
+                question=question,
+                user_answer=options[2],
+                correct_answer=options[1],
+                explanation="",
+                module_name="Module 6: International Trade",
+                options=options,
+            )
+            records = json.loads(analyzer.data_file.read_text(encoding="utf-8"))["records"]
+            assert len(records) == 1, records
+            assert records[0].get("attempts") == 3, records[0]
+            assert records[0].get("wrong_answers") == [options[0], options[2]], records[0]
+            print("  ✅ A question that is logged again updates its record")
+        finally:
+            _ = os.environ.pop("CFA_PREP_HOME", None)
+
+
 def test_mistake_question_id():
     """Test that a mistake stores its question id and that the quiz engine reuses it"""
     import json
@@ -210,7 +275,7 @@ def test_mistake_question_id():
                 "the id must be derived from the question text and its options"
             )
 
-            # A re-logged copy keeps the id of the original question
+            # A re-logged copy updates the record instead of writing a second one
             _ = analyzer.add_mistake(
                 subject="Economics",
                 question=question,
@@ -222,9 +287,11 @@ def test_mistake_question_id():
                 existing_question_id=stored,
             )
             records = json.loads(analyzer.data_file.read_text(encoding="utf-8"))["records"]
-            assert records[1]["question_id"] == stored, (
+            assert len(records) == 1, "the log must not grow with every attempt"
+            assert records[0]["question_id"] == stored, (
                 "a re-logged mistake must keep the id of the original question"
             )
+            assert records[0].get("attempts") == 2, records[0]
 
             # The engine takes the id from the log, it does not derive it again
             custom_id = "q:0123456789abcdef"

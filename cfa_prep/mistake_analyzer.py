@@ -21,6 +21,7 @@ from .utils import (
 )
 
 QUESTION_PREFIX = "q:"   # identity derived from the question text
+MAX_WRONG_ANSWERS = 5    # how many wrong answers of a question are kept
 
 
 def question_id(stem: str, options: list[str] | None = None) -> str:
@@ -57,6 +58,9 @@ def _session_label(subject: str, module_name: str) -> str:
 class _MistakeRecordOptional(TypedDict, total=False):
     """The optional part of a mistake record."""
     table: Table | None
+    attempts: int          # how often the mistake was logged
+    last_date: str         # the date of the last attempt
+    wrong_answers: list[str]  # the answers that were given wrong so far
 
 
 class MistakeRecord(_MistakeRecordOptional):
@@ -131,7 +135,7 @@ class MistakeAnalyzer:
                 print(f"      ✅ Correct: {r['correct_answer']}")
             if r.get("date"):
                 print(f"      🗓 Date: {r['date']}")
-        choice = self._prompt("\nAdd it again anyway? [y/N]: ").strip().lower()
+        choice = self._prompt("\nLog it again? The record is updated. [y/N]: ").strip().lower()
         return choice in ("y", "yes")
 
     def add_mistake(
@@ -149,6 +153,11 @@ class MistakeAnalyzer:
     ) -> str:
         """
         Add a mistake record to mistakes.json.
+
+        A question that is already logged is updated instead of being written a
+        second time: the attempt is counted, the date of the last attempt is
+        kept and the wrong answers are collected.  The log therefore grows with
+        the questions, not with the attempts.
 
         Parameters:
             subject: subject name (e.g., Economics)
@@ -193,9 +202,65 @@ class MistakeAnalyzer:
         )
         if table:
             record["table"] = table
-        records.append(record)
+
+        # A question that is already logged is updated, not written a second
+        # time: the log grows with the questions, not with the attempts.
+        existing = self._find_by_id(records, qid)
+        if existing is None:
+            record["attempts"] = 1
+            if record.get("user_answer"):
+                # The history of the wrong answers starts with this one
+                record["wrong_answers"] = [record["user_answer"]]
+            records.append(record)
+        else:
+            self._update_mistake(existing, record)
         self._save(records)
         return str(self.data_file)
+
+    @staticmethod
+    def _find_by_id(
+        records: list[MistakeRecord], qid: str
+    ) -> MistakeRecord | None:
+        """Return the record of that question, when it is already logged."""
+        if not qid:
+            return None
+        for record in records:
+            if record.get("question_id") == qid:
+                return record
+        return None
+
+    @staticmethod
+    def _update_mistake(existing: MistakeRecord, new: MistakeRecord) -> None:
+        """
+        Fold a new attempt into the record that is already there.
+
+        What was typed by hand (the explanation, the options, the table) is kept
+        when the new attempt does not bring it, so an automatic entry (the quiz
+        re-logging a repeated mistake) never wipes what the user wrote.
+        """
+        existing["attempts"] = existing.get("attempts", 1) + 1
+        existing["last_date"] = new.get("date", "")
+
+        wrong = new.get("user_answer", "")
+        if wrong:
+            existing["user_answer"] = wrong
+            # The history holds the answers that were wrong, each one once: it
+            # shows the traps that were taken, not every single attempt.
+            history = list(existing.get("wrong_answers") or [])
+            if wrong not in history:
+                history.append(wrong)
+            existing["wrong_answers"] = history[-MAX_WRONG_ANSWERS:]
+
+        correct = new.get("correct_answer", "")
+        if correct and correct != existing.get("correct_answer"):
+            existing["correct_answer"] = correct
+        if new.get("explanation"):
+            existing["explanation"] = new["explanation"]
+        if new.get("options"):
+            existing["options"] = list(new["options"])
+        table = new.get("table")
+        if table:
+            existing["table"] = table
 
     @staticmethod
     def _prompt(prompt: str = "") -> str:
@@ -548,8 +613,13 @@ class MistakeAnalyzer:
         subject = record.get("subject", "")
         module = record.get("module", "")
         location = f"{subject} | {module}" if subject and module else (subject or module)
+        attempts = record.get("attempts", 1)
+        date = record.get("date", "")
+        if attempts > 1:
+            # The question was logged again: the first date and the last one
+            date = f"{date} (last {record.get('last_date', '')}, {attempts} attempts)"
         print(rule)
-        print(f"  📅 {record.get('date', '')}  |  {location}  |  {record.get('level', '')}")
+        print(f"  📅 {date}  |  {location}  |  {record.get('level', '')}")
         print()
         print(f"  {record.get('question', '')}")
         table = record.get("table")
@@ -559,6 +629,7 @@ class MistakeAnalyzer:
                 print(row)
         options = record.get("options") or []
         correct = record.get("correct_answer", "")
+        history = list(record.get("wrong_answers") or [])
         if options:
             print()
             for letter, opt in zip("ABC", options):
@@ -571,6 +642,9 @@ class MistakeAnalyzer:
             print(f"\n    Answer: {correct}")
             if show_wrong:
                 print(f"    Your answer: {record.get('user_answer', '')}")
+        if show_wrong and len(history) > 1:
+            # The answers that were given wrong before, so the pattern shows
+            print(f"    Wrong answers so far: {', '.join(history)}")
         if record.get("explanation"):
             print(f"\n  💡 {record['explanation']}")
         print(rule)
@@ -634,7 +708,11 @@ class MistakeAnalyzer:
         module = module_names[index]
 
         records = modules[module]
-        print(f"\n  📝 {len(records)} in {subject} | {module}\n")
+        attempts = sum(r.get("attempts", 1) for r in records)
+        header = f"📝 {len(records)} in {subject} | {module}"
+        if attempts > len(records):
+            header += f" ({attempts} attempts)"
+        print(f"\n  {header}\n")
         for record in records:
             # While browsing, only the correct answer is marked: the point is
             # to read the question again, not to look at the old mistake.
@@ -663,7 +741,18 @@ class MistakeAnalyzer:
         if not modules:
             return
         noun = "mistake" if total == 1 else "mistakes"
-        print_section(f"Mistake log by subject and module ({total} {noun})")
+        attempts_value = stats.get("attempts")
+        attempts = attempts_value if isinstance(attempts_value, int) else total
+        title = f"Mistake log by subject and module ({total} {noun})"
+        if attempts > total:
+            title += f", {attempts} attempts"
+        print_section(title)
+        module_attempts_value = stats.get("module_attempts")
+        module_attempts = (
+            cast(dict[str, int], module_attempts_value)
+            if isinstance(module_attempts_value, dict)
+            else {}
+        )
         subject_rank, module_rank = self._curriculum_order()
         ordered = sorted(
             modules.items(),
@@ -671,7 +760,10 @@ class MistakeAnalyzer:
         )
         width = max(len(str(count)) for _group, count in ordered)
         for group, count in ordered:
-            print(f"  {count:>{width}} | {group}")
+            # The questions that were answered wrong again are counted apart
+            group_attempts = module_attempts.get(group, count)
+            suffix = f" ({group_attempts} attempts)" if group_attempts > count else ""
+            print(f"  {count:>{width}} | {group}{suffix}")
 
     @staticmethod
     def _curriculum_order() -> tuple[dict[str, int], dict[str, dict[str, int]]]:
@@ -717,30 +809,41 @@ class MistakeAnalyzer:
         """
         Get mistake statistics.
         Returns the total count, per-subject counts, and per-module counts.
+        The attempts are counted as well: a question that was logged again is
+        one mistake, but several attempts.
         """
         records = self._load()
         total = len(records)
         if total == 0:
             return {
                 "total": 0,
+                "attempts": 0,
                 "subjects": {},
                 "modules": {},
+                "module_attempts": {},
             }
 
         subj_count: dict[str, int] = {}
         module_count: dict[str, int] = {}
+        module_attempts: dict[str, int] = {}
+        attempts = 0
         for r in records:
             subj = r.get("subject", "Unknown")
             subj_count[subj] = subj_count.get(subj, 0) + 1
+            count = r.get("attempts", 1)
+            attempts += count
             module = r.get("module", "")
             if module:
                 key = f"{subj} > {module}"
                 module_count[key] = module_count.get(key, 0) + 1
+                module_attempts[key] = module_attempts.get(key, 0) + count
 
         return {
             "total": total,
+            "attempts": attempts,
             "subjects": subj_count,
             "modules": module_count,
+            "module_attempts": module_attempts,
         }
 
     def list_mistake_files(self) -> list[Path]:
