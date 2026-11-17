@@ -4,6 +4,7 @@ Author: CodeBuddy AI Assistant
 Purpose: Check the manual flashcards: adding them and reviewing them.
 """
 
+import contextlib
 import os
 import sys
 from pathlib import Path
@@ -86,6 +87,46 @@ def test_flashcard_with_image():
             text = out.read_text(encoding="utf-8")
             assert "![Spot vs forward curve](images/diagram.png)" in text, text
             print("  ✅ A flashcard can carry an image")
+        finally:
+            _ = os.environ.pop("CFA_PREP_HOME", None)
+
+
+def test_flashcard_missing_image():
+    """Test that a picture that is gone hides the option to open it"""
+    import io
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as tmp:
+        os.environ["CFA_PREP_HOME"] = tmp
+        try:
+            generator = FlashcardGenerator()
+            # The picture is not copied into the data root, so it is not there
+            _ = generator.add_manual(
+                question="What is the yield curve?",
+                answer="Spot rates by maturity",
+                level="L1",
+                subject="Fixed Income",
+                module="Module 3: Yield Curve",
+                images=["images/gone.png"],
+                image_caption="Spot vs forward curve",
+            )
+
+            old_stdin = sys.stdin
+            try:
+                sys.stdin = io.StringIO("q\n")  # quit the review
+                buffer = io.StringIO()
+                with contextlib.redirect_stdout(buffer):
+                    generator.view_flashcards("L1")
+            finally:
+                sys.stdin = old_stdin
+
+            output = buffer.getvalue()
+            # The option to open a picture that is not there is not offered
+            assert "[o] open image" not in output, output
+            assert "not found" in output, output
+            # The path of the picture is still shown
+            assert "gone.png" in output, output
+            print("  ✅ A missing picture hides the option to open it")
         finally:
             _ = os.environ.pop("CFA_PREP_HOME", None)
 

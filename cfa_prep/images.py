@@ -71,9 +71,11 @@ def image_lines(path: Path, caption: str = "") -> list[str]:
     """
     Return the lines that tell where the picture is and how to open it.
 
-    The picture itself is not drawn: it is opened in the image viewer of the
-    system, so the original file is always the one that is studied.
+    A picture that is not on the disk any more gets no hint: there is nothing
+    to open, so the option is not offered either.
     """
+    if not path.is_file():
+        return [f"     ⚠️  {path} (not found)"]
     lines = [f"     📁 {path}"]
     if caption:
         lines.append(f"     🖼️  {caption}")

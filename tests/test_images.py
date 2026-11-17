@@ -108,6 +108,8 @@ def test_image_lines():
 
     with tempfile.TemporaryDirectory() as tmp:
         target = Path(tmp) / "images" / "pic.png"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        _ = target.write_bytes(b"\x89PNG\r\n\x1a\n")
         lines = image_lines(target, "Spot vs forward curve")
         text = "\n".join(lines)
         assert "pic.png" in text
@@ -117,4 +119,10 @@ def test_image_lines():
         # Without a caption the hint is still there
         plain = "\n".join(image_lines(target))
         assert "'o'" in plain
+
+        # A picture that is not on the disk gets no hint, there is nothing to open
+        missing = image_lines(Path(tmp) / "images" / "gone.png")
+        assert len(missing) == 1, missing
+        assert "not found" in missing[0], missing
+        assert "'o'" not in missing[0], missing
     print("  ✅ The lines that describe the picture of a card")

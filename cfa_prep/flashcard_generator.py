@@ -275,6 +275,21 @@ class FlashcardGenerator:
             return ""
         return subjects[idx]
 
+    def _review_keys(self, images: list[str]) -> str:
+        """
+        Return the keys of the review prompt for a set of pictures.
+
+        The option to open a picture only shows up when the file is really
+        there - a picture that is gone cannot be opened, so it is not offered.
+        """
+        keys = "[Enter] reveal answer"
+        if any((self.flashcards_dir / relative).is_file() for relative in images):
+            keys += ", [o] open image"
+        if images:
+            keys += ", [s] path"
+        keys += ", [n] next, [q] quit"
+        return keys
+
     def view_flashcards(self, level: str = "L1") -> None:
         """
         Interactively review flashcards: show each question, then reveal its
@@ -300,10 +315,11 @@ class FlashcardGenerator:
                 cards = filtered
 
             total = len(cards)
-            if any(card.get("images") for card in cards):
-                keys = "[Enter] reveal answer, [o] open image, [s] path, [n] next, [q] quit"
-            else:
-                keys = "[Enter] reveal answer, [n] next, [q] quit"
+            keys = self._review_keys([
+                relative
+                for card in cards
+                for relative in (card.get("images") or [])
+            ])
             print(f"\n  {total} flashcard(s). {keys}.\n")
 
             i = 0
@@ -329,13 +345,14 @@ class FlashcardGenerator:
                 # The image keys keep the card on the screen, so the header is
                 # not printed again after them.
                 while True:
-                    action = self._prompt(
-                        "  [Enter] reveal answer, [o] open image, [s] path, [n] next, [q] quit: "
-                    ).strip().lower()
+                    action = self._prompt(f"  {self._review_keys(images)}: ").strip().lower()
 
                     if action == "o":
                         for relative in images:
                             target = self.flashcards_dir / relative
+                            if not target.is_file():
+                                # The picture is gone, so there is nothing to open
+                                continue
                             if open_externally(target):
                                 print(f"  🖼️  Opened: {target}")
                             else:

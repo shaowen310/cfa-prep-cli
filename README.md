@@ -498,6 +498,9 @@ For a card **with an image** these keys are added:
 - `[o]` opens the picture in the image viewer of the system (the only way to see it)
 - `[s]` prints the path of the picture (for `code <path>` or copying it)
 
+The `[o]` option only shows up when the picture is still on the disk — a picture that
+was deleted is reported as `⚠️ … (not found)` and there is nothing to open.
+
 ## BA II Plus Calculator
 
 Launch an interactive emulator of the Texas Instruments **BA II Plus** financial
