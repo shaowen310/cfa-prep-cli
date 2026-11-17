@@ -261,8 +261,8 @@ class QuizEngine:
             correct_label = labels[options.index(correct_text)]
             print(f"\n  ❌ Incorrect. Correct answer: {correct_label}. {correct_text}")
             self.wrong += 1
-            # Auto-log the repeated mistake
-            self._auto_log_mistake(item)
+            # Auto-log the repeated mistake, with the answer that was chosen
+            self._auto_log_mistake(item, chosen)
         # Record the outcome against the question, so it is rescheduled
         if qid:
             self.stats.record_question(
@@ -273,15 +273,19 @@ class QuizEngine:
             )
         return correct
 
-    def _auto_log_mistake(self, item: MistakeQuestion) -> None:
-        """Re-log a mistake that was answered incorrectly during review."""
+    def _auto_log_mistake(self, item: MistakeQuestion, chosen: str = "") -> None:
+        """Re-log a mistake that was answered incorrectly during review.
+
+        The answer that was chosen is stored as the wrong answer: the quiz
+        knows it already, so the log shows which trap was taken.
+        """
         if not item.get("module"):
             # Without a module the copy cannot be attributed to the curriculum.
             return
         _ = self.mistake_analyzer.add_mistake(
             subject=item["subject"],
             question=item["question"],
-            user_answer="",
+            user_answer=chosen,
             correct_answer=item["correct"],
             explanation="",
             module_name=item["module"],

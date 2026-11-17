@@ -233,6 +233,50 @@ def test_quiz_records_only_questions():
             _ = os.environ.pop("CFA_PREP_HOME", None)
 
 
+def test_quiz_stores_the_chosen_answer():
+    """Test that a mistake created by the quiz keeps the answer that was chosen"""
+    import tempfile
+
+    import cfa_prep.quiz_engine as qe
+    from cfa_prep.mistake_analyzer import MistakeAnalyzer
+
+    options = ["A tariff", "An import quota", "A voluntary export restraint"]
+    with tempfile.TemporaryDirectory() as tmp:
+        os.environ["CFA_PREP_HOME"] = tmp
+        original_read_input = qe.read_input
+        qe.read_input = lambda prompt="": "A"  # always the first option shown
+
+        try:
+            analyzer = MistakeAnalyzer()
+            _ = analyzer.add_mistake(
+                subject="Economics",
+                question="Which trade restriction costs the importing country most?",
+                user_answer=options[0],
+                correct_answer=options[1],
+                explanation="",
+                module_name="Module 6: International Trade",
+                options=options,
+            )
+            before = len(analyzer.all_mistakes())
+
+            engine = QuizEngine()
+            engine.randomize = False  # the options keep their order
+            items = engine._get_mistake_questions()  # pyright: ignore[reportPrivateUsage]
+            assert len(items) == 1
+            _ = engine._run_mistake_mcq(items[0])  # pyright: ignore[reportPrivateUsage]
+
+            records = analyzer.all_mistakes()
+            assert len(records) == before + 1, "the wrong answer must be logged again"
+            logged = records[-1]
+            # The quiz knows which answer was chosen, so it is stored
+            assert logged.get("user_answer") == options[0], logged
+            assert logged.get("correct_answer") == options[1], logged
+            print("  ✅ The quiz stores the answer that was chosen")
+        finally:
+            qe.read_input = original_read_input
+            _ = os.environ.pop("CFA_PREP_HOME", None)
+
+
 def test_quiz_stats_scheduling_and_selection():
     """Test the quiz statistics: scheduling, mastery discount and priority selection"""
     import tempfile

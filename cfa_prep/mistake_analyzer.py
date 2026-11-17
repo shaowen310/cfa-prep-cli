@@ -346,7 +346,7 @@ class MistakeAnalyzer:
             ("option_a", "  Enter the 3 answer options:\n    A: ", False),
             ("option_b", "    B: ", False),
             ("option_c", "    C: ", False),
-            ("user_letter", "\nYour wrong answer (A/B/C): ", True),
+            ("user_letter", "\nYour wrong answer (A/B/C, blank to skip): ", True),
             ("correct_letter", "Correct answer (A/B/C): ", True),
             ("explanation", "Explanation (optional): ", False),
         ]
@@ -453,7 +453,7 @@ class MistakeAnalyzer:
         while i < len(fields):
             key = fields[i]
             if key == "user_answer":
-                prompt = "\nYour wrong answer: "
+                prompt = "\nYour wrong answer (optional — blank to skip): "
             elif key == "correct_answer":
                 prompt = "Correct answer: "
             else:
