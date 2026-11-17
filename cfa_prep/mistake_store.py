@@ -3,8 +3,7 @@ CFA Prep CLI - Mistake store module
 Author: CodeBuddy AI Assistant
 Purpose: Keep the mistake log in an SQLite database (the standard library), so a
          mistake is written with one statement instead of rewriting the whole
-         file, and every read is a query instead of a full parse.  The old JSON
-         file is imported once and kept as a backup.
+         file, and every read is a query instead of a full parse.
 """
 
 import json
@@ -17,7 +16,6 @@ from typing import TypedDict, cast
 from .tables import Table
 
 DB_NAME = "mistakes.db"
-LEGACY_NAME = "mistakes.json"
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS mistakes (
@@ -131,35 +129,18 @@ def _record_values(record: MistakeRecord) -> tuple[object, ...]:
     )
 
 
-def read_json_records(path: Path) -> list[MistakeRecord]:
-    """Read the records of the old JSON log."""
-    if not path.exists():
-        return []
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return []
-    records = data.get("records", [])
-    if not isinstance(records, list):
-        return []
-    return cast(list[MistakeRecord], records)
-
-
 class MistakeStore:
     """
     The mistake log, kept in an SQLite database.
 
     The database is the live store: a mistake is written with one statement,
     the rows are found by index, and the log is never rewritten as a whole.
-    The old JSON file is imported once and then kept as a backup.
     """
 
     db_path: Path
-    legacy_path: Path | None
 
-    def __init__(self, db_path: Path, legacy_path: Path | None = None) -> None:
+    def __init__(self, db_path: Path) -> None:
         self.db_path = db_path
-        self.legacy_path = legacy_path
 
     @contextmanager
     def _session(self) -> Generator[sqlite3.Connection, None, None]:
@@ -268,27 +249,7 @@ class MistakeStore:
             )
             return cursor.rowcount > 0
 
-    # --- moving between the formats ---------------------------------------
-
-    def import_legacy(self) -> int:
-        """
-        Import the old JSON log into the database, once.
-
-        The import only happens while the database is still empty, so a JSON
-        file that shows up later is never mixed into a log that is in use.  The
-        file is kept as a backup under a new name, so nothing is lost.
-        """
-        if self.legacy_path is None or not self.legacy_path.exists():
-            return 0
-        if self.count() > 0:
-            return 0
-        records = read_json_records(self.legacy_path)
-        with self._session() as connection:
-            for record in records:
-                _ = connection.execute(UPSERT, _record_values(record))
-        backup = self.legacy_path.with_name(self.legacy_path.name + ".imported")
-        _ = self.legacy_path.replace(backup)
-        return len(records)
+    # --- exporting ---------------------------------------------------------
 
     def export_json(self, path: Path) -> None:
         """Write the log as a JSON file, the format that can be read by hand."""

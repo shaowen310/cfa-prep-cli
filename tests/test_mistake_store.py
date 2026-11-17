@@ -2,7 +2,7 @@
 CFA Prep CLI - Tests for the mistake store module
 Author: CodeBuddy AI Assistant
 Purpose: Check the SQLite store of the mistake log: writing, reading, the counts
-         and the import of the old JSON log.
+         and the export to JSON.
 """
 
 import json
@@ -77,50 +77,6 @@ def test_mistake_store_queries():
         total = sum(questions for _s, _m, questions, _a in groups)
         assert total == 3, groups
         print("  ✅ The log can be read by subject, module, question and date")
-
-
-def test_mistake_store_migration():
-    """Test that the old JSON log is imported once and then kept as a backup"""
-    with tempfile.TemporaryDirectory() as tmp:
-        root = Path(tmp)
-        legacy = root / "mistakes.json"
-        _ = legacy.write_text(
-            json.dumps(
-                {
-                    "records": [
-                        {
-                            "date": "20260101",
-                            "level": "L1",
-                            "subject": "Economics",
-                            "module": "Module 1: Basics",
-                            "question": "What is demand?",
-                            "question_id": "q:dem",
-                            "options": ["A", "B"],
-                            "user_answer": "A",
-                            "correct_answer": "B",
-                            "explanation": "",
-                        }
-                    ]
-                }
-            ),
-            encoding="utf-8",
-        )
-
-        store = MistakeStore(root / "mistakes.db", legacy)
-        imported = store.import_legacy()
-        assert imported == 1, imported
-        assert store.count() == 1, store.count()
-        # The old file is kept as a backup
-        assert not legacy.exists()
-        backup = root / "mistakes.json.imported"
-        assert backup.is_file(), backup
-        assert json.loads(backup.read_text(encoding="utf-8"))["records"]
-
-        # A second import does not touch the log that is in use
-        store.upsert(_record("What is a quota?"))
-        assert store.import_legacy() == 0
-        assert store.count() == 2, store.count()
-        print("  ✅ The old JSON log is imported once and then kept as a backup")
 
 
 def test_mistake_store_export():

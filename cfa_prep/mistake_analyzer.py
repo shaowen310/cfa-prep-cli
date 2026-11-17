@@ -1,7 +1,8 @@
 """
 CFA Prep CLI - Mistake analyzer module
 Author: CodeBuddy AI Assistant
-Purpose: Log and analyze mistakes, stored as JSON at <data_root>/mistakes/mistakes.json.
+Purpose: Log and analyze mistakes, stored in an SQLite database at
+         <data_root>/mistakes/mistakes.db.
          Supports MCQ (L1) and free-form (L2/L3) mistake logging.
 """
 
@@ -9,7 +10,7 @@ from pathlib import Path
 from typing import cast
 
 from .curriculum import Curriculum
-from .mistake_store import DB_NAME, LEGACY_NAME, MistakeRecord, MistakeStore
+from .mistake_store import DB_NAME, MistakeRecord, MistakeStore
 from .tables import Table, read_table, render_table
 from .utils import (
     get_data_dir,
@@ -58,22 +59,13 @@ class MistakeAnalyzer:
     """
     Mistake analyzer.
     Manages the entry, categorization, storage, and retrieval of mistakes.
-    All records are stored in an SQLite database (mistakes.db); the old JSON
-    file is imported once and then kept as a backup.
+    All records are stored in an SQLite database (mistakes.db).
     """
 
     def __init__(self):
         self.mistakes_dir: Path = get_data_dir("mistakes")
-        self.data_file: Path = self.mistakes_dir / LEGACY_NAME
         self.db_file: Path = self.mistakes_dir / DB_NAME
-        self.store: MistakeStore = MistakeStore(self.db_file, self.data_file)
-        imported = self.store.import_legacy()
-        if imported:
-            print(
-                f"\n  📥 Imported {imported} mistake(s) from {self.data_file.name} "
-                f"into {self.db_file.name} (the old file is kept as "
-                f"{self.data_file.name}.imported)."
-            )
+        self.store: MistakeStore = MistakeStore(self.db_file)
 
     def _load(self) -> list[MistakeRecord]:
         """Load all mistake records."""
@@ -134,7 +126,7 @@ class MistakeAnalyzer:
         table: Table | None = None,
     ) -> str:
         """
-        Add a mistake record to mistakes.json.
+        Add a mistake record to the mistake log (mistakes.db).
 
         A question that is already logged is updated instead of being written a
         second time: the attempt is counted, the date of the last attempt is
@@ -156,7 +148,7 @@ class MistakeAnalyzer:
             table: the table the question refers to (optional)
 
         Returns:
-            the path of the mistakes file
+            the path of the mistakes database
         """
         # The subject and module are curriculum values, so they are the reliable
         # link between a mistake and the material it belongs to.  A mistake
@@ -836,8 +828,6 @@ class MistakeAnalyzer:
         files: list[Path] = []
         if self.db_file.exists():
             files.append(self.db_file)
-        if self.data_file.exists():
-            files.append(self.data_file)
         return files
 
     def export_mistakes(self, path: Path) -> Path:

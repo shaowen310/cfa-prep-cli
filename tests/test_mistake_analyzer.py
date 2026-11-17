@@ -305,7 +305,7 @@ def test_mistake_question_id():
                 items = engine._get_mistake_questions()  # pyright: ignore[reportPrivateUsage]
                 assert len(items) == 1
                 assert items[0]["question_id"] == custom_id, (
-                    "the engine must read the id from mistakes.json"
+                    "the engine must read the id from the mistake log"
                 )
                 _ = engine._run_mistake_mcq(items[0])  # pyright: ignore[reportPrivateUsage]
             finally:
@@ -313,7 +313,7 @@ def test_mistake_question_id():
 
             questions = QuizStats().load()["questions"]
             assert custom_id in questions, (
-                "the quiz statistics must be keyed by the id stored in mistakes.json"
+                "the quiz statistics must be keyed by the id stored in the mistake log"
             )
 
             print("  ✅ Mistake question id is stored and reused")

@@ -293,11 +293,6 @@ new attempt is a single `INSERT … ON CONFLICT DO UPDATE` instead of reading an
 rewriting the whole file. Lookups (by subject and module, by question text) use indexes,
 so the browse view and the search only touch the rows they need.
 
-An older `mistakes.json` is imported **once**, automatically, the first time the
-database is used; the file is then kept as `mistakes.json.imported` so nothing is lost.
-The import never runs again, even if the database is emptied, because the backup no
-longer has the original name.
-
 To look at the log with your own tools — or to move it to another machine — export it as
 a readable JSON file:
 
@@ -669,7 +664,7 @@ Every folder belongs to one command:
 | Folder | Command | Content |
 | --- | --- | --- |
 | `flashcards/` | `cfa-prep flashcard` | `flashcards.json` (manually added), `images/` (the pictures of the cards) |
-| `mistakes/` | `cfa-prep mistake` | `mistakes.db` (auto-generated), `mistakes-export.json` (optional export), `mistakes.json.imported` (backup of an imported JSON log) |
+| `mistakes/` | `cfa-prep mistake` | `mistakes.db` (auto-generated), `mistakes-export.json` (optional export) |
 | `curriculum/` | `cfa-prep curriculum` | `curriculum.json` (subjects, modules, topics) |
 | `progress/` | `cfa-prep recap` / `cfa-prep stats` | `progress.json`, `quiz_stats.json`, `quiz_sessions.json` |
 | `templates/` | `cfa-prep ips` | IPS templates |
