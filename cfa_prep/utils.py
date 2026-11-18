@@ -284,7 +284,7 @@ def fuzzy_word_match(text: str, keyword: str) -> bool:
     keyword = keyword.strip()
     if not keyword:
         return False
-    for word in re.findall(r"\w+", text):
+    for word in cast(list[str], re.findall(r"\w+", text)):
         if fuzzy_match(keyword, word):
             return True
     return False

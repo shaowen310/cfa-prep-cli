@@ -538,7 +538,7 @@ class QuizEngine:
         print(f"📋 {quiz['instructions']}")
         print("\nWrite your analysis below (enter a blank line to finish):\n")
 
-        lines = []
+        lines: list[str] = []
         while True:
             line = input()
             if line == "" and lines and lines[-1] == "":
@@ -594,7 +594,7 @@ class QuizEngine:
             for _key, stat in weakest:
                 print(
                     f"     • {describe(stat)}"
-                    f" ({stat['times_wrong']} wrong / {stat['times_seen']} seen)"
+                    + f" ({stat['times_wrong']} wrong / {stat['times_seen']} seen)"
                 )
 
         due = self.stats.due_questions(limit=3)

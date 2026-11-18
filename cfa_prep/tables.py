@@ -84,13 +84,13 @@ def render_table(table: Table, indent: str = "  ", rule: str = "─") -> list[st
     rows = [row + [""] * (columns - len(row)) for row in rows]
 
     # The width of a column is the widest cell in it
-    widths = []
+    widths: list[int] = []
     for index in range(columns):
         cells = [header[index]] + [row[index] for row in rows]
         widths.append(max(len(cell) for cell in cells))
 
     def format_row(cells: list[str]) -> str:
-        parts = []
+        parts: list[str] = []
         for index, cell in enumerate(cells):
             if is_numeric(cell):
                 parts.append(cell.rjust(widths[index]))

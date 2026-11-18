@@ -585,7 +585,7 @@ def test_mistake_session_summary():
             output = buffer.getvalue()
             assert (
                 "✅ Session complete — 1 mistake saved for "
-                "Economics > Module 6: International Trade." in output
+                + "Economics > Module 6: International Trade." in output
             ), output
             assert "Mistake log by subject and module" not in output, output
             records = analyzer.all_mistakes()

@@ -186,7 +186,7 @@ class QuizStats:
         questions: dict[str, QuestionStat] = {}
         questions_raw = raw.get("questions", {})
         if isinstance(questions_raw, dict):
-            for key, value in questions_raw.items():
+            for key, value in cast(dict[str, object], questions_raw).items():
                 if isinstance(value, dict):
                     questions[key] = self._normalize_question(cast(dict[str, object], value))
 
@@ -212,7 +212,7 @@ class QuizStats:
         sessions: list[SessionRecord] = []
         sessions_raw = raw.get("sessions", [])
         if isinstance(sessions_raw, list):
-            for item in sessions_raw:
+            for item in cast(list[object], sessions_raw):
                 if isinstance(item, dict):
                     d = cast(dict[str, object], item)
                     sessions.append(self._normalize_session(d))

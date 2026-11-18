@@ -101,7 +101,7 @@ def test_save_json_waits_for_a_locked_file():
         real_replace = os.replace
         calls = {"count": 0}
 
-        def locked_replace(src, dst):
+        def locked_replace(src: str, dst: str) -> None:
             calls["count"] += 1
             if calls["count"] == 1:
                 raise PermissionError("the file is locked")

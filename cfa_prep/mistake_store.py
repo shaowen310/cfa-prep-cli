@@ -93,6 +93,57 @@ ON CONFLICT(question_id) DO UPDATE SET
 """
 
 
+def _rows(cursor: sqlite3.Cursor) -> list[sqlite3.Row]:
+    """The rows of a query, with the type of the row known."""
+    return cast(list[sqlite3.Row], cursor.fetchall())
+
+
+def _row(cursor: sqlite3.Cursor) -> sqlite3.Row | None:
+    """The row of a query, with the type of the row known."""
+    return cast(sqlite3.Row | None, cursor.fetchone())
+
+
+def _text(row: sqlite3.Row, column: str) -> str:
+    """The text of a column of a row of the database.
+
+    A column that holds nothing is an empty text.
+    """
+    value = cast(object, row[column])
+    if value is None:
+        return ""
+    return value if isinstance(value, str) else str(value)
+
+
+def _number(row: sqlite3.Row, column: str) -> int:
+    """The number of a column of a row of the database."""
+    value = cast(object, row[column])
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str) and value.strip():
+        try:
+            return int(value)
+        except ValueError:
+            return 0
+    return 0
+
+
+def _texts(row: sqlite3.Row, column: str) -> list[str]:
+    """The list of texts that is stored in a column of a row."""
+    raw = _text(row, column)
+    if not raw:
+        return []
+    values = cast(list[object], json.loads(raw))
+    return [str(value) for value in values]
+
+
+def _table_of(row: sqlite3.Row, column: str) -> Table | None:
+    """The table that is stored in a column of a row."""
+    raw = _text(row, column)
+    if not raw:
+        return None
+    return cast(Table, json.loads(raw))
+
+
 def _ensure_schema(connection: sqlite3.Connection) -> None:
     """
     Create the table and bring an older database up to date.
@@ -102,7 +153,9 @@ def _ensure_schema(connection: sqlite3.Connection) -> None:
     the new lookup as well.
     """
     _ = connection.executescript(SCHEMA)
-    columns = {row["name"] for row in connection.execute("PRAGMA table_info(mistakes)")}
+    columns = {
+        _text(row, "name") for row in _rows(connection.execute("PRAGMA table_info(mistakes)"))
+    }
     if "stem_key" not in columns:
         _ = connection.execute(
             "ALTER TABLE mistakes ADD COLUMN stem_key TEXT NOT NULL DEFAULT ''"
@@ -111,14 +164,16 @@ def _ensure_schema(connection: sqlite3.Connection) -> None:
         "CREATE INDEX IF NOT EXISTS idx_mistakes_stem_key ON mistakes(stem_key)"
     )
     # The key of the questions that were logged before the column existed
-    rows = connection.execute(
-        "SELECT question_id, question FROM mistakes"
-        " WHERE stem_key = '' AND question != ''"
-    ).fetchall()
+    rows = _rows(
+        connection.execute(
+            "SELECT question_id, question FROM mistakes"
+            + " WHERE stem_key = '' AND question != ''"
+        )
+    )
     for row in rows:
         _ = connection.execute(
             "UPDATE mistakes SET stem_key = ? WHERE question_id = ?",
-            (stem_key(row["question"]), row["question_id"]),
+            (stem_key(_text(row, "question")), _text(row, "question_id")),
         )
 
 
@@ -147,25 +202,27 @@ class MistakeRecord(_MistakeRecordOptional):
 def _row_to_record(row: sqlite3.Row) -> MistakeRecord:
     """Build a mistake record from a database row."""
     record = MistakeRecord(
-        date=row["date"],
-        level=row["level"],
-        subject=row["subject"],
-        module=row["module"],
-        question=row["question"],
-        question_id=row["question_id"],
-        options=cast(list[str], json.loads(row["options"] or "[]")),
-        user_answer=row["user_answer"],
-        correct_answer=row["correct_answer"],
-        explanation=row["explanation"],
-        attempts=row["attempts"],
+        date=_text(row, "date"),
+        level=_text(row, "level"),
+        subject=_text(row, "subject"),
+        module=_text(row, "module"),
+        question=_text(row, "question"),
+        question_id=_text(row, "question_id"),
+        options=_texts(row, "options"),
+        user_answer=_text(row, "user_answer"),
+        correct_answer=_text(row, "correct_answer"),
+        explanation=_text(row, "explanation"),
+        attempts=_number(row, "attempts"),
     )
-    if row["last_date"]:
-        record["last_date"] = row["last_date"]
-    wrong_answers = cast(list[str], json.loads(row["wrong_answers"] or "[]"))
+    last_date = _text(row, "last_date")
+    if last_date:
+        record["last_date"] = last_date
+    wrong_answers = _texts(row, "wrong_answers")
     if wrong_answers:
         record["wrong_answers"] = wrong_answers
-    if row["table_json"]:
-        record["table"] = cast(Table, json.loads(row["table_json"]))
+    table = _table_of(row, "table_json")
+    if table:
+        record["table"] = table
     return record
 
 
@@ -223,16 +280,18 @@ class MistakeStore:
     def load_all(self) -> list[MistakeRecord]:
         """Return every record, in the order it was logged."""
         with self._session() as connection:
-            rows = connection.execute("SELECT * FROM mistakes ORDER BY rowid").fetchall()
+            rows = _rows(connection.execute("SELECT * FROM mistakes ORDER BY rowid"))
         return [_row_to_record(row) for row in rows]
 
     def load_recent(self, limit: int = 10) -> list[MistakeRecord]:
         """Return the newest records, the newest first."""
         with self._session() as connection:
-            rows = connection.execute(
-                "SELECT * FROM mistakes ORDER BY date DESC, rowid DESC LIMIT ?",
-                (limit,),
-            ).fetchall()
+            rows = _rows(
+                connection.execute(
+                    "SELECT * FROM mistakes ORDER BY date DESC, rowid DESC LIMIT ?",
+                    (limit,),
+                )
+            )
         return [_row_to_record(row) for row in rows]
 
     def load_by_subject_module(
@@ -240,10 +299,12 @@ class MistakeStore:
     ) -> list[MistakeRecord]:
         """Return the records of one module, in the order they were logged."""
         with self._session() as connection:
-            rows = connection.execute(
-                'SELECT * FROM mistakes WHERE subject = ? AND "module" = ? ORDER BY rowid',
-                (subject, module),
-            ).fetchall()
+            rows = _rows(
+                connection.execute(
+                    'SELECT * FROM mistakes WHERE subject = ? AND "module" = ? ORDER BY rowid',
+                    (subject, module),
+                )
+            )
         return [_row_to_record(row) for row in rows]
 
     def load_by_question(self, question: str) -> list[MistakeRecord]:
@@ -259,9 +320,11 @@ class MistakeStore:
         if not key:
             return []
         with self._session() as connection:
-            rows = connection.execute(
-                "SELECT * FROM mistakes WHERE stem_key = ? ORDER BY rowid", (key,)
-            ).fetchall()
+            rows = _rows(
+                connection.execute(
+                    "SELECT * FROM mistakes WHERE stem_key = ? ORDER BY rowid", (key,)
+                )
+            )
         return [_row_to_record(row) for row in rows]
 
     def get(self, question_id: str) -> MistakeRecord | None:
@@ -269,9 +332,11 @@ class MistakeStore:
         if not question_id:
             return None
         with self._session() as connection:
-            row = connection.execute(
-                "SELECT * FROM mistakes WHERE question_id = ?", (question_id,)
-            ).fetchone()
+            row = _row(
+                connection.execute(
+                    "SELECT * FROM mistakes WHERE question_id = ?", (question_id,)
+                )
+            )
         return _row_to_record(row) if row is not None else None
 
     def grouped_counts(self) -> list[tuple[str, str, int, int]]:
@@ -282,30 +347,41 @@ class MistakeStore:
         loaded to know how much of it there is.
         """
         with self._session() as connection:
-            rows = connection.execute(
-                "SELECT subject, \"module\" AS module, COUNT(*) AS questions,"
-                " SUM(attempts) AS attempts FROM mistakes"
-                " GROUP BY subject, \"module\" ORDER BY subject, \"module\""
-            ).fetchall()
+            rows = _rows(
+                connection.execute(
+                    'SELECT subject, "module" AS module, COUNT(*) AS questions,'
+                    + " SUM(attempts) AS attempts FROM mistakes"
+                    + ' GROUP BY subject, "module" ORDER BY subject, "module"'
+                )
+            )
         return [
-            (row["subject"], row["module"], row["questions"], row["attempts"])
+            (
+                _text(row, "subject"),
+                _text(row, "module"),
+                _number(row, "questions"),
+                _number(row, "attempts"),
+            )
             for row in rows
         ]
 
     def count(self) -> int:
         """Return the number of logged questions."""
         with self._session() as connection:
-            row = connection.execute("SELECT COUNT(*) AS total FROM mistakes").fetchone()
-        return int(row["total"]) if row is not None else 0
+            row = _row(
+                connection.execute("SELECT COUNT(*) AS total FROM mistakes")
+            )
+        return _number(row, "total") if row is not None else 0
 
     def latest(self) -> MistakeRecord | None:
         """Return the question that was logged last, when there is one."""
         with self._session() as connection:
-            row = connection.execute(
-                'SELECT * FROM mistakes'
-                ' ORDER BY COALESCE(NULLIF(last_date, \'\'), date) DESC, rowid DESC'
-                " LIMIT 1"
-            ).fetchone()
+            row = _row(
+                connection.execute(
+                    "SELECT * FROM mistakes"
+                    + " ORDER BY COALESCE(NULLIF(last_date, ''), date) DESC, rowid DESC"
+                    + " LIMIT 1"
+                )
+            )
         return _row_to_record(row) if row is not None else None
 
     # --- writing -----------------------------------------------------------
@@ -340,12 +416,14 @@ class MistakeStore:
         different text.  The oldest row of a group comes first.
         """
         with self._session() as connection:
-            rows = connection.execute(
-                "SELECT * FROM mistakes WHERE stem_key != '' ORDER BY rowid"
-            ).fetchall()
+            rows = _rows(
+                connection.execute(
+                    "SELECT * FROM mistakes WHERE stem_key != '' ORDER BY rowid"
+                )
+            )
         groups: dict[str, list[MistakeRecord]] = {}
         for row in rows:
-            key = str(row["stem_key"])
+            key = _text(row, "stem_key")
             groups.setdefault(key, []).append(_row_to_record(row))
         return [group for group in groups.values() if len(group) > 1]
 

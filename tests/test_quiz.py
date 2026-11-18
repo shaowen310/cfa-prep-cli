@@ -7,6 +7,7 @@ Purpose: Check the quiz engine: the mistake review, the module material and the 
 import os
 import sys
 from pathlib import Path
+from typing import cast
 
 # Add the project root to the path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -401,8 +402,12 @@ def test_quiz_stats_file_split():
             assert stats.sessions_file.exists(), "the sessions file must exist"
             assert stats.stats_file != stats.sessions_file
 
-            questions_raw = json.loads(stats.stats_file.read_text(encoding="utf-8"))
-            sessions_raw = json.loads(stats.sessions_file.read_text(encoding="utf-8"))
+            questions_raw = cast(
+                dict[str, object], json.loads(stats.stats_file.read_text(encoding="utf-8"))
+            )
+            sessions_raw = cast(
+                dict[str, object], json.loads(stats.sessions_file.read_text(encoding="utf-8"))
+            )
             assert "questions" in questions_raw, "the questions file holds the per-question stats"
             assert "sessions" not in questions_raw, "sessions must not live in the questions file"
             assert "sessions" in sessions_raw, "the sessions file holds the history"

@@ -12,7 +12,9 @@ import importlib
 import pkgutil
 import sys
 import traceback
+from collections.abc import Callable
 from pathlib import Path
+from typing import cast
 
 # Add the project root to the path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -34,7 +36,7 @@ def run_all_tests() -> int:
     passed = 0
     failed = 0
     total = 0
-    failures = []
+    failures: list[tuple[str, str, str]] = []
 
     print("=" * 60)
     print("CFA Prep CLI - Running the test suite")
@@ -46,12 +48,13 @@ def run_all_tests() -> int:
 
         test_names = sorted(
             name for name in dir(module)
-            if name.startswith("test_") and callable(getattr(module, name))
+            if name.startswith("test_")
+            and callable(cast(object, getattr(module, name, None)))
         )
 
         for name in test_names:
             total += 1
-            test_func = getattr(module, name)
+            test_func = cast(Callable[[], None], getattr(module, name))
             try:
                 test_func()
             except Exception:  # noqa: BLE001 - a failing test must not stop the run

@@ -10,6 +10,7 @@ import sqlite3
 import sys
 import tempfile
 from pathlib import Path
+from typing import cast
 
 # Add the project root to the path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -239,9 +240,10 @@ def test_mistake_store_export():
 
         target = root / "export.json"
         store.export_json(target)
-        data = json.loads(target.read_text(encoding="utf-8"))
-        assert len(data["records"]) == 1, data
-        assert data["records"][0]["question"] == "What is demand?", data
+        data = cast(dict[str, object], json.loads(target.read_text(encoding="utf-8")))
+        records = cast(list[dict[str, object]], data["records"])
+        assert len(records) == 1, data
+        assert records[0]["question"] == "What is demand?", data
         # No half-written file is left behind
         assert not (root / "export.json.tmp").exists()
         print("  ✅ The log can be written as a JSON file again")

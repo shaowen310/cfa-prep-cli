@@ -228,8 +228,8 @@ def cmd_search(args: CLIArgs) -> None:
 
     print(
         f"\nCurriculum: {outcome['curriculum_modules']} modules"
-        f" / {outcome['curriculum_topics']} topics"
-        f" | Flashcards: {outcome['flashcards']} | Mistakes: {outcome['mistakes']}\n"
+        + f" / {outcome['curriculum_topics']} topics"
+        + f" | Flashcards: {outcome['flashcards']} | Mistakes: {outcome['mistakes']}\n"
     )
 
     hits = outcome["hits"]
@@ -320,8 +320,8 @@ def cmd_stats(args: CLIArgs) -> None:
             label = describe(stat)
             print(
                 f"  • {label}"
-                f" — {stat['times_wrong']} wrong / {stat['times_seen']} seen"
-                f" (streak {stat['streak']}, due {due.isoformat() if due else 'n/a'})"
+                + f" — {stat['times_wrong']} wrong / {stat['times_seen']} seen"
+                + f" (streak {stat['streak']}, due {due.isoformat() if due else 'n/a'})"
             )
 
     due = stats.due_questions(limit=10)
@@ -383,7 +383,7 @@ def cmd_mistake(args: CLIArgs) -> None:
         print(f"\n  {record.get('question', '')}")
         print(
             f"  {record.get('subject', '')} | {record.get('module', '')}"
-            f" | {record.get('date', '')}"
+            + f" | {record.get('date', '')}"
         )
         print(f"  📊 {analyzer.store.count()} question(s) left")
         return
@@ -404,8 +404,8 @@ def cmd_mistake(args: CLIArgs) -> None:
                 marker = "keep" if record is keep else "merge"
                 print(
                     f"      · [{marker}] {record.get('question_id', '')}"
-                    f"  {record.get('date', '')}"
-                    f"  attempts={record.get('attempts', 1)}"
+                    + f"  {record.get('date', '')}"
+                    + f"  attempts={record.get('attempts', 1)}"
                 )
                 print(f"          question : {record.get('question', '')}")
                 print(f"          options  : {record.get('options') or []}")

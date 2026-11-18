@@ -298,7 +298,7 @@ class FlashcardGenerator:
                     Step(
                         "question",
                         f"\nQuestion{(' [' + location + ']') if location else ''}"
-                        " (blank to finish): ",
+                        + " (blank to finish): ",
                         on_value=check_question,
                     ),
                     Step("answer", "Answer: ", on_value=check_answer),
