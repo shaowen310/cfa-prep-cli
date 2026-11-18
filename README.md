@@ -84,6 +84,7 @@ cfa-prep search FCFE
 | `search <keyword>`           | Search your curriculum, flashcards and mistakes | `cfa-prep search FCFE`      |
 | `search --regex`             | Regex search                 | `cfa-prep search "FCF[EF]" --regex`            |
 | `search --no-fuzzy`          | Exact matching only (higher precision) | `cfa-prep search FCFE --no-fuzzy`   |
+| `search --detail N`          | Show the original data of the result N | `cfa-prep search FCFE --detail 2`      |
 | `quiz`                       | Quiz at the configured level (set via `config level`) | `cfa-prep quiz`                          |
 | `quiz --no-randomize`        | Disable question/option shuffling | `cfa-prep quiz --no-randomize`             |
 | `stats`                      | Quiz statistics and review schedule | `cfa-prep stats`                        |
@@ -129,21 +130,66 @@ Every hit shows where it came from:
   🔍 Search: tariff
 ============================================================
 
-Curriculum: 93 modules / 583 topics | Flashcards: 5 | Mistakes: 66
+Curriculum: 93 modules / 583 topics | Flashcards: 8 | Mistakes: 81
 
 Found 3 result(s):
 
 ────────────────────────────────────────────────────────────
-  📘 [1] Module 4: Monetary Policy | Economics > Module 4: Monetary Policy (L1)
+  📘 [1] 6.03 Trade Restrictions and Agreements—Tariffs, Quotas, and Export
+      Subsidies | Economics > Module 6: International Trade (L1)
 
 ────────────────────────────────────────────────────────────
-  ❌ [1] Which of the following trade restrictions is likely to result in the
+  ❌ [2] Which of the following trade restrictions is likely to result in the
       greatest welfare loss for the importing country? | Economics > Module 6:
       International Trade
 ────────────────────────────────────────────────────────────
   ...s is likely to result in the greatest welfare loss for the importing country?
   A tariff
+  An import quota
+  A voluntary export restraint
+  With a voluntary export restraint,...
+
+────────────────────────────────────────────────────────────
+  ❌ [3] A large country can | Economics > Module 6: International Trade
+────────────────────────────────────────────────────────────
+  A large country can
+  benefit by imposing a tariff.
+  benefit with an export subsidy.
+  not benefit from any trade restriction.
+  By def...
+
+  Type the number of a result to see its original data (Enter to quit):
+  > 2
+────────────────────────────────────────────────────────────
+  📅 20260811  |  Economics | Module 6: International Trade  |  L1
+
+  Which of the following trade restrictions is likely to result in the greatest welfare loss for the importing country?
+
+    A. A tariff
+    B. An import quota
+    C. A voluntary export restraint
+
+    Answer: C
+
+  💡 With a voluntary export restraint, the price increase induced by restricting the quantity of imports (= quota rent for equivalent quota = tariff revenue for equivalent tariff) accrues to foreign exporters or the foreign government.
+────────────────────────────────────────────────────────────
+
+  Type the number of another result, 'm' for the module of the last one, or press Enter to quit:
+  >
 ```
+
+The search only shows a **snippet** of what was found. Type the **number of a result** to
+see the **original entry** behind it: the topics of a curriculum module, the whole
+flashcard (answer, table, pictures) or the whole mistake (table, options, the correct
+answer, the explanation). Several results can be opened one after the other; an empty
+answer ends it. `--detail N` shows one result right away and stops.
+
+A mistake is shown by the **mistake browser** itself (`MistakeAnalyzer.print_mistake`),
+so a search hit and `cfa-prep mistake -b` look exactly the same. Like the browser, only
+the correct answer is marked — the answer that was given wrongly is not shown, so the
+question can be read again. After a mistake has been opened, **`m`** shows the browser at
+the module the mistake belongs to — every question of that module that is logged, in the
+browser's own view.
 
 The matches are **whole words**: `tariff` finds "a tariff" but not "tariffs" (use
 `--regex "tariffs?"` to catch both). A phrase can be typed **without quotes** —
@@ -155,7 +201,8 @@ the others.
 
 In the curriculum the **module is the unit**: a module whose name matches is one hit
 on its own, otherwise every matching topic of that module is a hit. A curriculum hit
-shows no detail block — the title already is the content.
+shows no snippet — the title already is the content. When it is opened, the **topics of
+its module** are listed, so the whole unit is in front of you.
 
 ## Curriculum
 

@@ -19,7 +19,7 @@ from .mistake_analyzer import MistakeAnalyzer
 from .progress_tracker import ProgressTracker
 from .quiz_engine import QuizEngine
 from .quiz_stats import QuizStats, describe, next_due_of
-from .search import SOURCE_ICONS, search_all
+from .search import SOURCE_ICONS, SearchHit, print_hit_record, search_all
 from .utils import (
     clean_keyword,
     get_data_dir,
@@ -46,6 +46,7 @@ class CLIArgs(Protocol):
     regex: bool
     no_fuzzy: bool
     max_results: int
+    detail: int | None
     randomize: bool
     reset: bool
     add: bool
@@ -210,6 +211,10 @@ def cmd_search(args: CLIArgs) -> None:
 
     The keyword is matched as a whole word, and a phrase can be typed without
     quotes: `cfa-prep search free cash flow`.
+
+    Only a snippet of a hit is shown; the number of a result opens the original
+    entry behind it (the topics of a module, the whole flashcard, the whole
+    mistake).
     """
     keyword = clean_keyword(args.keyword)
     if not keyword:
@@ -251,6 +256,83 @@ def cmd_search(args: CLIArgs) -> None:
             print(f"{'─' * 60}")
             print(f"  {hit['snippet']}")
         print()
+
+    # The original entry of a result can be shown on its own
+    if args.detail is not None:
+        _show_result(hits, args.detail)
+        return
+    _browse_results(hits)
+
+
+def _show_result(hits: list[SearchHit], number: int) -> None:
+    """Show the original entry of the result with that number."""
+    index = number - 1
+    if index < 0 or index >= len(hits):
+        print(f"❌ There is no result [{number}].")
+        return
+    record = hits[index].get("record")
+    if record is None:
+        print("  (this result has no original data)")
+        return
+    print_hit_record(record)
+
+
+def _show_module(hits: list[SearchHit], number: int) -> None:
+    """Show every logged question of the module the result belongs to."""
+    index = number - 1
+    if index < 0 or index >= len(hits):
+        return
+    record = hits[index].get("record")
+    if record is None:
+        return
+    subject = record.get("subject", "")
+    module = record.get("module", "")
+    if record.get("mistake") is None or not subject or not module:
+        print("  (this result does not belong to a module of the mistake log)")
+        return
+    # The view of the mistake browser, straight at the module of the hit
+    MistakeAnalyzer().print_module_mistakes(subject, module)
+
+
+def _browse_results(hits: list[SearchHit]) -> None:
+    """
+    Let the reader pick a result and show the original entry behind it.
+
+    The search only shows a snippet of what was found; the entry itself — the
+    topics of a module, the whole flashcard or the whole mistake — is shown
+    here.  A mistake is shown by the mistake browser, and "m" opens the browser
+    at the module the mistake belongs to.  An empty answer ends the loop.
+    """
+    print(
+        "\n  Type the number of a result to see its original data"
+        + " (Enter to quit):"
+    )
+    last = 0
+    while True:
+        try:
+            # The mark of the byte order may end up in front of the answer when
+            # the input is piped, so it is removed
+            choice = input("  > ").strip().lstrip("\ufeff").strip()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            return
+        if not choice:
+            return
+        if choice.lower() == "m" and last:
+            _show_module(hits, last)
+            continue
+        if not choice.isdigit():
+            print(
+                "  (type the number of a result, 'm' for the module of the last"
+                + " one, or press Enter to quit)"
+            )
+            continue
+        last = int(choice)
+        _show_result(hits, last)
+        print(
+            "\n  Type the number of another result, 'm' for the module of the last"
+            + " one, or press Enter to quit:"
+        )
 
 
 def cmd_quiz(args: CLIArgs) -> None:
@@ -604,6 +686,7 @@ Examples:
   cfa-prep search free cash flow         A phrase can be typed without quotes
   cfa-prep search FCFE --regex           Use regex search
   cfa-prep search FCFE --no-fuzzy        Disable fuzzy matching for higher precision
+  cfa-prep search FCFE --detail 2        Show the original data of the result 2
   cfa-prep quiz                          Start quizzing at the configured level (config level)
   cfa-prep quiz --no-randomize           Disable question/option shuffling
   cfa-prep stats                        Show quiz statistics and the review schedule
@@ -660,6 +743,8 @@ Data root (default ~/.cfa-prep) can be set via:
     _ = p_search.add_argument("--no-fuzzy", action="store_true", help="disable fuzzy matching")
     _ = p_search.add_argument("--max-results", type=int, default=10,
                               help="maximum number of results per source (default 10)")
+    _ = p_search.add_argument("--detail", type=int, default=None, metavar="N",
+                              help="show the original data of the result N and stop")
 
     # quiz command
     p_quiz = subparsers.add_parser("quiz", help="Start quizzing (uses the configured level)")

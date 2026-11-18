@@ -12,6 +12,8 @@ from typing import TypedDict
 from .curriculum import Curriculum
 from .flashcard_generator import FlashcardGenerator
 from .mistake_analyzer import MistakeAnalyzer
+from .mistake_store import MistakeRecord
+from .tables import Table, render_table
 from .utils import contains_word, extract_context, fuzzy_word_match
 
 # Source tags used in a hit
@@ -30,7 +32,37 @@ SOURCE_ICONS = {
 NO_CONTEXT = "(No matching content found)"
 
 
-class SearchHit(TypedDict):
+class _HitRecordOptional(TypedDict, total=False):
+    """The optional part of the original entry a hit came from."""
+
+    date: str
+    level: str
+    subject: str
+    module: str
+    question: str
+    answer: str          # the answer of a flashcard
+    table: Table | None
+    images: list[str]
+    image_caption: str
+    topics: list[str]     # the topics of a module (curriculum)
+    mistake: MistakeRecord | None   # the mistake itself, shown by the browser
+
+
+class HitRecord(_HitRecordOptional):
+    """The original entry a hit came from, kept so it can be shown in full."""
+
+    source: str      # "curriculum" | "flashcard" | "mistake"
+    title: str       # topic / module / card question / mistake question
+    location: str    # "Economics > Module 3: Fiscal Policy (L1)"
+
+
+class _SearchHitOptional(TypedDict, total=False):
+    """The optional part of a search hit."""
+
+    record: HitRecord   # the original entry, shown when the hit is selected
+
+
+class SearchHit(_SearchHitOptional):
     """A single search hit, tagged with the source it came from."""
     source: str      # "curriculum" | "flashcard" | "mistake"
     title: str       # topic / module / card question / mistake question
@@ -114,6 +146,14 @@ def _search_curriculum(
                         "location": location,
                         # The title is the module itself; a snippet would repeat it
                         "snippet": "",
+                        # The original data: the module with all its topics
+                        "record": HitRecord(
+                            source=SOURCE_CURRICULUM,
+                            title=module,
+                            location=location,
+                            level=level,
+                            topics=list(topics),
+                        ),
                     })
                     continue
                 for topic in topics:
@@ -127,6 +167,14 @@ def _search_curriculum(
                         "location": location,
                         # The title is the topic itself; a snippet would repeat it
                         "snippet": "",
+                        # The original data: the module the topic belongs to
+                        "record": HitRecord(
+                            source=SOURCE_CURRICULUM,
+                            title=topic,
+                            location=location,
+                            level=level,
+                            topics=list(topics),
+                        ),
                     })
     return hits
 
@@ -154,6 +202,19 @@ def _search_flashcards(
             "title": title,
             "location": location,
             "snippet": _snippet(text, keyword, use_regex),
+            # The original data: the whole card
+            "record": HitRecord(
+                source=SOURCE_FLASHCARD,
+                title=question,
+                location=location,
+                date=card.get("date", ""),
+                level=card.get("level", ""),
+                question=question,
+                answer=answer,
+                table=card.get("table"),
+                images=list(card.get("images") or []),
+                image_caption=card.get("image_caption", ""),
+            ),
         })
     return hits
 
@@ -163,25 +224,37 @@ def _search_mistakes(
 ) -> list[SearchHit]:
     """Search the mistake log (question, options and explanation)."""
     hits: list[SearchHit] = []
-    for record in MistakeAnalyzer().all_mistakes():
+    for entry in MistakeAnalyzer().all_mistakes():
         if len(hits) >= limit:
             break
-        question = record.get("question", "")
-        options = record.get("options", []) or []
-        explanation = record.get("explanation", "")
+        question = entry.get("question", "")
+        options = entry.get("options", []) or []
+        explanation = entry.get("explanation", "")
         text = "\n".join(
             part for part in ([question, *options, explanation]) if part
         )
         if not text or not _is_match(text, keyword, use_regex, use_fuzzy):
             continue
-        subject = record.get("subject", "")
-        module = record.get("module", "")
+        subject = entry.get("subject", "")
+        module = entry.get("module", "")
         location = f"{subject} > {module}" if subject and module else (subject or module)
         hits.append({
             "source": SOURCE_MISTAKE,
             "title": question,
             "location": location,
             "snippet": _snippet(text, keyword, use_regex),
+            # The original data: the mistake itself, shown by the mistake browser
+            "record": HitRecord(
+                source=SOURCE_MISTAKE,
+                title=question,
+                location=location,
+                date=entry.get("date", ""),
+                level=entry.get("level", ""),
+                subject=subject,
+                module=module,
+                question=question,
+                mistake=entry,
+            ),
         })
     return hits
 
@@ -222,3 +295,69 @@ def search_all(
         "flashcards": len(cards),
         "mistakes": len(records),
     }
+
+
+def print_hit_record(record: HitRecord) -> None:
+    """
+    Print the original entry a hit came from, in full.
+
+    A search shows a snippet of what was found; this shows the entry itself:
+    the topics of a module, the whole flashcard or the whole mistake with its
+    table, its options, the answer that was given and the explanation.
+
+    A mistake is shown by the mistake browser, so a hit and the browser show
+    the very same thing.  Like the browser, only the correct answer is marked:
+    the question is read again, not the old mistake.
+    """
+    mistake = record.get("mistake")
+    if mistake is not None:
+        MistakeAnalyzer().print_mistake(mistake, show_wrong=False)
+        return
+
+    rule = "─" * 60
+    icon = SOURCE_ICONS.get(record["source"], "📄")
+    print(rule)
+    print(f"  {icon} {record['title']}")
+    location = record.get("location", "")
+    if location:
+        print(f"  📍 {location}")
+    if record["source"] == SOURCE_CURRICULUM:
+        level = record.get("level", "")
+        if level:
+            print(f"  🎯 Level: {level}")
+    else:
+        meta = " | ".join(
+            part for part in (record.get("date", ""), record.get("level", "")) if part
+        )
+        if meta:
+            print(f"  🗓️ {meta}")
+
+    topics = record.get("topics") or []
+    if topics:
+        print(f"\n  Topics ({len(topics)}):")
+        for topic in topics:
+            print(f"    • {topic}")
+
+    question = record.get("question", "")
+    if question:
+        print(f"\n  ❓ {question}")
+
+    table = record.get("table")
+    if table:
+        print()
+        for row in render_table(table, indent="  "):
+            print(row)
+
+    answer = record.get("answer", "")
+    if answer:
+        print(f"\n  💬 {answer}")
+
+    images = record.get("images") or []
+    if images:
+        print(f"\n  📷 {len(images)} image(s) attached:")
+        for relative in images:
+            print(f"    {relative}")
+        caption = record.get("image_caption", "")
+        if caption:
+            print(f"    {caption}")
+    print(rule)

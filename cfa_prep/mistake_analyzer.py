@@ -781,7 +781,20 @@ class MistakeAnalyzer:
         module = module_names[index]
 
         # Only the questions of the chosen module are loaded
+        self.print_module_mistakes(subject, module)
+
+    def print_module_mistakes(self, subject: str, module: str) -> None:
+        """
+        Print every question of one module that is logged as a mistake.
+
+        This is the view of the mistake browser: the questions of a module, one
+        after the other.  Only the correct answer is marked, so the questions can
+        be read again without the old mistake pointing at the answer.
+        """
         records = self._module_records(subject, module)
+        if not records:
+            print(f"\n  No questions are logged in {subject} | {module}.")
+            return
         attempts = sum(r.get("attempts", 1) for r in records)
         header = f"📝 {len(records)} in {subject} | {module}"
         if attempts > len(records):
