@@ -435,31 +435,6 @@ def test_quiz_stats_file_split():
                 "a skipped question must not be stored"
             )
 
-            # An entry of an older file that only holds skips is dropped too
-            old = cast(
-                dict[str, object], json.loads(stats.stats_file.read_text(encoding="utf-8"))
-            )
-            questions = cast(dict[str, object], old["questions"])
-            questions["q:old_skip"] = {
-                "question": "An old skipped question",
-                "level": "L1",
-                "times_seen": 1,
-                "times_correct": 0,
-                "times_wrong": 0,
-                "times_skipped": 1,
-                "streak": 0,
-                "ease": 2.4,
-                "interval_days": 0,
-                "last_seen": "20260101",
-                "last_result": "skipped",
-            }
-            old["questions"] = questions
-            _ = stats.stats_file.write_text(json.dumps(old), encoding="utf-8")
-            fresh = QuizStats()
-            assert "q:old_skip" not in fresh.load()["questions"], (
-                "an entry that only holds skips must be dropped"
-            )
-
             print("  ✅ Quiz stats file split works")
         finally:
             _ = os.environ.pop("CFA_PREP_HOME", None)

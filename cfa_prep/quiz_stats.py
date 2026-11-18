@@ -119,16 +119,6 @@ def parse_date(value: str) -> date | None:
         return None
 
 
-def _was_never_tested(stat: QuestionStat) -> bool:
-    """
-    Tell whether a question was only ever skipped, and never really tested.
-
-    A question that was never answered correctly nor wrongly does not belong
-    in the statistics: it counts as unseen and comes back in the next session.
-    """
-    return stat["times_correct"] == 0 and stat["times_wrong"] == 0
-
-
 def describe(stat: QuestionStat, max_len: int = 60) -> str:
     """Return a short human-readable label for a statistics entry."""
     text = stat.get("question", "").strip()
@@ -196,13 +186,7 @@ class QuizStats:
         if isinstance(questions_raw, dict):
             for key, value in cast(dict[str, object], questions_raw).items():
                 if isinstance(value, dict):
-                    stat = self._normalize_question(cast(dict[str, object], value))
-                    if _was_never_tested(stat):
-                        # The entry only exists because the question was skipped:
-                        # it was never really tested, so it is dropped and the
-                        # question counts as unseen again.
-                        continue
-                    questions[key] = stat
+                    questions[key] = self._normalize_question(cast(dict[str, object], value))
 
         data = QuizStatsData(
             version=_as_int(raw.get("version"), 1),
@@ -260,13 +244,10 @@ class QuizStats:
 
     @staticmethod
     def _normalize_question(raw: dict[str, object]) -> QuestionStat:
-        # The skips of an older file do not count as seen: the question was
-        # never really tested then.
-        skipped = _as_int(raw.get("times_skipped"))
         return QuestionStat(
             question=_as_str(raw.get("question")),
             level=_as_str(raw.get("level")),
-            times_seen=max(_as_int(raw.get("times_seen")) - skipped, 0),
+            times_seen=_as_int(raw.get("times_seen")),
             times_correct=_as_int(raw.get("times_correct")),
             times_wrong=_as_int(raw.get("times_wrong")),
             streak=_as_int(raw.get("streak")),
