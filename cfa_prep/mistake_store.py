@@ -67,6 +67,7 @@ CREATE TABLE IF NOT EXISTS mistakes (
 );
 CREATE INDEX IF NOT EXISTS idx_mistakes_subject_module ON mistakes(subject, "module");
 CREATE INDEX IF NOT EXISTS idx_mistakes_date ON mistakes(date);
+CREATE INDEX IF NOT EXISTS idx_mistakes_stem_key ON mistakes(stem_key);
 """
 
 UPSERT = """
@@ -145,36 +146,8 @@ def _table_of(row: sqlite3.Row, column: str) -> Table | None:
 
 
 def _ensure_schema(connection: sqlite3.Connection) -> None:
-    """
-    Create the table and bring an older database up to date.
-
-    A database that was written before the matching key existed gets the column
-    added and filled in, so the questions that are already logged are found by
-    the new lookup as well.
-    """
+    """Create the table and its indexes."""
     _ = connection.executescript(SCHEMA)
-    columns = {
-        _text(row, "name") for row in _rows(connection.execute("PRAGMA table_info(mistakes)"))
-    }
-    if "stem_key" not in columns:
-        _ = connection.execute(
-            "ALTER TABLE mistakes ADD COLUMN stem_key TEXT NOT NULL DEFAULT ''"
-        )
-    _ = connection.execute(
-        "CREATE INDEX IF NOT EXISTS idx_mistakes_stem_key ON mistakes(stem_key)"
-    )
-    # The key of the questions that were logged before the column existed
-    rows = _rows(
-        connection.execute(
-            "SELECT question_id, question FROM mistakes"
-            + " WHERE stem_key = '' AND question != ''"
-        )
-    )
-    for row in rows:
-        _ = connection.execute(
-            "UPDATE mistakes SET stem_key = ? WHERE question_id = ?",
-            (stem_key(_text(row, "question")), _text(row, "question_id")),
-        )
 
 
 class _MistakeRecordOptional(TypedDict, total=False):

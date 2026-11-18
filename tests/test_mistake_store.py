@@ -6,7 +6,6 @@ Purpose: Check the SQLite store of the mistake log: writing, reading, the counts
 """
 
 import json
-import sqlite3
 import sys
 import tempfile
 from pathlib import Path
@@ -94,45 +93,6 @@ def test_mistake_store_question_key():
         # Another question is not found
         assert len(store.load_by_question("What is a quota?")) == 0
         print("  ✅ A question is found whatever the punctuation at its end is")
-
-
-def test_mistake_store_migrates_old_database():
-    """Test that an older database gets the matching key and stays searchable"""
-    with tempfile.TemporaryDirectory() as tmp:
-        root = Path(tmp)
-        db = root / "mistakes.db"
-        # A database of the shape it had before the matching key existed
-        connection = sqlite3.connect(db)
-        _ = connection.execute(
-            """CREATE TABLE mistakes (
-                question_id TEXT PRIMARY KEY,
-                date TEXT NOT NULL DEFAULT '',
-                last_date TEXT NOT NULL DEFAULT '',
-                attempts INTEGER NOT NULL DEFAULT 1,
-                level TEXT NOT NULL DEFAULT '',
-                subject TEXT NOT NULL DEFAULT '',
-                "module" TEXT NOT NULL DEFAULT '',
-                question TEXT NOT NULL DEFAULT '',
-                options TEXT NOT NULL DEFAULT '[]',
-                user_answer TEXT NOT NULL DEFAULT '',
-                correct_answer TEXT NOT NULL DEFAULT '',
-                explanation TEXT NOT NULL DEFAULT '',
-                wrong_answers TEXT NOT NULL DEFAULT '[]',
-                table_json TEXT
-            )"""
-        )
-        _ = connection.execute(
-            "INSERT INTO mistakes (question_id, question) VALUES (?, ?)",
-            ("q:old", "What is demand?"),
-        )
-        connection.commit()
-        connection.close()
-
-        store = MistakeStore(db)
-        assert store.count() == 1, store.count()
-        found = store.load_by_question("what is demand:")
-        assert len(found) == 1, found
-        print("  ✅ An older database gets the matching key and stays searchable")
 
 
 def test_mistake_store_merge_duplicates():

@@ -74,16 +74,6 @@ class QuestionStat(TypedDict):
     last_result: str       # "correct" | "wrong"
 
 
-class SessionRecord(TypedDict):
-    """Summary of one finished quiz session (the shape of the older files)."""
-    date: str
-    level: str
-    total: int
-    correct: int
-    wrong: int
-    skipped: int
-
-
 class DayTotals(TypedDict):
     """The totals of one level on one day."""
     sessions: int
@@ -236,10 +226,6 @@ class QuizStats:
                             cast(dict[str, object], values)
                         )
                 days[date] = totals
-        else:
-            # An older file keeps every session on its own: they are folded
-            # into the totals of the days, nothing is lost.
-            days = self._fold_sessions(raw)
 
         data = QuizSessionsData(
             version=SESSIONS_VERSION,
@@ -259,36 +245,6 @@ class QuizStats:
             wrong=_as_int(raw.get("wrong")),
             skipped=_as_int(raw.get("skipped")),
         )
-
-    @staticmethod
-    def _fold_sessions(raw: dict[str, object]) -> dict[str, dict[str, DayTotals]]:
-        """
-        Fold the sessions of an older file into the totals of the days.
-
-        The file of the older format keeps every session on its own; they are
-        summed up per day and level, so the numbers stay the same.
-        """
-        days: dict[str, dict[str, DayTotals]] = {}
-        sessions_raw = raw.get("sessions", [])
-        if not isinstance(sessions_raw, list):
-            return days
-        for item in cast(list[object], sessions_raw):
-            if not isinstance(item, dict):
-                continue
-            record = QuizStats._normalize_session(cast(dict[str, object], item))
-            levels = days.setdefault(record["date"], {})
-            totals = levels.get(record["level"])
-            if totals is None:
-                totals = DayTotals(
-                    sessions=0, total=0, correct=0, wrong=0, skipped=0
-                )
-                levels[record["level"]] = totals
-            totals["sessions"] += 1
-            totals["total"] += record["total"]
-            totals["correct"] += record["correct"]
-            totals["wrong"] += record["wrong"]
-            totals["skipped"] += record["skipped"]
-        return days
 
     def save(self, data: QuizStatsData) -> None:
         """Persist the per-question statistics file."""
@@ -322,17 +278,6 @@ class QuizStats:
             interval_days=_as_int(raw.get("interval_days")),
             last_seen=_as_str(raw.get("last_seen")),
             last_result=_as_str(raw.get("last_result")),
-        )
-
-    @staticmethod
-    def _normalize_session(raw: dict[str, object]) -> SessionRecord:
-        return SessionRecord(
-            date=_as_str(raw.get("date")),
-            level=_as_str(raw.get("level")),
-            total=_as_int(raw.get("total")),
-            correct=_as_int(raw.get("correct")),
-            wrong=_as_int(raw.get("wrong")),
-            skipped=_as_int(raw.get("skipped")),
         )
 
     @staticmethod

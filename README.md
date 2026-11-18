@@ -245,8 +245,7 @@ per session:
 ```
 
 Only the sums are ever read, so storing them is enough — the file stays small and grows
-with the **days** you quiz, not with the sessions. A file of the older shape (one entry
-per session) is folded into the days automatically, nothing is lost.
+with the **days** you quiz, not with the sessions.
 
 ### Question identity
 
