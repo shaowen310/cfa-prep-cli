@@ -8,16 +8,63 @@ import hashlib
 import json
 import os
 import re
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import cast
 
 HASH_LENGTH = 16  # number of hex characters kept from a hash
 
+# The punctuation that only closes a question and carries no meaning of its own
+CLOSING_PUNCTUATION = ".:;!?。！？"
+
 
 def normalize_text(text: str) -> str:
     """Collapse whitespace and case so cosmetic edits keep the same identity."""
     return " ".join(text.split()).casefold()
+
+
+def stem_key(text: str) -> str:
+    """
+    Return the text that recognises a question that is already logged.
+
+    The key ignores what is only cosmetic: the case, the spacing and the
+    punctuation that closes the sentence.  "What is X?" and "what is x" are the
+    same question, so they have to be recognised as one — otherwise the
+    duplicate is never noticed and the question is logged a second time.
+    """
+    return normalize_text(text).rstrip(CLOSING_PUNCTUATION).strip()
+
+
+def ends_with_punctuation(text: str) -> bool:
+    """Tell whether the text ends with the punctuation that closes a sentence."""
+    stripped = text.rstrip()
+    return bool(stripped) and stripped[-1] in CLOSING_PUNCTUATION
+
+
+def capitalize_first(text: str) -> str:
+    """Write the first letter of a sentence in upper case."""
+    if not text or not text[0].islower():
+        return text
+    return text[0].upper() + text[1:]
+
+
+def prefer_text(old: str, new: str) -> str:
+    """
+    Return the variant of a text that is written the most carefully.
+
+    The variant that ends with punctuation wins over the one that does not:
+    "general partnerships." is the whole text, "general partnerships" is the
+    same text with the point left out.  When both are written the same way,
+    the newer one wins.
+    """
+    if not old:
+        return new
+    if not new:
+        return old
+    if ends_with_punctuation(new) != ends_with_punctuation(old):
+        return new if ends_with_punctuation(new) else old
+    return new
 
 
 def hash_text(*parts: str) -> str:
@@ -147,11 +194,30 @@ def save_json(filepath: Path, data: dict[str, object]) -> None:
             json.dump(data, f, ensure_ascii=False, indent=2)
             f.flush()
             os.fsync(f.fileno())
-        os.replace(temp, filepath)
+        _replace_with_retry(temp, filepath)
     except BaseException:
         # The old file is still there, so only the half-written one is removed
         temp.unlink(missing_ok=True)
         raise
+
+
+def _replace_with_retry(temp: Path, target: Path, attempts: int = 5) -> None:
+    """
+    Move the temporary file over the target, retrying a little.
+
+    Windows refuses the move when another program holds the target open for a
+    moment — a cloud sync client or the virus scanner does that on its own.
+    The target is only ever replaced by a complete file, so waiting a little
+    is enough to get the write through.
+    """
+    for attempt in range(attempts):
+        try:
+            os.replace(temp, target)
+            return
+        except PermissionError:
+            if attempt == attempts - 1:
+                raise
+            time.sleep(0.05 * (attempt + 1))
 
 
 def load_settings() -> dict[str, object]:

@@ -87,3 +87,33 @@ def test_save_json_is_atomic():
         assert load_json(target).get("records") == [{"question": "A question"}]
         assert not target.with_name(target.name + ".tmp").exists()
     print("  ✅ A JSON file is written safely and never half-written")
+
+
+def test_save_json_waits_for_a_locked_file():
+    """Test that a file that is locked for a moment is still written"""
+    import os
+
+    with tempfile.TemporaryDirectory() as tmp:
+        target = Path(tmp) / "data.json"
+        save_json(target, {"records": ["first"]})
+
+        # Another program (a cloud sync client) holds the file open for a moment
+        real_replace = os.replace
+        calls = {"count": 0}
+
+        def locked_replace(src, dst):
+            calls["count"] += 1
+            if calls["count"] == 1:
+                raise PermissionError("the file is locked")
+            real_replace(src, dst)
+
+        os.replace = locked_replace
+        try:
+            save_json(target, {"records": ["second"]})
+        finally:
+            os.replace = real_replace
+
+        assert calls["count"] > 1, "the write must be retried"
+        assert load_json(target).get("records") == ["second"]
+        assert not target.with_name(target.name + ".tmp").exists()
+    print("  ✅ A file that is locked for a moment is still written")

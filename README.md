@@ -92,6 +92,8 @@ cfa-prep search FCFE
 | `mistake -a`                 | Interactive mistake entry    | `cfa-prep mistake -a`                          |
 | `mistake -b`                 | Browse the questions by subject and module | `cfa-prep mistake -b`              |
 | `mistake --export`           | Export the mistake log to a readable JSON file | `cfa-prep mistake --export`      |
+| `mistake --merge-duplicates` | Merge the questions that are logged twice into one row | `cfa-prep mistake --merge-duplicates` |
+| `mistake --check-duplicates` | Show the questions that are logged twice (changes nothing) | `cfa-prep mistake --check-duplicates` |
 | `recap`                      | View study progress          | `cfa-prep recap`                               |
 | `recap --update`             | Update study progress        | `cfa-prep recap --update`                      |
 | `recap --remove`             | Remove progress entries      | `cfa-prep recap --remove`                      |
@@ -284,6 +286,36 @@ its record** instead of writing a second copy of it:
 
 The log therefore grows with the **questions**, not with the attempts, and the
 breakdown shows both: `3 | Economics > Module 6 (7 attempts)`.
+
+### Recognising a question that is already logged
+
+When a question is typed in, the log looks for it first and asks whether it is
+logged again. The question is matched on a **key** that ignores what is only
+cosmetic: the case, the spacing and the punctuation that closes the sentence.
+`... most likely` and `... most likely:` are the same question, so the second
+one is recognised and the record is **updated** instead of being written twice.
+
+The options decide between two questions that share the same stem, and the record
+that is updated keeps its id — the quiz statistics stay attached to it.
+
+Questions that were logged twice before this rule existed can be looked at first and
+cleaned up afterwards:
+
+```
+cfa-prep mistake --check-duplicates      # shows the groups, changes nothing
+cfa-prep mistake --merge-duplicates       # merges them
+```
+
+The merge keeps the **oldest** row — it holds the id and the first date — and folds the
+attempts of the other rows into it. The texts are written the most careful way:
+
+- a text that ends with punctuation wins over the same text without it
+  (`... owners in:` beats `... owners in`);
+- the options are matched on their key, so a different order is no problem, and the
+  answers are written the way the option they belong to is;
+- a sentence starts with a capital letter, so `tax disadvantage for owners...` becomes
+  `Tax disadvantage for owners...`;
+- what was typed by hand (the explanation, the options, the answer) is never lost.
 
 ### Storage: a database, not a growing JSON file
 

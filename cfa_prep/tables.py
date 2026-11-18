@@ -109,7 +109,7 @@ def render_table(table: Table, indent: str = "  ", rule: str = "─") -> list[st
 
 def read_table(
     prompt: Callable[[str], str],
-    message: str = "  Paste the table below the question (blank line if there is none):",
+    message: str = "  Paste the table below the question (press Enter if there is none):",
 ) -> Table | None:
     """
     Read a table that is pasted below a question.

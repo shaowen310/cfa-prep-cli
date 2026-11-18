@@ -14,8 +14,38 @@ from pathlib import Path
 from typing import TypedDict, cast
 
 from .tables import Table
+from .utils import (
+    capitalize_first,
+    normalize_text,
+    prefer_text,
+    stem_key,
+)
 
 DB_NAME = "mistakes.db"
+MAX_WRONG_ANSWERS = 5  # how many wrong answers of a question are kept
+
+
+def reconcile_options(old: list[str], new: list[str]) -> tuple[list[str], dict[str, str]]:
+    """
+    Return the options of a question and the map of the texts that changed.
+
+    The options are matched on their key (the case and the spacing do not
+    count), so a different order is not a problem.  The variant that ends with
+    punctuation wins over the one that does not, and the map says which text
+    became which, so the answers can be written the same way.
+    """
+    old_by_key = {normalize_text(option): option for option in old}
+    options: list[str] = []
+    mapping: dict[str, str] = {}
+    for option in new:
+        key = normalize_text(option)
+        previous = old_by_key.get(key, "")
+        chosen = prefer_text(previous, option)
+        options.append(chosen)
+        if previous:
+            mapping[previous] = chosen
+        mapping[option] = chosen
+    return options, mapping
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS mistakes (
@@ -27,6 +57,7 @@ CREATE TABLE IF NOT EXISTS mistakes (
     subject        TEXT NOT NULL DEFAULT '',
     "module"       TEXT NOT NULL DEFAULT '',
     question       TEXT NOT NULL DEFAULT '',
+    stem_key       TEXT NOT NULL DEFAULT '',
     options        TEXT NOT NULL DEFAULT '[]',
     user_answer    TEXT NOT NULL DEFAULT '',
     correct_answer TEXT NOT NULL DEFAULT '',
@@ -35,15 +66,15 @@ CREATE TABLE IF NOT EXISTS mistakes (
     table_json     TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_mistakes_subject_module ON mistakes(subject, "module");
-CREATE INDEX IF NOT EXISTS idx_mistakes_question ON mistakes(question);
 CREATE INDEX IF NOT EXISTS idx_mistakes_date ON mistakes(date);
 """
 
 UPSERT = """
 INSERT INTO mistakes (
     question_id, date, last_date, attempts, level, subject, "module", question,
-    options, user_answer, correct_answer, explanation, wrong_answers, table_json
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    stem_key, options, user_answer, correct_answer, explanation, wrong_answers,
+    table_json
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(question_id) DO UPDATE SET
     date           = excluded.date,
     last_date      = excluded.last_date,
@@ -52,6 +83,7 @@ ON CONFLICT(question_id) DO UPDATE SET
     subject        = excluded.subject,
     "module"       = excluded."module",
     question       = excluded.question,
+    stem_key       = excluded.stem_key,
     options        = excluded.options,
     user_answer    = excluded.user_answer,
     correct_answer = excluded.correct_answer,
@@ -59,6 +91,35 @@ ON CONFLICT(question_id) DO UPDATE SET
     wrong_answers  = excluded.wrong_answers,
     table_json     = excluded.table_json
 """
+
+
+def _ensure_schema(connection: sqlite3.Connection) -> None:
+    """
+    Create the table and bring an older database up to date.
+
+    A database that was written before the matching key existed gets the column
+    added and filled in, so the questions that are already logged are found by
+    the new lookup as well.
+    """
+    _ = connection.executescript(SCHEMA)
+    columns = {row["name"] for row in connection.execute("PRAGMA table_info(mistakes)")}
+    if "stem_key" not in columns:
+        _ = connection.execute(
+            "ALTER TABLE mistakes ADD COLUMN stem_key TEXT NOT NULL DEFAULT ''"
+        )
+    _ = connection.execute(
+        "CREATE INDEX IF NOT EXISTS idx_mistakes_stem_key ON mistakes(stem_key)"
+    )
+    # The key of the questions that were logged before the column existed
+    rows = connection.execute(
+        "SELECT question_id, question FROM mistakes"
+        " WHERE stem_key = '' AND question != ''"
+    ).fetchall()
+    for row in rows:
+        _ = connection.execute(
+            "UPDATE mistakes SET stem_key = ? WHERE question_id = ?",
+            (stem_key(row["question"]), row["question_id"]),
+        )
 
 
 class _MistakeRecordOptional(TypedDict, total=False):
@@ -120,6 +181,8 @@ def _record_values(record: MistakeRecord) -> tuple[object, ...]:
         record.get("subject", ""),
         record.get("module", ""),
         record.get("question", ""),
+        # The key is always derived from the question, never stored by hand
+        stem_key(record.get("question", "")),
         json.dumps(record.get("options") or [], ensure_ascii=False),
         record.get("user_answer", ""),
         record.get("correct_answer", ""),
@@ -149,8 +212,8 @@ class MistakeStore:
         connection = sqlite3.connect(self.db_path)
         connection.row_factory = sqlite3.Row
         try:
-            _ = connection.executescript(SCHEMA)
             with connection:
+                _ensure_schema(connection)
                 yield connection
         finally:
             connection.close()
@@ -184,11 +247,20 @@ class MistakeStore:
         return [_row_to_record(row) for row in rows]
 
     def load_by_question(self, question: str) -> list[MistakeRecord]:
-        """Return the records whose question text matches, ignoring the case."""
+        """
+        Return the records of that question.
+
+        The question is matched on its key: the case, the spacing and the
+        punctuation that closes the sentence do not count, so a question that is
+        typed again as "... most likely:" is recognised as the "... most likely"
+        that is already logged.
+        """
+        key = stem_key(question)
+        if not key:
+            return []
         with self._session() as connection:
             rows = connection.execute(
-                "SELECT * FROM mistakes WHERE question = ? COLLATE NOCASE ORDER BY rowid",
-                (question,),
+                "SELECT * FROM mistakes WHERE stem_key = ? ORDER BY rowid", (key,)
             ).fetchall()
         return [_row_to_record(row) for row in rows]
 
@@ -249,8 +321,111 @@ class MistakeStore:
             )
             return cursor.rowcount > 0
 
-    # --- exporting ---------------------------------------------------------
+    def duplicate_groups(self) -> list[list[MistakeRecord]]:
+        """
+        Return the groups of rows that hold the same question.
 
+        The rows of a group share the key of the question, so they are the same
+        question that was logged more than once — usually under a slightly
+        different text.  The oldest row of a group comes first.
+        """
+        with self._session() as connection:
+            rows = connection.execute(
+                "SELECT * FROM mistakes WHERE stem_key != '' ORDER BY rowid"
+            ).fetchall()
+        groups: dict[str, list[MistakeRecord]] = {}
+        for row in rows:
+            key = str(row["stem_key"])
+            groups.setdefault(key, []).append(_row_to_record(row))
+        return [group for group in groups.values() if len(group) > 1]
+
+    def merge_duplicates(self) -> int:
+        """
+        Merge the rows that hold the same question into a single row.
+
+        The oldest row is kept — it holds the id and the first date — and the
+        attempts and the wrong answers of the other ones are folded into it.
+
+        The texts are written the most careful way: a text that ends with
+        punctuation wins over the same text without it, and a sentence starts
+        with a capital letter.  Returns the number of rows that were removed.
+        """
+        removed = 0
+        for group in self.duplicate_groups():
+            keep = group[0]
+            newest = group[-1]
+
+            # The question: the variant that is written the most carefully
+            question = keep.get("question", "")
+            for other in group[1:]:
+                question = prefer_text(question, other.get("question", ""))
+
+            # The options: matched on their key, the punctuation decides
+            options = list(keep.get("options") or [])
+            mapping: dict[str, str] = {}
+            for other in group[1:]:
+                other_options = list(other.get("options") or [])
+                if not other_options:
+                    continue
+                options, extra = reconcile_options(options, other_options)
+                composed = dict(mapping)
+                for source, target in extra.items():
+                    composed[source] = mapping.get(target, target)
+                mapping = composed
+
+            # The answers are written the way the options they belong to are
+            user_answer = prefer_text(
+                keep.get("user_answer", ""), newest.get("user_answer", "")
+            )
+            correct_answer = prefer_text(
+                keep.get("correct_answer", ""), newest.get("correct_answer", "")
+            )
+            user_answer = mapping.get(user_answer, user_answer)
+            correct_answer = mapping.get(correct_answer, correct_answer)
+
+            explanation = prefer_text(
+                keep.get("explanation", ""), newest.get("explanation", "")
+            )
+
+            merged = MistakeRecord(
+                date=keep.get("date", ""),
+                level=keep.get("level", ""),
+                subject=keep.get("subject", ""),
+                module=keep.get("module", ""),
+                question=capitalize_first(question),
+                question_id=keep["question_id"],
+                options=options,
+                user_answer=user_answer,
+                correct_answer=correct_answer,
+                explanation=capitalize_first(explanation),
+            )
+            table = newest.get("table") or keep.get("table")
+            if table:
+                merged["table"] = table
+
+            # The history of the attempts is folded into the row that is kept
+            attempts = 0
+            wrong: list[str] = []
+            for record in group:
+                attempts += int(record.get("attempts", 1))
+                for answer in record.get("wrong_answers") or []:
+                    written = mapping.get(answer, answer)
+                    if written not in wrong:
+                        wrong.append(written)
+            merged["attempts"] = attempts
+            merged["wrong_answers"] = wrong[-MAX_WRONG_ANSWERS:]
+            merged["last_date"] = max(
+                str(record.get("last_date") or record.get("date", ""))
+                for record in group
+            )
+
+            self.upsert(merged)
+            for other in group[1:]:
+                _ = self.delete(other["question_id"])
+                removed += 1
+        return removed
+
+    # --- exporting ---------------------------------------------------------
     def export_json(self, path: Path) -> None:
         """Write the log as a JSON file, the format that can be read by hand."""
         path.parent.mkdir(parents=True, exist_ok=True)

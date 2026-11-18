@@ -10,7 +10,13 @@ from pathlib import Path
 from typing import cast
 
 from .curriculum import Curriculum
-from .mistake_store import DB_NAME, MistakeRecord, MistakeStore
+from .mistake_store import (
+    DB_NAME,
+    MAX_WRONG_ANSWERS,
+    MistakeRecord,
+    MistakeStore,
+    reconcile_options,
+)
 from .tables import Table, read_table, render_table
 from .utils import (
     get_data_dir,
@@ -21,7 +27,6 @@ from .utils import (
 )
 
 QUESTION_PREFIX = "q:"   # identity derived from the question text
-MAX_WRONG_ANSWERS = 5    # how many wrong answers of a question are kept
 
 
 def question_id(stem: str, options: list[str] | None = None) -> str:
@@ -180,6 +185,12 @@ class MistakeAnalyzer:
         # time: the log grows with the questions, not with the attempts.
         existing = self.store.get(qid)
         if existing is None:
+            # The question may already be logged under a slightly different
+            # text (a trailing colon, another spacing).  It is the same
+            # question, so the record that is already there is updated and its
+            # id is kept — the quiz statistics stay attached to it.
+            existing = self._matching_record(question, options or [])
+        if existing is None:
             record["attempts"] = 1
             if record.get("user_answer"):
                 # The history of the wrong answers starts with this one
@@ -189,6 +200,36 @@ class MistakeAnalyzer:
             self._update_mistake(existing, record)
             self.store.upsert(existing)
         return str(self.db_file)
+
+    def _matching_record(
+        self, question: str, options: list[str]
+    ) -> MistakeRecord | None:
+        """
+        Return the record of the question that is already logged, if it is the
+        same question.
+
+        The question text is matched on its key, so a trailing colon or another
+        spacing does not hide the record that is already there.  The options
+        decide between several questions that share the same stem.
+        """
+        if not question.strip():
+            return None
+        candidates = self.store.load_by_question(question)
+        if not candidates:
+            return None
+        wanted = sorted(normalize_text(option) for option in options)
+        for record in candidates:
+            stored = sorted(
+                normalize_text(option) for option in (record.get("options") or [])
+            )
+            if stored == wanted:
+                return record
+        if len(candidates) == 1:
+            # One question with this stem is logged and its options were typed
+            # again: it is the question the user confirmed in the prompt.
+            return candidates[0]
+        # Several questions share the stem: none of them is clearly the one.
+        return None
 
     @staticmethod
     def _find_by_id(
@@ -229,8 +270,21 @@ class MistakeAnalyzer:
             existing["correct_answer"] = correct
         if new.get("explanation"):
             existing["explanation"] = new["explanation"]
-        if new.get("options"):
-            existing["options"] = list(new["options"])
+        options = new.get("options")
+        if options:
+            # The options are matched on their key: a text that ends with
+            # punctuation wins over the same text without it
+            merged_options, mapping = reconcile_options(
+                existing.get("options") or [], list(options)
+            )
+            existing["options"] = merged_options
+            # The answers are written the way the options they belong to are
+            wrong_text = existing.get("user_answer", "")
+            if wrong_text:
+                existing["user_answer"] = mapping.get(wrong_text, wrong_text)
+            correct_text = existing.get("correct_answer", "")
+            if correct_text:
+                existing["correct_answer"] = mapping.get(correct_text, correct_text)
         table = new.get("table")
         if table:
             existing["table"] = table
@@ -834,3 +888,23 @@ class MistakeAnalyzer:
         """Write the log as a JSON file, the format that can be read by hand."""
         self.store.export_json(path)
         return path
+
+    def merge_duplicates(self) -> int:
+        """
+        Merge the questions that are logged twice into a single row.
+
+        A question that was logged twice under a slightly different text (a
+        trailing colon) ended up in two rows.  The extra rows are removed and
+        their attempts are folded into the row that is kept.
+        """
+        return self.store.merge_duplicates()
+
+    def check_duplicates(self) -> list[list[MistakeRecord]]:
+        """
+        Return the questions that are logged more than once, with their records.
+
+        Every group holds the records of one question that was logged twice: the
+        first one is the row that would be kept, the other ones are the rows
+        that would be merged into it.
+        """
+        return self.store.duplicate_groups()

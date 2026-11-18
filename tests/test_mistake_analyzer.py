@@ -321,6 +321,97 @@ def test_mistake_question_id():
             _ = os.environ.pop("CFA_PREP_HOME", None)
 
 
+def test_mistake_duplicate_prompt():
+    """Test that the prompt for a duplicate appears when the question is typed again"""
+    import tempfile
+    from unittest import mock
+
+    question = "Which trade restriction costs the importing country most?"
+    options = ["A tariff", "An import quota", "A voluntary export restraint"]
+
+    with tempfile.TemporaryDirectory() as tmp:
+        os.environ["CFA_PREP_HOME"] = tmp
+        try:
+            analyzer = MistakeAnalyzer()
+            _ = analyzer.add_mistake(
+                subject="Economics",
+                question=question,
+                user_answer=options[0],
+                correct_answer=options[1],
+                explanation="",
+                module_name="Module 1: Basics",
+                options=options,
+            )
+
+            # The question is typed again with a colon at the end: the log has
+            # to notice it and ask whether it is logged again
+            asked: list[str] = []
+
+            def fake_prompt(message: str = "") -> str:
+                asked.append(message)
+                return "n"
+
+            with mock.patch.object(
+                MistakeAnalyzer, "_prompt", staticmethod(fake_prompt)
+            ):
+                assert analyzer._confirm_duplicate(question + ":") is False, (  # pyright: ignore[reportPrivateUsage]
+                    "the question is already logged, so it must not be added blindly"
+                )
+            assert asked, "the prompt for a duplicate must appear"
+            print("  ✅ The prompt for a duplicate appears for a retyped question")
+        finally:
+            _ = os.environ.pop("CFA_PREP_HOME", None)
+
+
+def test_mistake_duplicate_with_other_punctuation():
+    """Test that the same question is recognised despite the punctuation at its end"""
+    import tempfile
+
+    question = "Which trade restriction costs the importing country most?"
+    options = ["A tariff", "An import quota", "A voluntary export restraint"]
+
+    with tempfile.TemporaryDirectory() as tmp:
+        os.environ["CFA_PREP_HOME"] = tmp
+        try:
+            analyzer = MistakeAnalyzer()
+            _ = analyzer.add_mistake(
+                subject="Economics",
+                question=question,
+                user_answer=options[0],
+                correct_answer=options[1],
+                explanation="",
+                module_name="Module 1: Basics",
+                options=options,
+            )
+            first = analyzer.all_mistakes()[0]
+
+            # The question is typed again with a colon at the end: the log knows
+            # that it is the same question, so the prompt appears
+            found = analyzer.store.load_by_question(question + ":")
+            assert len(found) == 1, found
+            assert found[0]["question_id"] == first["question_id"], found
+
+            # Logging it again updates the record instead of writing a second one
+            _ = analyzer.add_mistake(
+                subject="Economics",
+                question=question + ":",
+                user_answer=options[2],
+                correct_answer=options[1],
+                explanation="",
+                module_name="Module 1: Basics",
+                options=options,
+            )
+            records = analyzer.all_mistakes()
+            assert len(records) == 1, "the log must not grow with a retyped question"
+            assert records[0]["question_id"] == first["question_id"], (
+                "the updated record must keep the id of the original question"
+            )
+            assert records[0].get("attempts") == 2, records[0]
+            print("  ✅ The same question is recognised despite the punctuation")
+        finally:
+            _ = os.environ.pop("CFA_PREP_HOME", None)
+
+
 def test_mistake_session_summary():
     """Test that the logging session ends with a line stating how many mistakes were saved"""
     import io
@@ -636,7 +727,7 @@ def test_mistake_breakdown_view():
 
             buffer = io.StringIO()
             with redirect_stdout(buffer):
-                cmd_mistake(SimpleNamespace(add=False, browse=False, export=None))  # pyright: ignore[reportArgumentType]
+                cmd_mistake(SimpleNamespace(add=False, browse=False, export=None, merge_duplicates=False, check_duplicates=False))  # pyright: ignore[reportArgumentType]
             output = buffer.getvalue()
             assert "Mistake log by subject and module (3 mistakes)" in output, output
             # The count comes first, right-aligned on the width of the largest one

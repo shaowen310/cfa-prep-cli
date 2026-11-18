@@ -51,6 +51,8 @@ class CLIArgs(Protocol):
     add: bool
     browse: bool
     export: str | None
+    merge_duplicates: bool
+    check_duplicates: bool
     remove: bool
     update: bool
     type: str | None
@@ -369,6 +371,45 @@ def cmd_mistake(args: CLIArgs) -> None:
         print(f"  📊 {count} question(s)")
         return
 
+    if args.check_duplicates:
+        # Show the questions that are logged more than once, without changing
+        # anything: the first row of a group is the one that would be kept
+        groups = analyzer.check_duplicates()
+        print_header("🔍 Duplicated questions")
+        if not groups:
+            print("\n  No question is logged twice.")
+            return
+        for index, group in enumerate(groups, 1):
+            keep = group[0]
+            print(f"\n  [{index}] {keep.get('question', '')}")
+            print(f"      {len(group)} records — the first one is kept:")
+            for record in group:
+                marker = "keep" if record is keep else "merge"
+                print(
+                    f"      · [{marker}] {record.get('question_id', '')}"
+                    f"  {record.get('date', '')}"
+                    f"  attempts={record.get('attempts', 1)}"
+                )
+                print(f"          question : {record.get('question', '')}")
+                print(f"          options  : {record.get('options') or []}")
+                print(f"          answered : {record.get('user_answer', '')}")
+                print(f"          correct  : {record.get('correct_answer', '')}")
+                explanation = record.get("explanation", "")
+                print(f"          explains : {explanation[:80]}")
+        extra = sum(len(group) - 1 for group in groups)
+        print(f"\n  {len(groups)} question(s) are logged twice — {extra} row(s) extra.")
+        print("  Merge them with: cfa-prep mistake --merge-duplicates")
+        return
+
+    if args.merge_duplicates:
+        # Questions that were logged twice under a different text are folded
+        # into the row that is kept
+        removed = analyzer.merge_duplicates()
+        print_header("🧹 Duplicates merged")
+        print(f"  {removed} duplicate row(s) merged into the question they belong to")
+        print(f"  📊 {analyzer.store.count()} question(s) left")
+        return
+
     # Default: show recent mistakes and the full summary by subject and module
     print_header("📝 Mistakes")
     print_section("Recent mistakes")
@@ -587,6 +628,10 @@ Data root (default ~/.cfa-prep) can be set via:
     _ = p_mistake.add_argument("-e", "--export", nargs="?", const="", default=None,
                               metavar="PATH",
                               help="export the mistake log as JSON (default: the data root)")
+    _ = p_mistake.add_argument("--merge-duplicates", action="store_true",
+                              help="merge the questions that are logged twice into one row")
+    _ = p_mistake.add_argument("--check-duplicates", action="store_true",
+                              help="show the questions that are logged twice")
 
     # search command
     p_search = subparsers.add_parser("search", help="Search your curriculum, flashcards and mistakes")
