@@ -50,7 +50,6 @@ UNSEEN_PRIORITY = 5.0      # never tested -> high attention
 OVERDUE_CAP = 3.0          # max bonus for being long past due
 WRONG_RATIO_WEIGHT = 4.0   # weight of the wrong-answer ratio
 WRONG_COUNT_WEIGHT = 0.8   # weight per repeat mistake (capped at 5)
-SKIP_WEIGHT = 1.5          # bonus for questions that were skipped (never answered)
 MASTERY_DISCOUNT = 2.0     # max discount for a streak of correct answers
 
 RESULT_CORRECT = "correct"
@@ -65,12 +64,11 @@ class QuestionStat(TypedDict):
     times_seen: int
     times_correct: int
     times_wrong: int
-    times_skipped: int
     streak: int            # consecutive correct answers
     ease: float            # SM-2 ease factor
     interval_days: int     # current scheduling interval
     last_seen: str         # ISO date of the last attempt
-    last_result: str       # "correct" | "wrong" | "skipped"
+    last_result: str       # "correct" | "wrong"
 
 
 class SessionRecord(TypedDict):
@@ -119,6 +117,16 @@ def parse_date(value: str) -> date | None:
         return date.fromisoformat(value)
     except ValueError:
         return None
+
+
+def _was_never_tested(stat: QuestionStat) -> bool:
+    """
+    Tell whether a question was only ever skipped, and never really tested.
+
+    A question that was never answered correctly nor wrongly does not belong
+    in the statistics: it counts as unseen and comes back in the next session.
+    """
+    return stat["times_correct"] == 0 and stat["times_wrong"] == 0
 
 
 def describe(stat: QuestionStat, max_len: int = 60) -> str:
@@ -188,7 +196,13 @@ class QuizStats:
         if isinstance(questions_raw, dict):
             for key, value in cast(dict[str, object], questions_raw).items():
                 if isinstance(value, dict):
-                    questions[key] = self._normalize_question(cast(dict[str, object], value))
+                    stat = self._normalize_question(cast(dict[str, object], value))
+                    if _was_never_tested(stat):
+                        # The entry only exists because the question was skipped:
+                        # it was never really tested, so it is dropped and the
+                        # question counts as unseen again.
+                        continue
+                    questions[key] = stat
 
         data = QuizStatsData(
             version=_as_int(raw.get("version"), 1),
@@ -246,13 +260,15 @@ class QuizStats:
 
     @staticmethod
     def _normalize_question(raw: dict[str, object]) -> QuestionStat:
+        # The skips of an older file do not count as seen: the question was
+        # never really tested then.
+        skipped = _as_int(raw.get("times_skipped"))
         return QuestionStat(
             question=_as_str(raw.get("question")),
             level=_as_str(raw.get("level")),
-            times_seen=_as_int(raw.get("times_seen")),
+            times_seen=max(_as_int(raw.get("times_seen")) - skipped, 0),
             times_correct=_as_int(raw.get("times_correct")),
             times_wrong=_as_int(raw.get("times_wrong")),
-            times_skipped=_as_int(raw.get("times_skipped")),
             streak=_as_int(raw.get("streak")),
             ease=_as_float(raw.get("ease"), EASE_DEFAULT),
             interval_days=_as_int(raw.get("interval_days")),
@@ -279,7 +295,6 @@ class QuizStats:
             times_seen=0,
             times_correct=0,
             times_wrong=0,
-            times_skipped=0,
             streak=0,
             ease=EASE_DEFAULT,
             interval_days=0,
@@ -309,6 +324,10 @@ class QuizStats:
         """
         Record the outcome of one answered question and reschedule it.
 
+        A question that was skipped is **not** stored: it was never really
+        tested, so it stays unseen and comes back in the next session.  Nothing
+        of it is written, not even the attempt itself.
+
         Parameters:
             key: question identity (see :func:`question_id` in the mistake analyzer)
             result: "correct" | "wrong" | "skipped"
@@ -317,6 +336,10 @@ class QuizStats:
             today: override for the current date (testing)
         """
         if not key:
+            return
+        if result == RESULT_SKIPPED:
+            # A skipped question was never really tested: it is not stored, so
+            # it keeps the high priority of a question that was never seen.
             return
         day = today or local_today()
         data = self.load()
@@ -339,18 +362,12 @@ class QuizStats:
                 stat["streak"], stat["interval_days"], stat["ease"]
             )
             stat["last_result"] = RESULT_CORRECT
-        elif result == RESULT_WRONG:
+        else:
             stat["times_wrong"] += 1
             stat["streak"] = 0
             stat["ease"] = max(EASE_MIN, stat["ease"] - 0.2)
             stat["interval_days"] = 0
             stat["last_result"] = RESULT_WRONG
-        else:
-            stat["times_skipped"] += 1
-            stat["streak"] = 0
-            stat["ease"] = max(EASE_MIN, stat["ease"] - 0.1)
-            stat["interval_days"] = 0
-            stat["last_result"] = RESULT_SKIPPED
 
         questions[key] = stat
         data["questions"] = questions
@@ -418,10 +435,7 @@ class QuizStats:
         priority += WRONG_RATIO_WEIGHT * wrong_ratio
         priority += WRONG_COUNT_WEIGHT * min(stat["times_wrong"], 5)
 
-        # 3. Skipped questions were never really tested, so they still need attention.
-        priority += SKIP_WEIGHT * min(stat["times_skipped"], 2)
-
-        # 4. Mastery discount: consecutive correct answers push it back.
+        # 3. Mastery discount: consecutive correct answers push it back.
         priority -= MASTERY_DISCOUNT * min(stat["streak"] / 3.0, 1.0)
 
         return priority

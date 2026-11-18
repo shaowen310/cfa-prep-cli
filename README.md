@@ -507,13 +507,13 @@ Every logged mistake keeps its own schedule (a spaced-repetition style model):
 | --- | --- |
 | ✅ Correct | It rests for longer (1 → 3 → 7 → 14 days, then `interval × ease`), and its **ease** grows, so it is selected less often. |
 | ❌ Wrong | It is due **immediately** (0 days) and its ease drops, so it is selected more often. |
-| ⏭️ Skipped | It was never really tested — it stays due now and keeps some priority. |
+| ⏭️ Skipped | **Nothing is stored.** The question was never really tested, so it stays unseen, keeps the high priority of a new question and comes back in the next session. |
 
 Questions are then scored by **priority**:
 
 ```
 priority = overdue(≤ +3.0) + 4.0·wrong_ratio + 0.8·min(wrong, 5)
-           + 1.5·min(skipped, 2) − 2.0·min(streak/3, 1)
+           − 2.0·min(streak/3, 1)
 ```
 
 A module is as urgent as the most urgent mistake logged in it, and a module without any

@@ -163,7 +163,7 @@ def test_quiz_records_only_questions():
     import tempfile
 
     from cfa_prep.mistake_analyzer import MistakeAnalyzer
-    from cfa_prep.quiz_stats import RESULT_SKIPPED, QuizStats
+    from cfa_prep.quiz_stats import QuizStats
 
     data = {
         "L1": {"Economics": ["Demand and supply", "Monetary policy"]},
@@ -220,13 +220,9 @@ def test_quiz_records_only_questions():
             assert engine.wrong == 0, "an unanswered mistake must not be wrong"
             assert engine.skipped == 1, "the unanswered mistake must be skipped"
             questions = QuizStats().load()["questions"]
-            assert list(questions) == [items[0]["question_id"]], (
-                "only the mistake question may be in the statistics"
+            assert list(questions) == [], (
+                "a skipped question was never really tested and must not be stored"
             )
-            stat = questions[items[0]["question_id"]]
-            assert stat["last_result"] == RESULT_SKIPPED
-            assert stat["times_wrong"] == 0
-            assert stat["times_skipped"] == 1
 
             print("  ✅ Only questions are recorded - a topic prompt is not a question")
         finally:
@@ -291,6 +287,7 @@ def test_quiz_stats_scheduling_and_selection():
         RESULT_CORRECT,
         RESULT_SKIPPED,
         RESULT_WRONG,
+        UNSEEN_PRIORITY,
         QuizStats,
         next_due_of,
     )
@@ -359,16 +356,18 @@ def test_quiz_stats_scheduling_and_selection():
             assert wrong_question in selected, "repeatedly wrong questions should be selected"
             assert good_question not in selected, "a mastered question should be pushed back"
 
-            # A skipped question was never really tested, so it must stay due
+            # A skipped question was never really tested: it is not stored, so it
+            # stays unseen and comes back in the next session
             skipped_question = "Which of the following describes a derivative?"
             skipped_id = question_id(skipped_question)
             stats.record_question(
                 skipped_id, RESULT_SKIPPED, question=skipped_question, today=today
             )
-            stat = stats.load()["questions"][skipped_id]
-            assert stat["interval_days"] == 0, "a skipped question must be due again immediately"
-            assert stats.priority_of(skipped_id, today=today) > 0, (
-                "a skipped question must keep some priority"
+            assert skipped_id not in stats.load()["questions"], (
+                "a skipped question must not be stored in the statistics"
+            )
+            assert stats.priority_of(skipped_id, today=today) == UNSEEN_PRIORITY, (
+                "a skipped question stays unseen, so it keeps the high priority"
             )
 
             print("  ✅ Quiz stats scheduling and priority selection work")
@@ -382,7 +381,7 @@ def test_quiz_stats_file_split():
     import tempfile
     from datetime import date
 
-    from cfa_prep.quiz_stats import RESULT_CORRECT, QuizStats
+    from cfa_prep.quiz_stats import RESULT_CORRECT, RESULT_SKIPPED, QuizStats
 
     with tempfile.TemporaryDirectory() as tmp:
         os.environ["CFA_PREP_HOME"] = tmp
@@ -423,6 +422,43 @@ def test_quiz_stats_file_split():
             stats.reset()
             assert stats.overall()["sessions"] == 0
             assert stats.load()["questions"] == {}
+
+            # A question that was only ever skipped is not kept: it was never
+            # really tested, so it counts as unseen again
+            stats.record_question(
+                "q:skipped_only",
+                RESULT_SKIPPED,
+                question="A question that was only ever skipped",
+                today=today,
+            )
+            assert "q:skipped_only" not in stats.load()["questions"], (
+                "a skipped question must not be stored"
+            )
+
+            # An entry of an older file that only holds skips is dropped too
+            old = cast(
+                dict[str, object], json.loads(stats.stats_file.read_text(encoding="utf-8"))
+            )
+            questions = cast(dict[str, object], old["questions"])
+            questions["q:old_skip"] = {
+                "question": "An old skipped question",
+                "level": "L1",
+                "times_seen": 1,
+                "times_correct": 0,
+                "times_wrong": 0,
+                "times_skipped": 1,
+                "streak": 0,
+                "ease": 2.4,
+                "interval_days": 0,
+                "last_seen": "20260101",
+                "last_result": "skipped",
+            }
+            old["questions"] = questions
+            _ = stats.stats_file.write_text(json.dumps(old), encoding="utf-8")
+            fresh = QuizStats()
+            assert "q:old_skip" not in fresh.load()["questions"], (
+                "an entry that only holds skips must be dropped"
+            )
 
             print("  ✅ Quiz stats file split works")
         finally:

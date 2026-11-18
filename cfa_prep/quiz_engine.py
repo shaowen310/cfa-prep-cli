@@ -20,7 +20,6 @@ from .mistake_analyzer import MistakeAnalyzer
 from .progress_tracker import ProgressTracker
 from .quiz_stats import (
     RESULT_CORRECT,
-    RESULT_SKIPPED,
     RESULT_WRONG,
     UNSEEN_PRIORITY,
     QuizStats,
@@ -238,16 +237,11 @@ class QuizEngine:
 
         if answer not in valid_answers:
             # No answer given: the question counts as skipped, never as wrong.
-            print("⚠️ No answer given — recorded as skipped.")
+            # It is not written to the statistics either — it was never really
+            # tested, so it stays unseen and comes back in the next session.
+            print("⚠️ No answer given — skipped, it stays unseen.")
             self.total += 1
             self.skipped += 1
-            if qid:
-                self.stats.record_question(
-                    qid,
-                    RESULT_SKIPPED,
-                    question=item["question"],
-                    level="L1",
-                )
             return False
 
         chosen = options[labels.index(answer)]
