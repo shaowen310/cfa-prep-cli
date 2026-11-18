@@ -15,6 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from cfa_prep.curriculum import Curriculum
 from cfa_prep.mistake_analyzer import MistakeAnalyzer
 from cfa_prep.quiz_engine import QuizEngine
+from cfa_prep.utils import today_iso
 
 
 def test_quiz_engine():
@@ -409,8 +410,19 @@ def test_quiz_stats_file_split():
             )
             assert "questions" in questions_raw, "the questions file holds the per-question stats"
             assert "sessions" not in questions_raw, "sessions must not live in the questions file"
-            assert "sessions" in sessions_raw, "the sessions file holds the history"
+            assert "days" in sessions_raw, "the sessions file holds the totals of the days"
             assert "questions" not in sessions_raw, "questions must not live in the sessions file"
+
+            # The session is kept as the totals of the day
+            days = cast(dict[str, object], sessions_raw["days"])
+            today_totals = cast(dict[str, object], days[today_iso()])
+            assert today_totals["L1"] == {
+                "sessions": 1,
+                "total": 10,
+                "correct": 7,
+                "wrong": 2,
+                "skipped": 1,
+            }, today_totals
 
             # The aggregate report still reads the session history
             overall = stats.overall()
@@ -436,5 +448,74 @@ def test_quiz_stats_file_split():
             )
 
             print("  ✅ Quiz stats file split works")
+        finally:
+            _ = os.environ.pop("CFA_PREP_HOME", None)
+
+
+def test_quiz_sessions_are_folded_into_the_days():
+    """Test that the sessions of an older file are folded into the days"""
+    import json
+    import tempfile
+
+    from cfa_prep.quiz_stats import QuizStats
+
+    with tempfile.TemporaryDirectory() as tmp:
+        os.environ["CFA_PREP_HOME"] = tmp
+        try:
+            stats = QuizStats()
+            # A file of the older shape: every session on its own
+            old = {
+                "version": 1,
+                "updated": "2026-01-01",
+                "sessions": [
+                    {
+                        "date": "2026-01-01",
+                        "level": "L1",
+                        "total": 10,
+                        "correct": 7,
+                        "wrong": 2,
+                        "skipped": 1,
+                    },
+                    {
+                        "date": "2026-01-01",
+                        "level": "L1",
+                        "total": 5,
+                        "correct": 3,
+                        "wrong": 1,
+                        "skipped": 1,
+                    },
+                    {
+                        "date": "2026-01-02",
+                        "level": "L2",
+                        "total": 4,
+                        "correct": 4,
+                        "wrong": 0,
+                        "skipped": 0,
+                    },
+                ],
+            }
+            _ = stats.sessions_file.write_text(json.dumps(old), encoding="utf-8")
+
+            # The sessions are summed up per day and level
+            fresh = QuizStats()
+            days = fresh.load_sessions()["days"]
+            assert days["2026-01-01"]["L1"] == {
+                "sessions": 2,
+                "total": 15,
+                "correct": 10,
+                "wrong": 3,
+                "skipped": 2,
+            }, days
+            assert days["2026-01-02"]["L2"]["sessions"] == 1, days
+
+            # The totals are the same as they were
+            overall = fresh.overall()
+            assert overall["sessions"] == 3, overall
+            assert overall["total"] == 19, overall
+            assert overall["correct"] == 14, overall
+            assert overall["wrong"] == 3, overall
+            assert overall["skipped"] == 2, overall
+
+            print("  ✅ The sessions of an older file are folded into the days")
         finally:
             _ = os.environ.pop("CFA_PREP_HOME", None)

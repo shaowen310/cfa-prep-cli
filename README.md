@@ -226,10 +226,27 @@ The data is split across two files, because the two halves have different jobs:
 | File | Holds | Used for |
 | --- | --- | --- |
 | `progress/quiz_stats.json` | Per-question scheduling state | Choosing which questions to ask |
-| `progress/quiz_sessions.json` | Session history (capped at 200) | Reporting overall accuracy |
+| `progress/quiz_sessions.json` | The totals of every day (capped at 180 days) | Reporting overall accuracy |
 
 The per-question file is the one on the hot path — it is read and written once per quiz,
 not once per answer.
+
+The session history is kept as **the totals of every day and level**, not as one entry
+per session:
+
+```json
+{
+  "version": 2,
+  "updated": "2026-11-18",
+  "days": {
+    "2026-11-08": {"L1": {"sessions": 7, "total": 9, "correct": 7, "wrong": 1, "skipped": 1}}
+  }
+}
+```
+
+Only the sums are ever read, so storing them is enough — the file stays small and grows
+with the **days** you quiz, not with the sessions. A file of the older shape (one entry
+per session) is folded into the days automatically, nothing is lost.
 
 ### Question identity
 
