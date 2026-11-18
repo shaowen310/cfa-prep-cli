@@ -286,6 +286,57 @@ def test_flashcard_table_prompt():
             _ = os.environ.pop("CFA_PREP_HOME", None)
 
 
+def test_flashcard_input_goes_back():
+    """Test that the card input can go back and that the table of before is kept"""
+    import io
+    import json
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as tmp:
+        os.environ["CFA_PREP_HOME"] = tmp
+        try:
+            # A small curriculum, so the subject and module can be picked
+            c = Curriculum()
+            cur = Path(tmp) / "cur.json"
+            _ = cur.write_text(
+                json.dumps({"L1": {"Economics": {"Module 1: Intro": ["Demand"]}}}),
+                encoding="utf-8",
+            )
+            c.import_file(str(cur))
+
+            generator = FlashcardGenerator()
+            old_stdin = sys.stdin
+            try:
+                # subject, module, question, answer, table, back, table, image, end
+                answers = [
+                    "1",
+                    "1",
+                    "What is demand?",
+                    "Desire backed by ability",
+                    "\tYear 1\tYear 2",
+                    "DSO\t85\t76",
+                    "",
+                    r"\b",
+                    "",
+                    "",
+                    "",
+                ]
+                sys.stdin = io.StringIO("\n".join(answers) + "\n")
+                generator.manual_flashcard("L1")
+            finally:
+                sys.stdin = old_stdin
+
+            cards = generator._load_manual()  # pyright: ignore[reportPrivateUsage]
+            assert len(cards) == 1, cards
+            # The table that was pasted is still there
+            table = cards[0].get("table")
+            assert table is not None, cards[0]
+            assert table["rows"] == [["DSO", "85", "76"]], table
+            print("  ✅ The card input goes back and the table of before is kept")
+        finally:
+            _ = os.environ.pop("CFA_PREP_HOME", None)
+
+
 def test_flashcard_review():
     """Test reviewing flashcards (view question, reveal answer, skip)"""
     import json

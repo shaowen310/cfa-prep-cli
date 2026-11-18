@@ -412,6 +412,137 @@ def test_mistake_duplicate_with_other_punctuation():
             _ = os.environ.pop("CFA_PREP_HOME", None)
 
 
+def test_mistake_input_goes_back():
+    """Test that the input can go back and that the table of before is kept"""
+    import tempfile
+
+    from cfa_prep.mistake_analyzer import MistakeAnalyzer
+
+    answers = [
+        "What is demand?",       # the question
+        "Year 1\tYear 2",        # the header of the table
+        "Label\t85\t76",         # a row of the table
+        "",                      # the end of the table
+        r"\b",                   # back from the first option to the table
+        "",                      # the table of before is kept
+        "A tariff",              # option A
+        "An import quota",       # option B
+        "A restraint",           # option C
+        "A",                     # the wrong answer
+        "B",                     # the correct answer
+        "Because of the reason.",  # the explanation
+    ]
+
+    with tempfile.TemporaryDirectory() as tmp:
+        os.environ["CFA_PREP_HOME"] = tmp
+        try:
+            analyzer = MistakeAnalyzer()
+            answer_iter = iter(answers)
+
+            def fake_prompt(prompt: str = "") -> str:
+                del prompt  # the scripted answers do not depend on the prompt
+                return next(answer_iter, "")
+
+            original_prompt = MistakeAnalyzer._prompt  # pyright: ignore[reportPrivateUsage]
+            MistakeAnalyzer._prompt = staticmethod(fake_prompt)  # pyright: ignore[reportPrivateUsage]
+            try:
+                result = analyzer._log_mcq(  # pyright: ignore[reportPrivateUsage]
+                    "Economics", "Module 1: Basics", "L1"
+                )
+            finally:
+                MistakeAnalyzer._prompt = staticmethod(original_prompt)  # pyright: ignore[reportPrivateUsage]
+
+            assert result == "saved", result
+            records = analyzer.all_mistakes()
+            assert len(records) == 1, records
+            # The table that was pasted is still there
+            table = records[0].get("table")
+            assert table is not None, records[0]
+            assert table["rows"] == [["Label", "85", "76"]], table
+            assert records[0]["options"] == [
+                "A tariff",
+                "An import quota",
+                "A restraint",
+            ], records[0]
+            print("  ✅ The input goes back and the table of before is kept")
+        finally:
+            _ = os.environ.pop("CFA_PREP_HOME", None)
+
+
+def test_mistake_input_leaves_the_session():
+    """Test that the reader can leave the session without saving anything"""
+    import tempfile
+
+    from cfa_prep.mistake_analyzer import MistakeAnalyzer
+
+    answers = [
+        "What is demand?",       # the question
+        "",                      # no table below the question
+        r"\q",                   # leave the session
+    ]
+
+    with tempfile.TemporaryDirectory() as tmp:
+        os.environ["CFA_PREP_HOME"] = tmp
+        try:
+            analyzer = MistakeAnalyzer()
+            answer_iter = iter(answers)
+
+            def fake_prompt(prompt: str = "") -> str:
+                del prompt  # the scripted answers do not depend on the prompt
+                return next(answer_iter, "")
+
+            original_prompt = MistakeAnalyzer._prompt  # pyright: ignore[reportPrivateUsage]
+            MistakeAnalyzer._prompt = staticmethod(fake_prompt)  # pyright: ignore[reportPrivateUsage]
+            try:
+                result = analyzer._log_mcq(  # pyright: ignore[reportPrivateUsage]
+                    "Economics", "Module 1: Basics", "L1"
+                )
+            finally:
+                MistakeAnalyzer._prompt = staticmethod(original_prompt)  # pyright: ignore[reportPrivateUsage]
+
+            assert result == "quit", result
+            assert analyzer.all_mistakes() == [], "nothing must be saved"
+            print("  ✅ The reader can leave the session without saving anything")
+        finally:
+            _ = os.environ.pop("CFA_PREP_HOME", None)
+
+
+def test_mistake_undo():
+    """Test that the mistake that was logged last can be removed again"""
+    import tempfile
+
+    from cfa_prep.mistake_analyzer import MistakeAnalyzer
+
+    with tempfile.TemporaryDirectory() as tmp:
+        os.environ["CFA_PREP_HOME"] = tmp
+        try:
+            analyzer = MistakeAnalyzer()
+            options = ["A tariff", "An import quota", "A voluntary export restraint"]
+            _ = analyzer.add_mistake(
+                subject="Economics",
+                question="Which trade restriction costs the importing country most?",
+                user_answer=options[0],
+                correct_answer=options[1],
+                explanation="",
+                module_name="Module 1: Basics",
+                options=options,
+            )
+            assert len(analyzer.all_mistakes()) == 1
+
+            removed = analyzer.undo_last()
+            assert removed is not None, "the mistake must be found"
+            assert removed.get("question") == (
+                "Which trade restriction costs the importing country most?"
+            ), removed
+            assert analyzer.all_mistakes() == [], "the mistake must be gone"
+
+            # There is nothing left to undo
+            assert analyzer.undo_last() is None
+            print("  ✅ The mistake that was logged last can be removed again")
+        finally:
+            _ = os.environ.pop("CFA_PREP_HOME", None)
+
+
 def test_mistake_session_summary():
     """Test that the logging session ends with a line stating how many mistakes were saved"""
     import io
@@ -727,7 +858,7 @@ def test_mistake_breakdown_view():
 
             buffer = io.StringIO()
             with redirect_stdout(buffer):
-                cmd_mistake(SimpleNamespace(add=False, browse=False, export=None, merge_duplicates=False, check_duplicates=False))  # pyright: ignore[reportArgumentType]
+                cmd_mistake(SimpleNamespace(add=False, browse=False, export=None, merge_duplicates=False, check_duplicates=False, undo=False))  # pyright: ignore[reportArgumentType]
             output = buffer.getvalue()
             assert "Mistake log by subject and module (3 mistakes)" in output, output
             # The count comes first, right-aligned on the width of the largest one

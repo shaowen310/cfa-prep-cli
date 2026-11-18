@@ -7,7 +7,6 @@ Purpose: Store and display the small data tables a question may refer to
 """
 
 import re
-from collections.abc import Callable
 from typing import TypedDict
 
 
@@ -107,41 +106,19 @@ def render_table(table: Table, indent: str = "  ", rule: str = "─") -> list[st
     return lines
 
 
-def read_table(
-    prompt: Callable[[str], str],
-    message: str = "  Paste the table below the question (press Enter if there is none):",
-) -> Table | None:
+def table_from_text(text: str) -> Table | None:
     """
-    Read a table that is pasted below a question.
+    Return the table that was pasted, when the text holds one.
 
-    The table is pasted right below the question: one line per row, the
-    columns separated by tabs (or by two or more spaces).  The first line is
-    the header, a blank line ends the table.  A question without a table ends
-    the block right away, so there is nothing extra to answer.
-
-    A block that is not a table (no second column) is ignored.
+    The first line is the header, the lines below it are the data rows.  A
+    block that is not a table (no second column) is ignored.
     """
-    print(message)
-    lines: list[str] = []
-    while True:
-        line = prompt("")
-        if not line.strip():
-            break
-        lines.append(line)
+    lines = [line for line in text.splitlines() if line.strip()]
     if not lines:
         return None
     if len(split_row(lines[0])) < 2:
-        # Not a table: a question has more than one column
-        print("  (ignored — a table needs at least two columns)")
         return None
-    table = parse_table(lines)
-    if table is None:
-        return None
-    print("\n  📊 Table:")
-    for row in render_table(table, indent="    "):
-        print(row)
-    print()
-    return table
+    return parse_table(lines)
 
 
 def render_markdown_table(table: Table) -> str:

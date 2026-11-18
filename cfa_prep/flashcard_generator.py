@@ -10,7 +10,17 @@ from typing import TypedDict, cast
 
 from .curriculum import Curriculum
 from .images import attach_image, clean_pasted_path, image_lines, open_externally
-from .tables import Table, read_table, render_markdown_table, render_table
+from .input_flow import (
+    BACK,
+    HINT,
+    QUIT,
+    FinishSession,
+    QuitSession,
+    SkipQuestion,
+    Step,
+    StepFlow,
+)
+from .tables import Table, render_markdown_table, render_table, table_from_text
 from .utils import (
     get_data_dir,
     load_json,
@@ -150,16 +160,14 @@ class FlashcardGenerator:
             print()
             raise
 
-    def _read_image(self) -> tuple[list[str], str]:
+    def _attach_image(self, raw: str, caption: str) -> tuple[list[str], str]:
         """
-        Ask for an image to attach to the card.
+        Copy the picture of the card into the images folder of the data root.
 
         The path may be pasted (Windows Terminal puts it in quotes) and the file
-        is copied into the images folder of the data root, so the card keeps
-        working when the data root moves.
+        is copied, so the card keeps working when the data root moves.
         """
-        raw = self._prompt("Image path (blank for none): ").strip()
-        if not raw:
+        if not raw.strip():
             return [], ""
         source = Path(clean_pasted_path(raw)).expanduser()
         try:
@@ -167,7 +175,6 @@ class FlashcardGenerator:
         except ValueError as exc:
             print(f"  ❌ {exc}")
             return [], ""
-        caption = self._prompt("Caption (blank for none): ").strip()
         print(f"  📷 Image attached: {relative}")
         return [relative], caption
 
@@ -176,6 +183,8 @@ class FlashcardGenerator:
     ) -> tuple[str, str] | None:
         """
         Browse the curriculum to pick a subject and module.
+
+        `\\b` goes back to the list of subjects, `\\q` leaves the picker.
         Returns (subject, module), or None if the user finishes (blank subject),
         or ("", "") if the curriculum is empty.
         """
@@ -184,43 +193,65 @@ class FlashcardGenerator:
             print("\n  ℹ️  Curriculum is empty — skipping subject/module selection.")
             return "", ""
 
-        print("\n  Pick a subject (blank to finish):")
-        for i, s in enumerate(subjects, 1):
-            print(f"    [{i}] {s}")
-        choice = self._prompt("  > ").strip()
-        if not choice.isdigit():
-            return None
-        idx = int(choice) - 1
-        if idx < 0 or idx >= len(subjects):
-            return None
-        subject = subjects[idx]
+        while True:
+            print("\n  Pick a subject (blank to finish):")
+            for i, s in enumerate(subjects, 1):
+                print(f"    [{i}] {s}")
+            choice = self._prompt("  > ").strip()
+            if choice == QUIT:
+                return None
+            if choice == BACK:
+                print("  ⚠️ Already at the first step.")
+                continue
+            if not choice.isdigit():
+                return None
+            idx = int(choice) - 1
+            if idx < 0 or idx >= len(subjects):
+                return None
+            subject = subjects[idx]
 
-        modules = self.curriculum.all_modules(level, subject)
-        if not modules:
-            print(f"\n  ❌ No modules in {subject} — cannot add a card without a module.")
-            return None
+            modules = self.curriculum.all_modules(level, subject)
+            if not modules:
+                print(
+                    f"\n  ❌ No modules in {subject} — cannot add a card without a module."
+                )
+                return None
 
-        print(f"\n  {subject} — pick a module (blank to finish):")
-        for i, m in enumerate(modules, 1):
-            print(f"    [{i}] {m}")
-        choice = self._prompt("  > ").strip()
-        if not choice.isdigit():
-            return None
-        idx = int(choice) - 1
-        if idx < 0 or idx >= len(modules):
-            return None
-        return subject, modules[idx]
+            while True:
+                print(f"\n  {subject} — pick a module (blank to finish):")
+                for i, m in enumerate(modules, 1):
+                    print(f"    [{i}] {m}")
+                choice = self._prompt("  > ").strip()
+                if choice == QUIT:
+                    return None
+                if choice == BACK:
+                    # Back to the list of subjects
+                    print("  ⬅️ Back to: subject")
+                    break
+                if not choice.isdigit():
+                    return None
+                idx = int(choice) - 1
+                if idx < 0 or idx >= len(modules):
+                    return None
+                return subject, modules[idx]
 
     def manual_flashcard(self, level: str = "L1") -> None:
         """
         Interactively add one or more flashcards by hand, optionally selecting
         the subject and module from the curriculum. Aborts cleanly on Ctrl+C/Ctrl+D.
+
+        Every step of a card can be reached again: `\\b` goes one step back,
+        `\\r` starts the card over and `\\q` leaves the session.
         """
         added = 0
         try:
             print("\n" + "=" * 50)
             print("  🃏 Add Manual Flashcard")
             print("=" * 50)
+            print(f"\n  {HINT}")
+
+            # The table of the card that is being typed
+            tables: dict[str, Table | None] = {}
 
             while True:
                 picked = self._pick_subject_and_module(level)
@@ -228,36 +259,89 @@ class FlashcardGenerator:
                     break
                 subject, module = picked
                 location = " / ".join(p for p in (subject, module) if p)
+                tables.clear()
 
-                question = self._prompt(
-                    f"\nQuestion{(' [' + location + ']') if location else ''} (blank to finish): "
-                ).strip()
-                if not question:
+                def take_table(raw: str, previous: str) -> str:
+                    """Read the table of the card and show it as it will be shown."""
+                    if not raw.strip():
+                        if previous:
+                            print("  ↩️ Keeping the table from before.")
+                            return previous
+                        tables["table"] = None
+                        return raw
+                    table = table_from_text(raw)
+                    tables["table"] = table
+                    if table:
+                        print("\n  📊 Table:")
+                        for row in render_table(table, indent="    "):
+                            print(row)
+                        print()
+                    else:
+                        print("  (ignored — a table needs at least two columns)")
+                    return raw
+
+                def check_question(value: str, previous: str) -> None:
+                    """A blank question ends the session."""
+                    del previous
+                    if not value.strip():
+                        raise FinishSession
+
+                def check_answer(value: str, previous: str) -> None:
+                    """A card without an answer is skipped."""
+                    del previous
+                    if not value.strip():
+                        print("  ❌ Answer cannot be empty — skipping this card.")
+                        raise SkipQuestion
+
+                flow = StepFlow(self._prompt)
+                steps = [
+                    Step(
+                        "question",
+                        f"\nQuestion{(' [' + location + ']') if location else ''}"
+                        " (blank to finish): ",
+                        on_value=check_question,
+                    ),
+                    Step("answer", "Answer: ", on_value=check_answer),
+                    Step(
+                        "table",
+                        "  Paste the table of the card (press Enter if there is none):",
+                        kind="block",
+                        on_done=take_table,
+                        keep_on_empty=True,
+                    ),
+                    Step("image", "Image path (blank for none): "),
+                    Step(
+                        "caption",
+                        "Caption (blank for none): ",
+                        # The caption is only asked for when there is a picture
+                        when=lambda values: bool(values.get("image", "").strip()),
+                        keep_on_empty=True,
+                    ),
+                ]
+                try:
+                    values = flow.run(steps)
+                except FinishSession:
+                    break
+                except SkipQuestion:
+                    continue
+                except QuitSession:
+                    print("\n  👋 Left the session.")
                     break
 
-                answer = self._prompt("Answer: ").strip()
-                if not answer:
-                    print("  ❌ Answer cannot be empty — skipping this card.")
-                    continue
-
-                # A card may refer to a table: it is pasted after the answer
-                table = read_table(
-                    self._prompt,
-                    "  Paste the table of the card (blank line if there is none):",
+                # The picture is copied once the card is complete
+                images, caption = self._attach_image(
+                    values.get("image", ""), values.get("caption", "")
                 )
 
-                # An image (a diagram, a chart) may belong to the card
-                images, caption = self._read_image()
-
                 filepath = self.add_manual(
-                    question=question,
-                    answer=answer,
+                    question=values["question"],
+                    answer=values["answer"],
                     level=level,
                     subject=subject,
                     module=module,
                     images=images,
                     image_caption=caption,
-                    table=table,
+                    table=tables.get("table"),
                 )
                 added += 1
                 print(f"  ✅ Saved to: {filepath}\n")

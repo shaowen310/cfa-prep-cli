@@ -10,6 +10,17 @@ from pathlib import Path
 from typing import cast
 
 from .curriculum import Curriculum
+from .input_flow import (
+    BACK,
+    HINT,
+    QUIT,
+    FinishSession,
+    QuitSession,
+    RestartQuestion,
+    SkipQuestion,
+    Step,
+    StepFlow,
+)
 from .mistake_store import (
     DB_NAME,
     MAX_WRONG_ANSWERS,
@@ -17,7 +28,7 @@ from .mistake_store import (
     MistakeStore,
     reconcile_options,
 )
-from .tables import Table, read_table, render_table
+from .tables import Table, render_table, table_from_text
 from .utils import (
     get_data_dir,
     hash_text,
@@ -301,19 +312,6 @@ class MistakeAnalyzer:
             print()
             raise
 
-    def _read_table(self) -> Table | None:
-        """
-        Read the table that follows the question.
-
-        The table is pasted right below the question: one line per row, the
-        columns separated by tabs (or by two or more spaces).  The first line is
-        the header, a blank line ends the table.  A question without a table
-        ends the block right away, so there is nothing extra to answer.
-
-        A block that is not a table (no second column) is ignored.
-        """
-        return read_table(self._prompt)
-
     def add_mistake_interactive(
         self, curriculum: Curriculum | None = None, level: str = "L1"
     ) -> None:
@@ -364,6 +362,9 @@ class MistakeAnalyzer:
                     first = False
                     if result == "finished":
                         break
+                    if result == "quit":
+                        print("\n  👋 Left the session.")
+                        break
                     if result == "saved":
                         saved += 1
             else:
@@ -396,67 +397,86 @@ class MistakeAnalyzer:
     ) -> str:
         """
         Log an L1 MCQ mistake with 3-option input.
-        Enter `\\b` on any field to go back and re-enter the previous field.
+
+        Every step of the question can be reached again: `\\b` goes one step
+        back, `\\r` starts the question over and `\\q` leaves the session.
 
         Parameters:
-            show_hint: print the \\b navigation hint (only on the first entry)
+            show_hint: print the navigation hint (only on the first entry)
 
         Returns one of:
             "finished" — user entered a blank question (stop the session)
             "skipped"  — question already logged, user chose not to re-add
+            "quit"     — the user left the session
             "saved"    — a mistake was saved
         """
         if show_hint:
-            print("\n  (Enter \\b on any field to go back and edit the previous one)")
+            print(f"\n  {HINT}")
         module_label = f" [{module_name}]" if module_name else ""
-        data: dict[str, str] = {}
-        table: Table | None = None
+        tables: dict[str, Table | None] = {}
 
-        fields: list[tuple[str, str, bool]] = [
-            # (key, prompt, uppercase?)
-            ("question", f"Question text{module_label} (blank to finish): ", False),
-            ("option_a", "  Enter the 3 answer options:\n    A: ", False),
-            ("option_b", "    B: ", False),
-            ("option_c", "    C: ", False),
-            ("user_letter", "\nYour wrong answer (A/B/C, blank to skip): ", True),
-            ("correct_letter", "Correct answer (A/B/C): ", True),
-            ("explanation", "Explanation (optional): ", False),
+        def take_table(raw: str, previous: str) -> str:
+            """Read the table that was pasted and show it as it will be shown."""
+            if not raw.strip():
+                if previous:
+                    # The table of before is kept
+                    print("  ↩️ Keeping the table from before.")
+                    return previous
+                tables["table"] = None
+                return raw
+            table = table_from_text(raw)
+            tables["table"] = table
+            if table:
+                print("\n  📊 Table:")
+                for row in render_table(table, indent="    "):
+                    print(row)
+                print()
+            else:
+                print("  (ignored — a table needs at least two columns)")
+            return raw
+
+        def check_question(value: str, previous: str) -> None:
+            """The question text: an empty one ends the session."""
+            if not value.strip():
+                raise FinishSession
+            if value != previous and not self._confirm_duplicate(value):
+                raise SkipQuestion
+
+        flow = StepFlow(self._prompt)
+        steps = [
+            Step(
+                "question",
+                f"Question text{module_label} (blank to finish): ",
+                on_value=check_question,
+            ),
+            Step(
+                "table",
+                "  Paste the table below the question (press Enter if there is none):",
+                kind="block",
+                on_done=take_table,
+                keep_on_empty=True,
+            ),
+            Step("option_a", "  Enter the 3 answer options:\n    A: "),
+            Step("option_b", "    B: "),
+            Step("option_c", "    C: "),
+            Step("user_letter", "\nYour wrong answer (A/B/C, blank to skip): "),
+            Step("correct_letter", "Correct answer (A/B/C): "),
+            Step("explanation", "Explanation (optional): ", keep_on_empty=True),
         ]
-
-        i = 0
-        while i < len(fields):
-            key, prompt, upper = fields[i]
-
-            raw = self._prompt(prompt).strip()
-            # Back command: return to the previous field (no-op on the first)
-            if raw == r"\b":
-                if i > 0:
-                    i -= 1
-                    print(f"  ⬅️ Back to: {fields[i][0]}")
-                else:
-                    print("  ⚠️ Already at the first field.")
-                continue
-
-            # Question field has special handling: blank = finish, plus duplicate check
-            if key == "question":
-                if not raw:
-                    return "finished"
-                if raw != data.get("question") and not self._confirm_duplicate(raw):
-                    # Re-enter duplicate check whenever the question text changes
-                    print("  ⏭️ Skipped — already logged.")
-                    return "skipped"
-                data["question"] = raw
-                i += 1
-                # A question may refer to a table: it is pasted right below
-                table = self._read_table()
-                continue
-
-            data[key] = raw.upper() if upper else raw
-            i += 1
+        try:
+            data = flow.run(steps)
+        except FinishSession:
+            return "finished"
+        except SkipQuestion:
+            print("  ⏭️ Skipped — already logged.")
+            return "skipped"
+        except QuitSession:
+            return "quit"
 
         question = data["question"]
         option_a, option_b, option_c = data["option_a"], data["option_b"], data["option_c"]
-        user_letter, correct_letter = data["user_letter"], data["correct_letter"]
+        user_letter = data["user_letter"].upper()
+        correct_letter = data["correct_letter"].upper()
 
         # Map letters to option text so the machine can identify the answer
         # regardless of display order (quiz can shuffle options later).
@@ -475,72 +495,76 @@ class MistakeAnalyzer:
             explanation=explanation,
             module_name=module_name,
             level=level,
-            table=table,
+            table=tables.get("table"),
         )
         print(f"\n✅ Mistake saved to: {filepath}")
         return "saved"
 
     def _log_freeform(self, subject: str, module_name: str, level: str = "L1") -> bool:
         """
-        Log an L2/L3 free-form mistake. Enter `\\b` on any single-line field to go
-        back and re-enter the previous field. Returns True if a mistake was saved.
+        Log an L2/L3 free-form mistake.
+
+        Every step of the question can be reached again: `\\b` goes one step
+        back, `\\r` starts the question over and `\\q` leaves the session.
+        Returns True if a mistake was saved.
         """
-        print("\n  (Enter \\b on any field to go back and edit the previous one)")
-        data: dict[str, str] = {}
+        print(f"\n  {HINT}")
+        tables: dict[str, Table | None] = {}
 
-        # Question is multi-line (blank line to finish); other fields are single-line.
-        fields: list[str] = [
-            "user_answer",
-            "correct_answer",
-            "explanation",
-        ]
-
-        # 1. Multi-line question (first field; blank finishes the session)
-        print("\nEnter the question description (enter a blank line to finish):")
-        while True:
-            lines = [self._prompt()]
-            if lines[0] == "":
-                print("  Cancelled.")
-                return False
-            while True:
-                line = self._prompt()
-                if line == "":
-                    break
-                lines.append(line)
-            question = "\n".join(lines).strip()
-            if not question:
-                print("  Cancelled.")
-                return False
-            # Warn if this question was logged before, and let the user opt out
-            if self._confirm_duplicate(question):
-                data["question"] = question
-                break
-            print("  ⏭️ Skipped — already logged. Enter a different question.")
-
-        # 1b. The table the question refers to, pasted right below it
-        table = self._read_table()
-
-        # 2. Remaining single-line fields, with \b back navigation
-        i = 0
-        while i < len(fields):
-            key = fields[i]
-            if key == "user_answer":
-                prompt = "\nYour wrong answer (optional — blank to skip): "
-            elif key == "correct_answer":
-                prompt = "Correct answer: "
+        def take_table(raw: str, previous: str) -> str:
+            """Read the table that was pasted and show it as it will be shown."""
+            if not raw.strip():
+                if previous:
+                    # The table of before is kept
+                    print("  ↩️ Keeping the table from before.")
+                    return previous
+                tables["table"] = None
+                return raw
+            table = table_from_text(raw)
+            tables["table"] = table
+            if table:
+                print("\n  📊 Table:")
+                for row in render_table(table, indent="    "):
+                    print(row)
+                print()
             else:
-                prompt = "Explanation (one-sentence summary): "
+                print("  (ignored — a table needs at least two columns)")
+            return raw
 
-            raw = self._prompt(prompt).strip()
-            if raw == r"\b":
-                if i > 0:
-                    i -= 1
-                    print(f"  ⬅️ Back to: {fields[i]}")
-                else:
-                    print("  ⚠️ Already at the first field.")
-                continue
-            data[key] = raw
-            i += 1
+        def check_question(value: str, previous: str) -> None:
+            """The question text: an empty one cancels, a known one starts over."""
+            if not value.strip():
+                raise FinishSession
+            if value != previous and not self._confirm_duplicate(value):
+                print("  ⏭️ Skipped — already logged. Enter a different question.")
+                raise RestartQuestion
+
+        flow = StepFlow(self._prompt)
+        steps = [
+            Step(
+                "question",
+                "Enter the question description (enter a blank line to finish):",
+                kind="block",
+                on_value=check_question,
+            ),
+            Step(
+                "table",
+                "  Paste the table below the question (press Enter if there is none):",
+                kind="block",
+                on_done=take_table,
+                keep_on_empty=True,
+            ),
+            Step("user_answer", "\nYour wrong answer (optional — blank to skip): "),
+            Step("correct_answer", "Correct answer: "),
+            Step("explanation", "Explanation (one-sentence summary): ", keep_on_empty=True),
+        ]
+        try:
+            data = flow.run(steps)
+        except FinishSession:
+            print("  Cancelled.")
+            return False
+        except QuitSession:
+            return False
 
         filepath = self.add_mistake(
             subject=subject,
@@ -550,52 +574,68 @@ class MistakeAnalyzer:
             explanation=data["explanation"],
             module_name=module_name,
             level=level,
-            table=table,
+            table=tables.get("table"),
         )
         print(f"\n✅ Mistake saved to: {filepath}")
         return True
 
-    @staticmethod
-    def _pick_subject_and_module(curriculum: Curriculum, level: str) -> tuple[str, str]:
+    def _pick_subject_and_module(
+        self, curriculum: Curriculum, level: str
+    ) -> tuple[str, str]:
         """
         Browse the curriculum to pick a subject and module.
-        Returns (subject, module_name) or ("", "") if the user aborts.
+
+        `\\b` goes back to the list before, `\\q` leaves the picker.  Returns
+        (subject, module_name) or ("", "") if the user aborts.
         """
-        # 1. Pick subject
         subjects = curriculum.all_subjects(level)
         if not subjects:
             print("Curriculum is empty. Use free-text subject entry instead.")
             return "", ""
 
-        print("\nPick a subject:")
-        for i, s in enumerate(subjects, 1):
-            print(f"  [{i}] {s}")
-        choice = input("  > ").strip()
-        if not choice.isdigit():
-            return "", ""
-        idx = int(choice) - 1
-        if idx < 0 or idx >= len(subjects):
-            return "", ""
-        subject = subjects[idx]
+        while True:
+            # 1. Pick subject
+            print("\nPick a subject:")
+            for i, s in enumerate(subjects, 1):
+                print(f"  [{i}] {s}")
+            choice = self._prompt("  > ").strip()
+            if choice == QUIT:
+                return "", ""
+            if choice == BACK:
+                print("  ⚠️ Already at the first step.")
+                continue
+            if not choice.isdigit():
+                return "", ""
+            idx = int(choice) - 1
+            if idx < 0 or idx >= len(subjects):
+                print("  (no such subject)")
+                continue
+            subject = subjects[idx]
 
-        # 2. Pick module
-        modules = curriculum.all_modules(level, subject)
-        if not modules:
-            print(f"No modules in {subject}.")
-            return subject, ""
+            # 2. Pick module
+            modules = curriculum.all_modules(level, subject)
+            if not modules:
+                print(f"No modules in {subject}.")
+                return subject, ""
 
-        print(f"\n  {subject} — pick a module:")
-        for i, m in enumerate(modules, 1):
-            print(f"    [{i}] {m}")
-        choice = input("  > ").strip()
-        if not choice.isdigit():
-            return subject, ""
-        idx = int(choice) - 1
-        if idx < 0 or idx >= len(modules):
-            return subject, ""
-        module_name = modules[idx]
-
-        return subject, module_name
+            while True:
+                print(f"\n  {subject} — pick a module:")
+                for i, m in enumerate(modules, 1):
+                    print(f"    [{i}] {m}")
+                choice = self._prompt("    > ").strip()
+                if choice == QUIT:
+                    return "", ""
+                if choice == BACK:
+                    # Back to the list of subjects
+                    print("  ⬅️ Back to: subject")
+                    break
+                if not choice.isdigit():
+                    return subject, ""
+                idx = int(choice) - 1
+                if idx < 0 or idx >= len(modules):
+                    print("  (no such module)")
+                    continue
+                return subject, modules[idx]
 
     def get_recent_mistakes(self, limit: int = 10) -> list[MistakeRecord]:
         """
@@ -898,6 +938,19 @@ class MistakeAnalyzer:
         their attempts are folded into the row that is kept.
         """
         return self.store.merge_duplicates()
+
+    def undo_last(self) -> MistakeRecord | None:
+        """
+        Remove the question that was logged last.
+
+        It is the way back when a mistake was saved by accident: the question
+        that is removed is returned, so it can be shown.
+        """
+        record = self.store.latest()
+        if record is None:
+            return None
+        _ = self.store.delete(record["question_id"])
+        return record
 
     def check_duplicates(self) -> list[list[MistakeRecord]]:
         """

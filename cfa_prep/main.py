@@ -53,6 +53,7 @@ class CLIArgs(Protocol):
     export: str | None
     merge_duplicates: bool
     check_duplicates: bool
+    undo: bool
     remove: bool
     update: bool
     type: str | None
@@ -371,6 +372,22 @@ def cmd_mistake(args: CLIArgs) -> None:
         print(f"  📊 {count} question(s)")
         return
 
+    if args.undo:
+        # The way back when a mistake was saved by accident
+        record = analyzer.undo_last()
+        if record is None:
+            print_header("↩️ Undo")
+            print("\n  There is no mistake to undo.")
+            return
+        print_header("↩️ Mistake removed")
+        print(f"\n  {record.get('question', '')}")
+        print(
+            f"  {record.get('subject', '')} | {record.get('module', '')}"
+            f" | {record.get('date', '')}"
+        )
+        print(f"  📊 {analyzer.store.count()} question(s) left")
+        return
+
     if args.check_duplicates:
         # Show the questions that are logged more than once, without changing
         # anything: the first row of a group is the one that would be kept
@@ -592,6 +609,7 @@ Examples:
   cfa-prep stats                        Show quiz statistics and the review schedule
   cfa-prep mistake -a                    Log a mistake
   cfa-prep mistake -b                    Browse the questions by subject and module
+  cfa-prep mistake --undo                Remove the mistake that was logged last
   cfa-prep recap                         View progress
   cfa-prep recap --update                Update progress
   cfa-prep recap --remove                Remove progress entries
@@ -632,6 +650,8 @@ Data root (default ~/.cfa-prep) can be set via:
                               help="merge the questions that are logged twice into one row")
     _ = p_mistake.add_argument("--check-duplicates", action="store_true",
                               help="show the questions that are logged twice")
+    _ = p_mistake.add_argument("--undo", action="store_true",
+                              help="remove the mistake that was logged last")
 
     # search command
     p_search = subparsers.add_parser("search", help="Search your curriculum, flashcards and mistakes")

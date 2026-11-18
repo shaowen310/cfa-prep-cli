@@ -298,6 +298,16 @@ class MistakeStore:
             row = connection.execute("SELECT COUNT(*) AS total FROM mistakes").fetchone()
         return int(row["total"]) if row is not None else 0
 
+    def latest(self) -> MistakeRecord | None:
+        """Return the question that was logged last, when there is one."""
+        with self._session() as connection:
+            row = connection.execute(
+                'SELECT * FROM mistakes'
+                ' ORDER BY COALESCE(NULLIF(last_date, \'\'), date) DESC, rowid DESC'
+                " LIMIT 1"
+            ).fetchone()
+        return _row_to_record(row) if row is not None else None
+
     # --- writing -----------------------------------------------------------
 
     def upsert(self, record: MistakeRecord) -> None:
