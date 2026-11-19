@@ -788,8 +788,7 @@ class MistakeAnalyzer:
         Print every question of one module that is logged as a mistake.
 
         This is the view of the mistake browser: the questions of a module, one
-        after the other.  Only the correct answer is marked, so the questions can
-        be read again without the old mistake pointing at the answer.
+        after the other. Only the correct answer is marked.
         """
         records = self._module_records(subject, module)
         if not records:
