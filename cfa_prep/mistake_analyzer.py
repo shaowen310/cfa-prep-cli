@@ -827,18 +827,8 @@ class MistakeAnalyzer:
         if not modules:
             return
         noun = "mistake" if total == 1 else "mistakes"
-        attempts_value = stats.get("attempts")
-        attempts = attempts_value if isinstance(attempts_value, int) else total
         title = f"Mistake log by subject and module ({total} {noun})"
-        if attempts > total:
-            title += f", {attempts} attempts"
         print_section(title)
-        module_attempts_value = stats.get("module_attempts")
-        module_attempts = (
-            cast(dict[str, int], module_attempts_value)
-            if isinstance(module_attempts_value, dict)
-            else {}
-        )
         subject_rank, module_rank = self._curriculum_order()
         ordered = sorted(
             modules.items(),
@@ -846,10 +836,9 @@ class MistakeAnalyzer:
         )
         width = max(len(str(count)) for _group, count in ordered)
         for group, count in ordered:
-            # The questions that were answered wrong again are counted apart
-            group_attempts = module_attempts.get(group, count)
-            suffix = f" ({group_attempts} attempts)" if group_attempts > count else ""
-            print(f"  {count:>{width}} | {group}{suffix}")
+            # Only the questions are counted: the attempts are kept in the log,
+            # but the summary is about the questions that have to be learned.
+            print(f"  {count:>{width}} | {group}")
 
     @staticmethod
     def _curriculum_order() -> tuple[dict[str, int], dict[str, dict[str, int]]]:

@@ -855,6 +855,16 @@ def test_mistake_breakdown_view():
                 module_name="Module 1: Fixed-Income Instrument Features",
                 options=["A tax", "A weighted average maturity", "A subsidy"],
             )
+            # The same question once more: it stays one question with two attempts
+            _ = analyzer.add_mistake(
+                subject="Economics",
+                question="What is a tariff?",
+                user_answer="An import quota",
+                correct_answer="A tariff",
+                explanation="",
+                module_name="Module 6: International Trade",
+                options=["A tariff", "An import quota", "A voluntary export restraint"],
+            )
 
             buffer = io.StringIO()
             with redirect_stdout(buffer):
@@ -870,6 +880,8 @@ def test_mistake_breakdown_view():
             fixed_income = output.index("Fixed Income > Module 1")
             economics = output.index("Economics > Module 6")
             assert fixed_income < economics, output
+            # The summary counts the questions, not the attempts
+            assert "attempts" not in output, output
             print("  ✅ The mistake view shows the log in curriculum order")
         finally:
             _ = os.environ.pop("CFA_PREP_HOME", None)

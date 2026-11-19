@@ -348,8 +348,10 @@ its record** instead of writing a second copy of it:
 - What was typed by hand (the explanation, the options, the table) is kept, so an
   automatic entry — the quiz re-logging a repeated mistake — never wipes it.
 
-The log therefore grows with the **questions**, not with the attempts, and the
-breakdown shows both: `3 | Economics > Module 6 (7 attempts)`.
+The log therefore grows with the **questions**, not with the attempts. The attempts are
+kept in the record, but they are **not shown**: the breakdown counts the questions
+(`3 | Economics > Module 6`) and the browse view shows the questions themselves,
+without pointing at the old mistakes.
 
 ### Recognising a question that is already logged
 
