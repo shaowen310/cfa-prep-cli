@@ -469,6 +469,65 @@ def test_mistake_input_goes_back():
             _ = os.environ.pop("CFA_PREP_HOME", None)
 
 
+def test_mistake_table_can_be_cleared():
+    """Test that the table of before can be dropped with the clear key"""
+    import io
+    import tempfile
+    from contextlib import redirect_stdout
+
+    from cfa_prep.mistake_analyzer import MistakeAnalyzer
+
+    answers = [
+        "What is demand?",       # the question
+        "Year 1\tYear 2",        # the header of the table
+        "Label\t85\t76",         # a row of the table
+        "",                      # the end of the table
+        r"\b",                   # back from the first option to the table
+        r"\c",                   # the table is cleared
+        "",                      # the table is asked again and left empty
+        "A tariff",              # option A
+        "An import quota",       # option B
+        "A restraint",           # option C
+        "A",                     # the wrong answer
+        "B",                     # the correct answer
+        "Because of the reason.",  # the explanation
+    ]
+
+    with tempfile.TemporaryDirectory() as tmp:
+        os.environ["CFA_PREP_HOME"] = tmp
+        try:
+            analyzer = MistakeAnalyzer()
+            answer_iter = iter(answers)
+
+            def fake_prompt(prompt: str = "") -> str:
+                del prompt  # the scripted answers do not depend on the prompt
+                return next(answer_iter, "")
+
+            original_prompt = MistakeAnalyzer._prompt  # pyright: ignore[reportPrivateUsage]
+            MistakeAnalyzer._prompt = staticmethod(fake_prompt)  # pyright: ignore[reportPrivateUsage]
+            buffer = io.StringIO()
+            try:
+                with redirect_stdout(buffer):
+                    result = analyzer._log_mcq(  # pyright: ignore[reportPrivateUsage]
+                        "Economics", "Module 1: Basics", "L1"
+                    )
+            finally:
+                MistakeAnalyzer._prompt = staticmethod(original_prompt)  # pyright: ignore[reportPrivateUsage]
+
+            assert result == "saved", result
+            records = analyzer.all_mistakes()
+            assert len(records) == 1, records
+            # The table that was pasted is gone
+            assert records[0].get("table") is None, records[0]
+            # The table of before is not kept either
+            assert "Keeping the table from before" not in buffer.getvalue(), (
+                buffer.getvalue()
+            )
+            print("  ✅ The table of before can be cleared")
+        finally:
+            _ = os.environ.pop("CFA_PREP_HOME", None)
+
+
 def test_mistake_input_leaves_the_session():
     """Test that the reader can leave the session without saving anything"""
     import tempfile

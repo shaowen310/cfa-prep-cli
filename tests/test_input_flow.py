@@ -95,6 +95,27 @@ def test_step_flow_keeps_the_answer_of_before():
     print("  ✅ An empty answer keeps what was typed before")
 
 
+def test_step_flow_clears_the_step():
+    """Test that clearing drops what was typed before"""
+    flow = StepFlow(_reader(["first", r"\b", r"\c", "", "second"]))
+    steps = [Step("a", "A: ", keep_on_empty=True), Step("b", "B: ")]
+    values = flow.run(steps)
+    # Without the clear, the empty answer would have kept "first"
+    assert values["a"] == "", values
+    assert values["b"] == "second", values
+    print("  ✅ Clearing drops what was typed before")
+
+
+def test_step_flow_clears_a_step_and_asks_it_again():
+    """Test that the cleared step is asked again"""
+    flow = StepFlow(_reader(["first", r"\c", "new second"]))
+    steps = [Step("a", "A: "), Step("b", "B: ")]
+    values = flow.run(steps)
+    # The clear happened at the second step, which is asked again
+    assert values == {"a": "first", "b": "new second"}, values
+    print("  ✅ The cleared step is asked again")
+
+
 def test_step_flow_can_end_and_skip():
     """Test that a step can end the session or skip the question"""
     def finish(value: str, previous: str) -> None:

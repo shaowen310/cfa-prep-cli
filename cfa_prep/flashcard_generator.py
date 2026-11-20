@@ -241,7 +241,8 @@ class FlashcardGenerator:
         the subject and module from the curriculum. Aborts cleanly on Ctrl+C/Ctrl+D.
 
         Every step of a card can be reached again: `\\b` goes one step back,
-        `\\r` starts the card over and `\\q` leaves the session.
+        `\\c` clears the step, `\\r` starts the card over and `\\q` leaves the
+        session.
         """
         added = 0
         try:

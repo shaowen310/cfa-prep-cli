@@ -399,7 +399,8 @@ class MistakeAnalyzer:
         Log an L1 MCQ mistake with 3-option input.
 
         Every step of the question can be reached again: `\\b` goes one step
-        back, `\\r` starts the question over and `\\q` leaves the session.
+        back, `\\c` clears the step, `\\r` starts the question over and `\\q`
+        leaves the session.
 
         Parameters:
             show_hint: print the navigation hint (only on the first entry)
@@ -505,7 +506,8 @@ class MistakeAnalyzer:
         Log an L2/L3 free-form mistake.
 
         Every step of the question can be reached again: `\\b` goes one step
-        back, `\\r` starts the question over and `\\q` leaves the session.
+        back, `\\c` clears the step, `\\r` starts the question over and `\\q`
+        leaves the session.
         Returns True if a mistake was saved.
         """
         print(f"\n  {HINT}")

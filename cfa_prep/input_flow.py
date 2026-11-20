@@ -2,19 +2,20 @@
 CFA Prep CLI - Input flow module
 Author: CodeBuddy AI Assistant
 Purpose: One step machine for every question that is typed in, so that the ways
-         back work the same everywhere: \\b goes one step back, \\r starts the
-         question over and \\q leaves the session — in the question, in the
-         table and in every field after it.
+         back work the same everywhere: \\b goes one step back, \\c clears the step
+         and asks it again, \\r starts the question over and \\q leaves the session
+         — in the question, in the table and in every field after it.
 """
 
 from collections.abc import Callable
 from enum import Enum
 
 BACK = r"\b"       # one step back
+CLEAR = r"\c"      # the step is cleared and asked again
 RESTART = r"\r"    # the question starts over
 QUIT = r"\q"       # leave the session
 
-HINT = "(\\b = one step back, \\r = start over, \\q = leave)"
+HINT = "(\\b = one step back, \\c = clear this step, \\r = start over, \\q = leave)"
 
 
 class Action(Enum):
@@ -22,6 +23,7 @@ class Action(Enum):
 
     NEXT = "next"
     BACK = "back"
+    CLEAR = "clear"
     RESTART = "restart"
     QUIT = "quit"
 
@@ -121,6 +123,12 @@ class StepFlow:
             if action is Action.BACK:
                 self._back(steps)
                 continue
+            if action is Action.CLEAR:
+                # The step is asked again with nothing in it: what was typed
+                # before is dropped, so a table can be taken back.
+                self.values[step.key] = ""
+                print(f"  🧹 Cleared the {step.key}.")
+                continue
             if action is Action.RESTART:
                 self.values.clear()
                 self.index = 0
@@ -193,6 +201,8 @@ def _escape(text: str) -> Action | None:
     """Return what the reader asked for, when the text is a command."""
     if text == BACK:
         return Action.BACK
+    if text == CLEAR:
+        return Action.CLEAR
     if text == RESTART:
         return Action.RESTART
     if text == QUIT:

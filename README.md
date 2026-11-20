@@ -461,17 +461,18 @@ empty (a leading tab); a column of numbers is right-aligned.
 
 ### Going back while you type
 
-Every step of the question can be reached again. The same three keys work in the
+Every step of the question can be reached again. The same four keys work in the
 question, in the table and in every field after it:
 
 | Key | What it does |
 | --- | --- |
 | `\b` | go one step back — the step is asked again |
+| `\c` | clear the step — what was typed in it is dropped and it is asked again |
 | `\r` | start the question over — the answers of the attempt are dropped |
 | `\q` | leave the session — nothing of the current question is saved |
 
 ```
-  (\b = one step back, \r = start over, \q = leave)
+  (\b = one step back, \c = clear this step, \r = start over, \q = leave)
 Question text [Module 2: Analyzing Income Statements] (blank to finish): Based on the table below, which ratio improved the most?
   Paste the table below the question (press Enter if there is none):
 	Year 1	Year 2
@@ -485,10 +486,14 @@ Question text [Module 2: Analyzing Income Statements] (blank to finish): Based o
     C: ...
 \b                                    ← one step back: the table is asked again
                                     ← Enter keeps the table of before
+\c                                    ← the table is cleared: it is dropped
+  🧹 Cleared the table.
 ```
 
 What is typed before is **kept**: the table that was pasted is not lost when the
 question is typed again, and the explanation of before stays when you come back to it.
+**`\c` is the way to drop it**: the value of the step is cleared, the step is asked
+again and the old value is gone — a table can be taken back this way.
 The same keys work in the picker of the subject and the module — `\b` there goes back
 to the list of subjects.
 
@@ -626,9 +631,10 @@ cfa-prep flashcard -a    # or: cfa-prep flashcard -a
 - After picking a subject you **must** pick a module to add a card (blank also finishes).
 - The session reports how many flashcards were added, e.g. `Finished adding 2 flashcards.`
 
-The same keys as in the mistake log work here: `\b` goes one step back, `\r` starts the
-card over and `\q` leaves the session. The caption of a picture is only asked for when
-there is a picture, and the table that was pasted is kept when you go back.
+The same keys as in the mistake log work here: `\b` goes one step back, `\c` clears the
+step, `\r` starts the card over and `\q` leaves the session. The caption of a picture
+is only asked for when there is a picture, and the table that was pasted is kept when
+you go back — `\c` drops it.
 
 Cards are stored at `<data_root>/flashcards/flashcards.json`. You can add several cards
 in one session — after saving one, the subject/module picker is shown again.
