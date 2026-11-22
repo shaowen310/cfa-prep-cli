@@ -25,6 +25,33 @@ DB_NAME = "mistakes.db"
 MAX_WRONG_ANSWERS = 5  # how many wrong answers of a question are kept
 
 
+def fold_wrong_answers(history: list[str], answers: list[str]) -> list[str]:
+    """
+    Fold the answers that were given wrong into the history of a question.
+
+    Every wrong answer is in the history once: an answer that is given again
+    moves to the end, so the last one is always the answer of the last attempt.
+    Two texts that are the same answer, written with or without the closing
+    punctuation, are one answer — the variant written the most carefully wins.
+    """
+    folded = list(history)
+    for answer in answers:
+        if not answer:
+            continue
+        key = stem_key(answer)
+        for index, kept in enumerate(folded):
+            if stem_key(kept) == key:
+                # The same answer, written another way: the careful one wins
+                folded[index] = prefer_text(kept, answer)
+                answer = folded[index]
+                break
+        # The answer of the last attempt is the last one of the history
+        if answer in folded:
+            folded.remove(answer)
+        folded.append(answer)
+    return folded[-MAX_WRONG_ANSWERS:]
+
+
 def reconcile_options(old: list[str], new: list[str]) -> tuple[list[str], dict[str, str]]:
     """
     Return the options of a question and the map of the texts that changed.
@@ -59,7 +86,6 @@ CREATE TABLE IF NOT EXISTS mistakes (
     question       TEXT NOT NULL DEFAULT '',
     stem_key       TEXT NOT NULL DEFAULT '',
     options        TEXT NOT NULL DEFAULT '[]',
-    user_answer    TEXT NOT NULL DEFAULT '',
     correct_answer TEXT NOT NULL DEFAULT '',
     explanation    TEXT NOT NULL DEFAULT '',
     wrong_answers  TEXT NOT NULL DEFAULT '[]',
@@ -73,9 +99,8 @@ CREATE INDEX IF NOT EXISTS idx_mistakes_stem_key ON mistakes(stem_key);
 UPSERT = """
 INSERT INTO mistakes (
     question_id, date, last_date, attempts, level, subject, "module", question,
-    stem_key, options, user_answer, correct_answer, explanation, wrong_answers,
-    table_json
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    stem_key, options, correct_answer, explanation, wrong_answers, table_json
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(question_id) DO UPDATE SET
     date           = excluded.date,
     last_date      = excluded.last_date,
@@ -86,7 +111,6 @@ ON CONFLICT(question_id) DO UPDATE SET
     question       = excluded.question,
     stem_key       = excluded.stem_key,
     options        = excluded.options,
-    user_answer    = excluded.user_answer,
     correct_answer = excluded.correct_answer,
     explanation    = excluded.explanation,
     wrong_answers  = excluded.wrong_answers,
@@ -167,7 +191,6 @@ class MistakeRecord(_MistakeRecordOptional):
     question: str
     question_id: str  # stable id of the question (hash of its text and options)
     options: list[str]  # [A text, B text, C text]
-    user_answer: str     # the option text the user chose
     correct_answer: str  # the option text that is correct
     explanation: str
 
@@ -182,7 +205,6 @@ def _row_to_record(row: sqlite3.Row) -> MistakeRecord:
         question=_text(row, "question"),
         question_id=_text(row, "question_id"),
         options=_texts(row, "options"),
-        user_answer=_text(row, "user_answer"),
         correct_answer=_text(row, "correct_answer"),
         explanation=_text(row, "explanation"),
         attempts=_number(row, "attempts"),
@@ -214,7 +236,6 @@ def _record_values(record: MistakeRecord) -> tuple[object, ...]:
         # The key is always derived from the question, never stored by hand
         stem_key(record.get("question", "")),
         json.dumps(record.get("options") or [], ensure_ascii=False),
-        record.get("user_answer", ""),
         record.get("correct_answer", ""),
         record.get("explanation", ""),
         json.dumps(record.get("wrong_answers") or [], ensure_ascii=False),
@@ -435,13 +456,9 @@ class MistakeStore:
                 mapping = composed
 
             # The answers are written the way the options they belong to are
-            user_answer = prefer_text(
-                keep.get("user_answer", ""), newest.get("user_answer", "")
-            )
             correct_answer = prefer_text(
                 keep.get("correct_answer", ""), newest.get("correct_answer", "")
             )
-            user_answer = mapping.get(user_answer, user_answer)
             correct_answer = mapping.get(correct_answer, correct_answer)
 
             explanation = prefer_text(
@@ -456,7 +473,6 @@ class MistakeStore:
                 question=capitalize_first(question),
                 question_id=keep["question_id"],
                 options=options,
-                user_answer=user_answer,
                 correct_answer=correct_answer,
                 explanation=capitalize_first(explanation),
             )
@@ -469,12 +485,13 @@ class MistakeStore:
             wrong: list[str] = []
             for record in group:
                 attempts += int(record.get("attempts", 1))
-                for answer in record.get("wrong_answers") or []:
-                    written = mapping.get(answer, answer)
-                    if written not in wrong:
-                        wrong.append(written)
+                answers = [
+                    mapping.get(answer, answer)
+                    for answer in (record.get("wrong_answers") or [])
+                ]
+                wrong = fold_wrong_answers(wrong, answers)
             merged["attempts"] = attempts
-            merged["wrong_answers"] = wrong[-MAX_WRONG_ANSWERS:]
+            merged["wrong_answers"] = wrong
             merged["last_date"] = max(
                 str(record.get("last_date") or record.get("date", ""))
                 for record in group

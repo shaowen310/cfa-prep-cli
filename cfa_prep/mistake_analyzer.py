@@ -23,9 +23,9 @@ from .input_flow import (
 )
 from .mistake_store import (
     DB_NAME,
-    MAX_WRONG_ANSWERS,
     MistakeRecord,
     MistakeStore,
+    fold_wrong_answers,
     reconcile_options,
 )
 from .tables import Table, render_table, table_from_text
@@ -132,7 +132,7 @@ class MistakeAnalyzer:
         self,
         subject: str,
         question: str,
-        user_answer: str,
+        wrong_answer: str,
         correct_answer: str,
         explanation: str,
         module_name: str = "",
@@ -152,7 +152,7 @@ class MistakeAnalyzer:
         Parameters:
             subject: subject name (e.g., Economics)
             question: question text (without options)
-            user_answer: the user's incorrect answer
+            wrong_answer: the answer that was given wrong
             correct_answer: the correct answer
             explanation: the explanation of the correct answer
             module_name: module within the subject (required)
@@ -185,12 +185,13 @@ class MistakeAnalyzer:
             question=question,
             question_id=qid,
             options=options or [],
-            user_answer=user_answer,
             correct_answer=correct_answer,
             explanation=explanation,
         )
         if table:
             record["table"] = table
+        # The answer that was given wrong is the first one of the history
+        record["wrong_answers"] = [wrong_answer] if wrong_answer else []
 
         # A question that is already logged is updated, not written a second
         # time: the log grows with the questions, not with the attempts.
@@ -203,9 +204,6 @@ class MistakeAnalyzer:
             existing = self._matching_record(question, options or [])
         if existing is None:
             record["attempts"] = 1
-            if record.get("user_answer"):
-                # The history of the wrong answers starts with this one
-                record["wrong_answers"] = [record["user_answer"]]
             self.store.upsert(record)
         else:
             self._update_mistake(existing, record)
@@ -266,15 +264,15 @@ class MistakeAnalyzer:
         existing["attempts"] = existing.get("attempts", 1) + 1
         existing["last_date"] = new.get("date", "")
 
-        wrong = new.get("user_answer", "")
+        wrong = new.get("wrong_answers") or []
         if wrong:
-            existing["user_answer"] = wrong
-            # The history holds the answers that were wrong, each one once: it
-            # shows the traps that were taken, not every single attempt.
-            history = list(existing.get("wrong_answers") or [])
-            if wrong not in history:
-                history.append(wrong)
-            existing["wrong_answers"] = history[-MAX_WRONG_ANSWERS:]
+            # The history holds the answers that were wrong, each one once, the
+            # most recent one last: it shows the traps that were taken, not every
+            # single attempt.
+            history = fold_wrong_answers(
+                list(existing.get("wrong_answers") or []), wrong
+            )
+            existing["wrong_answers"] = history
 
         correct = new.get("correct_answer", "")
         if correct and correct != existing.get("correct_answer"):
@@ -290,9 +288,11 @@ class MistakeAnalyzer:
             )
             existing["options"] = merged_options
             # The answers are written the way the options they belong to are
-            wrong_text = existing.get("user_answer", "")
-            if wrong_text:
-                existing["user_answer"] = mapping.get(wrong_text, wrong_text)
+            history = list(existing.get("wrong_answers") or [])
+            if history:
+                existing["wrong_answers"] = [
+                    mapping.get(answer, answer) for answer in history
+                ]
             correct_text = existing.get("correct_answer", "")
             if correct_text:
                 existing["correct_answer"] = mapping.get(correct_text, correct_text)
@@ -482,7 +482,7 @@ class MistakeAnalyzer:
         # Map letters to option text so the machine can identify the answer
         # regardless of display order (quiz can shuffle options later).
         letter_to_text = {"A": option_a, "B": option_b, "C": option_c}
-        user_answer = letter_to_text.get(user_letter, user_letter)
+        wrong_answer = letter_to_text.get(user_letter, user_letter)
         correct_answer = letter_to_text.get(correct_letter, correct_letter)
 
         explanation = data["explanation"]
@@ -491,7 +491,7 @@ class MistakeAnalyzer:
             subject=subject,
             question=question,
             options=[option_a, option_b, option_c],
-            user_answer=user_answer,
+            wrong_answer=wrong_answer,
             correct_answer=correct_answer,
             explanation=explanation,
             module_name=module_name,
@@ -556,7 +556,7 @@ class MistakeAnalyzer:
                 on_done=take_table,
                 keep_on_empty=True,
             ),
-            Step("user_answer", "\nYour wrong answer (optional — blank to skip): "),
+            Step("wrong_answer", "\nYour wrong answer (optional — blank to skip): "),
             Step("correct_answer", "Correct answer: "),
             Step("explanation", "Explanation (one-sentence summary): ", keep_on_empty=True),
         ]
@@ -571,7 +571,7 @@ class MistakeAnalyzer:
         filepath = self.add_mistake(
             subject=subject,
             question=data["question"],
-            user_answer=data["user_answer"],
+            wrong_answer=data["wrong_answer"],
             correct_answer=data["correct_answer"],
             explanation=data["explanation"],
             module_name=module_name,
@@ -711,16 +711,16 @@ class MistakeAnalyzer:
             for letter, opt in zip("ABC", options):
                 print(f"    {letter}. {opt}")
             print(f"\n    Answer: {self._option_letter(options, correct)}")
-            if show_wrong:
-                wrong = record.get("user_answer", "")
-                print(f"    Your answer: {self._option_letter(options, wrong)}")
+            if show_wrong and history:
+                # The last one is the answer of the last attempt
+                print(f"    Your answer: {self._option_letter(options, history[-1])}")
         else:
             print(f"\n    Answer: {correct}")
-            if show_wrong:
-                print(f"    Your answer: {record.get('user_answer', '')}")
+            if show_wrong and history:
+                print(f"    Your answer: {history[-1]}")
         if show_wrong and len(history) > 1:
             # The answers that were given wrong before, so the pattern shows
-            print(f"    Wrong answers so far: {', '.join(history)}")
+            print(f"    Wrong answers so far: {', '.join(history[:-1])}")
         if record.get("explanation"):
             print(f"\n  💡 {record['explanation']}")
         print(rule)

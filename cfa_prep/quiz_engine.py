@@ -279,7 +279,7 @@ class QuizEngine:
         _ = self.mistake_analyzer.add_mistake(
             subject=item["subject"],
             question=item["question"],
-            user_answer=chosen,
+            wrong_answer=chosen,
             correct_answer=item["correct"],
             explanation="",
             module_name=item["module"],

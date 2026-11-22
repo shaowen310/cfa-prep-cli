@@ -27,9 +27,9 @@ def _record(question: str, module: str = "Module 1: Basics") -> MistakeRecord:
         question=question,
         question_id=f"q:{question}",
         options=["A", "B", "C"],
-        user_answer="A",
         correct_answer="B",
         explanation="Because of the reason.",
+        wrong_answers=["A"],
     )
 
 
@@ -45,15 +45,43 @@ def test_mistake_store_upsert():
 
         # The same question id updates the row instead of adding one
         record["attempts"] = 2
-        record["user_answer"] = "C"
+        record["wrong_answers"] = ["C"]
         store.upsert(record)
         assert store.count() == 1
         stored = store.get(record["question_id"])
         assert stored is not None
         assert stored.get("attempts") == 2, stored
-        assert stored.get("user_answer") == "C", stored
+        assert stored.get("wrong_answers") == ["C"], stored
         assert stored.get("options") == ["A", "B", "C"], stored
         print("  ✅ A record is written, updated and counted")
+
+
+def test_mistake_store_keeps_the_wrong_answer_in_the_history():
+    """Test that the wrong answer is only kept in the history"""
+    import sqlite3
+
+    with tempfile.TemporaryDirectory() as tmp:
+        store = MistakeStore(Path(tmp) / "mistakes.db")
+        store.upsert(_record("What is demand?"))
+
+        connection = sqlite3.connect(store.db_path)
+        connection.row_factory = sqlite3.Row
+        columns = [
+            cast(str, row[1])
+            for row in cast(
+                list[sqlite3.Row],
+                connection.execute("PRAGMA table_info(mistakes)").fetchall(),
+            )
+        ]
+        connection.close()
+        # The answer that was given wrong has no column of its own
+        assert "user_answer" not in columns, columns
+        assert "wrong_answers" in columns, columns
+
+        stored = store.get("q:What is demand?")
+        assert stored is not None
+        assert stored.get("wrong_answers") == ["A"], stored
+        print("  ✅ The wrong answer is only kept in the history")
 
 
 def test_mistake_store_queries():
@@ -120,7 +148,8 @@ def test_mistake_store_merge_duplicates():
         merged = store.load_by_question("what is demand")
         assert len(merged) == 1, merged
         assert merged[0].get("attempts") == 2, merged
-        assert merged[0].get("wrong_answers") == ["C"], merged
+        # Both wrong answers are kept: they are two different traps
+        assert merged[0].get("wrong_answers") == ["A", "C"], merged
         print("  ✅ A question that is logged twice ends up in a single row")
 
 
@@ -130,20 +159,20 @@ def test_mistake_store_merge_keeps_the_hand_written_content():
         store = MistakeStore(Path(tmp) / "mistakes.db")
         first = _record("What is demand?")
         first["explanation"] = ""
-        first["user_answer"] = ""
+        first["wrong_answers"] = []
         store.upsert(first)
         # The question is logged again and the explanation is typed in
         second = _record("What is demand:")
         second["question_id"] = "q:other"
         second["explanation"] = "Because of the reason."
-        second["user_answer"] = "C"
+        second["wrong_answers"] = ["C"]
         store.upsert(second)
 
         assert store.merge_duplicates() == 1
         merged = store.load_by_question("what is demand")
         assert len(merged) == 1, merged
         assert merged[0].get("explanation") == "Because of the reason.", merged
-        assert merged[0].get("user_answer") == "C", merged
+        assert merged[0].get("wrong_answers") == ["C"], merged
         # The oldest row is the one that is kept
         assert merged[0]["question_id"] == first["question_id"], merged
         print("  ✅ The merge keeps the explanation that was typed in")
@@ -156,7 +185,7 @@ def test_mistake_store_merge_writes_the_texts_carefully():
         # The first record: no punctuation, a lower case sentence
         first = _record("What is demand")
         first["options"] = ["A tariff", "An import quota", "A restraint"]
-        first["user_answer"] = "A tariff"
+        first["wrong_answers"] = ["A tariff"]
         first["correct_answer"] = "An import quota"
         first["explanation"] = "the demand falls when the price rises."
         store.upsert(first)
@@ -164,7 +193,7 @@ def test_mistake_store_merge_writes_the_texts_carefully():
         second = _record("What is demand:")
         second["question_id"] = "q:other"
         second["options"] = ["An import quota.", "A restraint.", "A tariff."]
-        second["user_answer"] = "A tariff."
+        second["wrong_answers"] = ["A tariff."]
         second["correct_answer"] = "An import quota."
         second["explanation"] = "The demand falls when the price rises."
         store.upsert(second)
@@ -182,7 +211,7 @@ def test_mistake_store_merge_writes_the_texts_carefully():
             "A tariff.",
         ], record
         # The answers are written the way the options they belong to are
-        assert record.get("user_answer") == "A tariff.", record
+        assert record.get("wrong_answers") == ["A tariff."], record
         assert record.get("correct_answer") == "An import quota.", record
         # The sentence starts with a capital letter
         assert (

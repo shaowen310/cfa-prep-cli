@@ -66,7 +66,7 @@ def test_module_review_follows_the_questions():
             _ = analyzer.add_mistake(
                 subject="Economics",
                 question="Which trade restriction costs the importing country most?",
-                user_answer=options[0],
+                wrong_answer=options[0],
                 correct_answer=options[1],
                 explanation="",
                 module_name="Module 2: Policy",
@@ -117,7 +117,7 @@ def test_mistake_replay_module_cap():
                 _ = analyzer.add_mistake(
                     subject="Economics",
                     question=f"A question of module one ({i})",
-                    user_answer=options[0],
+                    wrong_answer=options[0],
                     correct_answer=options[1],
                     explanation="",
                     module_name="Module 1: Basics",
@@ -126,7 +126,7 @@ def test_mistake_replay_module_cap():
             _ = analyzer.add_mistake(
                 subject="Economics",
                 question="A question of module two",
-                user_answer=options[0],
+                wrong_answer=options[0],
                 correct_answer=options[1],
                 explanation="",
                 module_name="Module 2: Policy",
@@ -208,7 +208,7 @@ def test_quiz_records_only_questions():
             _ = analyzer.add_mistake(
                 subject="Economics",
                 question="Which trade restriction costs the importing country most?",
-                user_answer=options[0],
+                wrong_answer=options[0],
                 correct_answer=options[1],
                 explanation="",
                 module_name="Module 6: International Trade",
@@ -249,7 +249,7 @@ def test_quiz_stores_the_chosen_answer():
             _ = analyzer.add_mistake(
                 subject="Economics",
                 question="Which trade restriction costs the importing country most?",
-                user_answer=options[0],
+                wrong_answer=options[0],
                 correct_answer=options[1],
                 explanation="",
                 module_name="Module 6: International Trade",
@@ -268,7 +268,7 @@ def test_quiz_stores_the_chosen_answer():
             assert len(records) == before, "the log must not grow with every attempt"
             logged = records[-1]
             # The quiz knows which answer was chosen, so it is stored
-            assert logged.get("user_answer") == options[0], logged
+            assert logged.get("wrong_answers") == [options[0]], logged
             assert logged.get("correct_answer") == options[1], logged
             # The attempt is counted on the record that was already there
             assert logged.get("attempts") == 2, logged

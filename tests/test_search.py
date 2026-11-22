@@ -44,7 +44,7 @@ def test_search_covers_all_sources():
             _ = analyzer.add_mistake(
                 subject="Economics",
                 question="What is a deflationary gap?",
-                user_answer="An expansionary gap",
+                wrong_answer="An expansionary gap",
                 correct_answer="A deflationary gap",
                 explanation="Aggregate demand falls below potential output.",
                 module_name="Module 3: Fiscal Policy",
@@ -106,7 +106,7 @@ def test_search_hits_keep_the_original_data():
             _ = analyzer.add_mistake(
                 subject="Economics",
                 question="What is a deflationary gap?",
-                user_answer="An expansionary gap",
+                wrong_answer="An expansionary gap",
                 correct_answer="A deflationary gap",
                 explanation="Aggregate demand falls below potential output.",
                 module_name="Module 3: Fiscal Policy",

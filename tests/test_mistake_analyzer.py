@@ -54,7 +54,7 @@ def test_quiz_module_attribution():
             _ = analyzer.add_mistake(
                 subject="Economics",
                 question="Which trade restriction costs the importing country most?",
-                user_answer=options[0],
+                wrong_answer=options[0],
                 correct_answer=options[1],
                 explanation="",
                 module_name="Module 1: Basics",
@@ -68,7 +68,7 @@ def test_quiz_module_attribution():
                 _ = analyzer.add_mistake(
                     subject="Economics",
                     question="A question without a module",
-                    user_answer=options[0],
+                    wrong_answer=options[0],
                     correct_answer=options[1],
                     explanation="",
                     module_name="",
@@ -192,7 +192,7 @@ def test_mistake_upsert():
             _ = analyzer.add_mistake(
                 subject="Economics",
                 question=question,
-                user_answer=options[0],
+                wrong_answer=options[0],
                 correct_answer=options[1],
                 explanation="A quota costs the importing country the most.",
                 module_name="Module 6: International Trade",
@@ -202,7 +202,7 @@ def test_mistake_upsert():
             _ = analyzer.add_mistake(
                 subject="Economics",
                 question=question,
-                user_answer=options[2],
+                wrong_answer=options[2],
                 correct_answer=options[1],
                 explanation="",
                 module_name="Module 6: International Trade",
@@ -216,7 +216,7 @@ def test_mistake_upsert():
             assert record.get("attempts") == 2, record
             assert record.get("last_date"), record
             # The last wrong answer is the one that was given
-            assert record.get("user_answer") == options[2], record
+            assert list(record.get("wrong_answers") or [])[-1] == options[2], record
             # Both wrong answers are kept
             assert record.get("wrong_answers") == [options[0], options[2]], record
             # What was written by hand is not wiped by an empty new attempt
@@ -227,7 +227,7 @@ def test_mistake_upsert():
             _ = analyzer.add_mistake(
                 subject="Economics",
                 question=question,
-                user_answer=options[2],
+                wrong_answer=options[2],
                 correct_answer=options[1],
                 explanation="",
                 module_name="Module 6: International Trade",
@@ -238,6 +238,37 @@ def test_mistake_upsert():
             assert records[0].get("attempts") == 3, records[0]
             assert records[0].get("wrong_answers") == [options[0], options[2]], records[0]
             print("  ✅ A question that is logged again updates its record")
+        finally:
+            _ = os.environ.pop("CFA_PREP_HOME", None)
+
+
+def test_mistake_history_keeps_the_last_answer_last():
+    """Test that the answer of the last attempt is the last one of the history"""
+    import tempfile
+
+    from cfa_prep.mistake_analyzer import MistakeAnalyzer
+
+    options = ["A tariff", "An import quota", "A restraint"]
+    with tempfile.TemporaryDirectory() as tmp:
+        os.environ["CFA_PREP_HOME"] = tmp
+        try:
+            analyzer = MistakeAnalyzer()
+            for wrong in (options[0], options[1], options[0]):
+                _ = analyzer.add_mistake(
+                    subject="Economics",
+                    question="Which trade restriction costs the importing country most?",
+                    wrong_answer=wrong,
+                    correct_answer=options[1],
+                    explanation="",
+                    module_name="Module 6: International Trade",
+                    options=options,
+                )
+
+            records = analyzer.all_mistakes()
+            assert len(records) == 1, records
+            # Every wrong answer is in the history once, the last one last
+            assert records[0].get("wrong_answers") == [options[1], options[0]], records[0]
+            print("  ✅ The answer of the last attempt is the last one of the history")
         finally:
             _ = os.environ.pop("CFA_PREP_HOME", None)
 
@@ -259,7 +290,7 @@ def test_mistake_question_id():
             _ = analyzer.add_mistake(
                 subject="Economics",
                 question=question,
-                user_answer=options[0],
+                wrong_answer=options[0],
                 correct_answer=options[1],
                 explanation="",
                 module_name="Module 6: International Trade",
@@ -277,7 +308,7 @@ def test_mistake_question_id():
             _ = analyzer.add_mistake(
                 subject="Economics",
                 question=question,
-                user_answer=options[0],
+                wrong_answer=options[0],
                 correct_answer=options[1],
                 explanation="",
                 module_name="Module 6: International Trade",
@@ -336,7 +367,7 @@ def test_mistake_duplicate_prompt():
             _ = analyzer.add_mistake(
                 subject="Economics",
                 question=question,
-                user_answer=options[0],
+                wrong_answer=options[0],
                 correct_answer=options[1],
                 explanation="",
                 module_name="Module 1: Basics",
@@ -377,7 +408,7 @@ def test_mistake_duplicate_with_other_punctuation():
             _ = analyzer.add_mistake(
                 subject="Economics",
                 question=question,
-                user_answer=options[0],
+                wrong_answer=options[0],
                 correct_answer=options[1],
                 explanation="",
                 module_name="Module 1: Basics",
@@ -395,7 +426,7 @@ def test_mistake_duplicate_with_other_punctuation():
             _ = analyzer.add_mistake(
                 subject="Economics",
                 question=question + ":",
-                user_answer=options[2],
+                wrong_answer=options[2],
                 correct_answer=options[1],
                 explanation="",
                 module_name="Module 1: Basics",
@@ -580,7 +611,7 @@ def test_mistake_undo():
             _ = analyzer.add_mistake(
                 subject="Economics",
                 question="Which trade restriction costs the importing country most?",
-                user_answer=options[0],
+                wrong_answer=options[0],
                 correct_answer=options[1],
                 explanation="",
                 module_name="Module 1: Basics",
@@ -680,7 +711,7 @@ def test_mistake_browse():
                 _ = analyzer.add_mistake(
                     subject="Economics",
                     question=question,
-                    user_answer="A tariff",
+                    wrong_answer="A tariff",
                     correct_answer=correct,
                     explanation="The quota raises the domestic price.",
                     module_name="Module 6: International Trade",
@@ -693,7 +724,7 @@ def test_mistake_browse():
             _ = analyzer.add_mistake(
                 subject="Equity",
                 question="What is the beta of a defensive stock?",
-                user_answer="1.5",
+                wrong_answer="1.5",
                 correct_answer="0.8",
                 explanation="",
                 module_name="Module 1: Overview of Equity Securities",
@@ -747,7 +778,7 @@ def test_print_mistake_hides_the_wrong_answer():
             _ = analyzer.add_mistake(
                 subject="Economics",
                 question="What is the impact of a tariff on the domestic price?",
-                user_answer="4.2%",
+                wrong_answer="4.2%",
                 correct_answer="4.0%",
                 explanation="",
                 module_name="Module 2: Policy",
@@ -788,7 +819,7 @@ def test_ctrl_c_exits_gracefully():
             _ = analyzer.add_mistake(
                 subject="Economics",
                 question="Which trade restriction costs the importing country most?",
-                user_answer="A tariff",
+                wrong_answer="A tariff",
                 correct_answer="An import quota",
                 explanation="",
                 module_name="Module 6: International Trade",
@@ -845,7 +876,7 @@ def test_mistake_with_table():
             _ = analyzer.add_mistake(
                 subject="Financial Statement Analysis",
                 question="Based on the table, which ratio improved the most?",
-                user_answer="Days payable outstanding",
+                wrong_answer="Days payable outstanding",
                 correct_answer="Days sales outstanding",
                 explanation="",
                 module_name="Module 2: Analyzing Income Statements",
@@ -899,7 +930,7 @@ def test_mistake_breakdown_view():
                 _ = analyzer.add_mistake(
                     subject="Economics",
                     question=question,
-                    user_answer="An import quota",
+                    wrong_answer="An import quota",
                     correct_answer="A tariff",
                     explanation="",
                     module_name="Module 6: International Trade",
@@ -908,7 +939,7 @@ def test_mistake_breakdown_view():
             _ = analyzer.add_mistake(
                 subject="Fixed Income",
                 question="What is duration?",
-                user_answer="A tax",
+                wrong_answer="A tax",
                 correct_answer="A weighted average maturity",
                 explanation="",
                 module_name="Module 1: Fixed-Income Instrument Features",
@@ -918,7 +949,7 @@ def test_mistake_breakdown_view():
             _ = analyzer.add_mistake(
                 subject="Economics",
                 question="What is a tariff?",
-                user_answer="An import quota",
+                wrong_answer="An import quota",
                 correct_answer="A tariff",
                 explanation="",
                 module_name="Module 6: International Trade",

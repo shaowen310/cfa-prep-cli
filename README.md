@@ -343,8 +343,8 @@ its record** instead of writing a second copy of it:
 
 - `attempts` counts how often the question was answered wrong.
 - `last_date` is the date of the last attempt; `date` stays the first one.
-- `wrong_answers` holds the answers that were wrong, each one once — it shows the
-  traps that were taken.
+- `wrong_answers` holds the answers that were wrong, each one once, the most recent
+  one last — it shows the traps that were taken.
 - What was typed by hand (the explanation, the options, the table) is kept, so an
   automatic entry — the quiz re-logging a repeated mistake — never wipes it.
 
