@@ -33,6 +33,7 @@ from .utils import (
     get_data_dir,
     hash_text,
     normalize_text,
+    prefer_text,
     print_section,
     today_str,
 )
@@ -939,8 +940,62 @@ class MistakeAnalyzer:
         A question that was logged twice under a slightly different text (a
         trailing colon) ended up in two rows.  The extra rows are removed and
         their attempts are folded into the row that is kept.
+
+        When the rows of a group do not agree on the correct answer, the reader
+        decides: the answer of before is kept, or another one is written into
+        the row.  When the answer changes, the wrong answers that were saved for
+        the answer of before are cleared — they were wrong for that answer.
         """
-        return self.store.merge_duplicates()
+        removed = 0
+        for group in self.store.duplicate_groups():
+            answer = self._ask_correct_answer(group)
+            explanation = self._ask_explanation(group)
+            self.store.merge_group(group, answer, explanation)
+            removed += len(group) - 1
+        return removed
+
+    def _ask_correct_answer(self, group: list[MistakeRecord]) -> str | None:
+        """
+        Ask which correct answer the merged row should hold.
+
+        The rows of the group do not agree on the correct answer.  The reader
+        sees the answers and decides: the answer of before is kept (Enter), or
+        one of the answers is written into the row.
+        """
+        answers: list[str] = []
+        for record in group:
+            given = str(record.get("correct_answer", ""))
+            if given and given not in answers:
+                answers.append(given)
+        if len({normalize_text(answer) for answer in answers}) < 2:
+            # They all say the same: there is nothing to ask
+            return None
+
+        print()
+        print("  ⚠️  The correct answer is not the same in every record:")
+        for record in group:
+            print(
+                f"      · {record.get('correct_answer', '')}"
+                + f"  ({record.get('date', '')}, {record.get('question_id', '')})"
+            )
+        print("  Which answer is correct?")
+        print(f"      [Enter] keep the answer of before: {self._answer_of_before(group)}")
+        for index, answer in enumerate(answers, 1):
+            print(f"      [{index}] {answer}")
+        try:
+            choice = self._prompt("  > ").strip().lstrip("\ufeff").strip()
+        except (KeyboardInterrupt, EOFError):
+            print()
+            return None
+        if not choice:
+            return None
+        if choice.isdigit():
+            index = int(choice) - 1
+            if 0 <= index < len(answers):
+                return answers[index]
+            return None
+        # The answer is written in
+        return choice
 
     def undo_last(self) -> MistakeRecord | None:
         """
@@ -955,12 +1010,86 @@ class MistakeAnalyzer:
         _ = self.store.delete(record["question_id"])
         return record
 
+    @staticmethod
+    def _answer_of_before(group: list[MistakeRecord]) -> str:
+        """The answer of the row that is kept when nothing is chosen."""
+        if not group:
+            return ""
+        return prefer_text(
+            str(group[0].get("correct_answer", "")),
+            str(group[-1].get("correct_answer", "")),
+        )
+
+    @staticmethod
+    def _explanation_of_before(group: list[MistakeRecord]) -> str:
+        """The explanation of the row that is kept when nothing is chosen."""
+        if not group:
+            return ""
+        return prefer_text(
+            str(group[0].get("explanation", "")),
+            str(group[-1].get("explanation", "")),
+        )
+
+    def _ask_explanation(self, group: list[MistakeRecord]) -> str | None:
+        """
+        Ask which explanation the merged row should hold.
+
+        The rows of the group do not agree on the explanation.  The reader sees
+        them and decides: the explanation of before is kept (Enter), or one of
+        them is written into the row, or a new text is typed in.
+        """
+        explanations: list[str] = []
+        for record in group:
+            given = str(record.get("explanation", ""))
+            if given and given not in explanations:
+                explanations.append(given)
+        if len(explanations) < 2:
+            # They all say the same: there is nothing to ask
+            return None
+
+        print()
+        print("  ⚠️  The explanation is not the same in every record:")
+        for record in group:
+            print(f"      · {str(record.get('explanation', ''))[:80]}")
+        print("  Which explanation is right?")
+        print(
+            "      [Enter] keep the explanation of before:"
+            + f" {self._explanation_of_before(group)}"
+        )
+        for index, explanation in enumerate(explanations, 1):
+            print(f"      [{index}] {explanation[:80]}")
+        try:
+            choice = self._prompt("  > ").strip().lstrip("\ufeff").strip()
+        except (KeyboardInterrupt, EOFError):
+            print()
+            return None
+        if not choice:
+            return None
+        if choice.isdigit():
+            index = int(choice) - 1
+            if 0 <= index < len(explanations):
+                return explanations[index]
+            return None
+        # The explanation is written in
+        return choice
+
     def check_duplicates(self) -> list[list[MistakeRecord]]:
         """
         Return the questions that are logged more than once, with their records.
 
         Every group holds the records of one question that was logged twice: the
         first one is the row that would be kept, the other ones are the rows
-        that would be merged into it.
+        that would be merged into it.  The rows of a group share the question
+        and the options, so they are the same question.
         """
         return self.store.duplicate_groups()
+
+    def check_similar_questions(self) -> list[list[MistakeRecord]]:
+        """
+        Return the questions that share the text but not the options.
+
+        They are different questions that were written the same way.  They are
+        not duplicates, so they are never merged: they are shown, so the reader
+        can look at them and decide what to do with them.
+        """
+        return self.store.similar_groups()

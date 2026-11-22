@@ -84,6 +84,89 @@ def test_mistake_store_keeps_the_wrong_answer_in_the_history():
         print("  ✅ The wrong answer is only kept in the history")
 
 
+def test_mistake_store_separates_the_same_question_from_another_one():
+    """Test that a question with other options is not a duplicate"""
+    with tempfile.TemporaryDirectory() as tmp:
+        store = MistakeStore(Path(tmp) / "mistakes.db")
+        # The same question, logged twice under a different text
+        first = _record("What is demand?")
+        first["question_id"] = "q:first"
+        store.upsert(first)
+        second = _record("What is demand:")
+        second["question_id"] = "q:second"
+        store.upsert(second)
+        # Another question that is written the same way
+        other = _record("What is demand?")
+        other["question_id"] = "q:other"
+        other["options"] = ["D", "E", "F"]
+        other["correct_answer"] = "E"
+        other["wrong_answers"] = ["D"]
+        store.upsert(other)
+
+        # The two rows with the same options are a duplicate
+        duplicates = store.duplicate_groups()
+        assert len(duplicates) == 1, duplicates
+        assert len(duplicates[0]) == 2, duplicates
+        # The question with the other options is not one of them
+        assert store.similar_groups(), store.similar_groups()
+        similar = store.similar_groups()[0]
+        assert len(similar) == 3, similar
+
+        # Only the duplicate is merged
+        assert store.merge_duplicates() == 1
+        assert store.count() == 2, store.count()
+        print("  ✅ A question with other options is not a duplicate")
+
+
+def test_mistake_store_clears_the_wrong_answers_when_the_answer_changes():
+    """Test that the wrong answers are cleared when the correct answer changes"""
+    with tempfile.TemporaryDirectory() as tmp:
+        store = MistakeStore(Path(tmp) / "mistakes.db")
+        first = _record("What is demand?")
+        first["question_id"] = "q:first"
+        first["correct_answer"] = "A"
+        first["wrong_answers"] = ["B"]
+        store.upsert(first)
+        second = _record("What is demand:")
+        second["question_id"] = "q:second"
+        second["correct_answer"] = "C"
+        second["wrong_answers"] = ["B"]
+        store.upsert(second)
+
+        groups = store.duplicate_groups()
+        assert len(groups) == 1, groups
+        # The reader chooses the other answer
+        store.merge_group(groups[0], "C")
+        stored = store.get("q:first")
+        assert stored is not None
+        assert stored.get("correct_answer") == "C", stored
+        # The wrong answers belonged to the answer of before
+        assert not stored.get("wrong_answers"), stored
+        print("  ✅ The wrong answers are cleared when the answer changes")
+
+
+def test_mistake_store_keeps_the_wrong_answers_when_the_answer_stays():
+    """Test that the wrong answers stay when the correct answer does not change"""
+    with tempfile.TemporaryDirectory() as tmp:
+        store = MistakeStore(Path(tmp) / "mistakes.db")
+        first = _record("What is demand?")
+        first["question_id"] = "q:first"
+        first["wrong_answers"] = ["C"]
+        store.upsert(first)
+        second = _record("What is demand:")
+        second["question_id"] = "q:second"
+        second["wrong_answers"] = ["A"]
+        store.upsert(second)
+
+        groups = store.duplicate_groups()
+        assert len(groups) == 1, groups
+        store.merge_group(groups[0])
+        stored = store.get("q:first")
+        assert stored is not None
+        assert stored.get("wrong_answers") == ["C", "A"], stored
+        print("  ✅ The wrong answers stay when the answer does not change")
+
+
 def test_mistake_store_queries():
     """Test that the log can be read by subject, module, question and date"""
     with tempfile.TemporaryDirectory() as tmp:

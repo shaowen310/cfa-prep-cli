@@ -474,10 +474,10 @@ def cmd_mistake(args: CLIArgs) -> None:
         # Show the questions that are logged more than once, without changing
         # anything: the first row of a group is the one that would be kept
         groups = analyzer.check_duplicates()
+        similar = analyzer.check_similar_questions()
         print_header("🔍 Duplicated questions")
         if not groups:
             print("\n  No question is logged twice.")
-            return
         for index, group in enumerate(groups, 1):
             keep = group[0]
             print(f"\n  [{index}] {keep.get('question', '')}")
@@ -496,9 +496,30 @@ def cmd_mistake(args: CLIArgs) -> None:
                 print(f"          correct  : {record.get('correct_answer', '')}")
                 explanation = record.get("explanation", "")
                 print(f"          explains : {explanation[:80]}")
-        extra = sum(len(group) - 1 for group in groups)
-        print(f"\n  {len(groups)} question(s) are logged twice — {extra} row(s) extra.")
-        print("  Merge them with: cfa-prep mistake --merge-duplicates")
+        if groups:
+            extra = sum(len(group) - 1 for group in groups)
+            print(
+                f"\n  {len(groups)} question(s) are logged twice"
+                + f" — {extra} row(s) extra."
+            )
+            print("  Merge them with: cfa-prep mistake --merge-duplicates")
+        if similar:
+            print()
+            print_section("Same question, other options — they are not duplicates")
+            print(
+                "  The same question with another set of options is a different"
+                + " question."
+            )
+            print("  They are never merged — look at them yourself:")
+            for index, group in enumerate(similar, 1):
+                print(f"\n  [{index}] {group[0].get('question', '')}")
+                for record in group:
+                    print(
+                        f"      · {record.get('question_id', '')}"
+                        + f"  {record.get('date', '')}"
+                    )
+                    print(f"          options  : {record.get('options') or []}")
+                    print(f"          correct  : {record.get('correct_answer', '')}")
         return
 
     if args.merge_duplicates:

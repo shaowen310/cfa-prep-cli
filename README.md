@@ -372,6 +372,12 @@ cfa-prep mistake --check-duplicates      # shows the groups, changes nothing
 cfa-prep mistake --merge-duplicates       # merges them
 ```
 
+Two questions are the **same question** when the key of the question and the **same
+options** belong to them — the options in any order, and the case, the spacing and the
+punctuation that closes the sentence do not count. Two questions that share the question
+but have **other options** are different questions: they are listed apart and are
+**never merged**.
+
 The merge keeps the **oldest** row — it holds the id and the first date — and folds the
 attempts of the other rows into it. The texts are written the most careful way:
 
@@ -382,6 +388,15 @@ attempts of the other rows into it. The texts are written the most careful way:
 - a sentence starts with a capital letter, so `tax disadvantage for owners...` becomes
   `Tax disadvantage for owners...`;
 - what was typed by hand (the explanation, the options, the answer) is never lost.
+
+When the rows of a group do not agree on the **correct answer**, you are asked which one
+is right — the answer of before is kept when you press Enter, and the prompt shows what
+that is. When the rows do not agree on the **explanation**, you are asked about it as
+well, in the same way.
+
+When the correct answer changes, the wrong answers that were saved for the answer of
+before are **cleared**: they were wrong for that answer. When the answer stays the same,
+they are kept and folded together.
 
 ### Storage: a database, not a growing JSON file
 

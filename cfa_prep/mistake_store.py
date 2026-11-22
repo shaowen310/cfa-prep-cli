@@ -52,6 +52,18 @@ def fold_wrong_answers(history: list[str], answers: list[str]) -> list[str]:
     return folded[-MAX_WRONG_ANSWERS:]
 
 
+def _option_key(options: list[str]) -> tuple[str, ...]:
+    """
+    The key of a set of options.
+
+    The options in any order are one key: the case, the spacing and the
+    punctuation that closes the sentence do not count — the same rule as the
+    key of the question itself.  Two questions with the same key have the same
+    options, so they are the same question.
+    """
+    return tuple(sorted(stem_key(option) for option in options))
+
+
 def reconcile_options(old: list[str], new: list[str]) -> tuple[list[str], dict[str, str]]:
     """
     Return the options of a question and the map of the texts that changed.
@@ -401,14 +413,8 @@ class MistakeStore:
             )
             return cursor.rowcount > 0
 
-    def duplicate_groups(self) -> list[list[MistakeRecord]]:
-        """
-        Return the groups of rows that hold the same question.
-
-        The rows of a group share the key of the question, so they are the same
-        question that was logged more than once — usually under a slightly
-        different text.  The oldest row of a group comes first.
-        """
+    def _stem_groups(self) -> list[list[MistakeRecord]]:
+        """All the rows, grouped by the key of the question."""
         with self._session() as connection:
             rows = _rows(
                 connection.execute(
@@ -419,7 +425,46 @@ class MistakeStore:
         for row in rows:
             key = _text(row, "stem_key")
             groups.setdefault(key, []).append(_row_to_record(row))
-        return [group for group in groups.values() if len(group) > 1]
+        return list(groups.values())
+
+    def duplicate_groups(self) -> list[list[MistakeRecord]]:
+        """
+        Return the groups of rows that hold the same question.
+
+        The rows of a group share the key of the question *and* the same
+        options, so they are the same question that was logged more than once —
+        usually under a slightly different text.  The oldest row of a group
+        comes first.
+        """
+        duplicates: list[list[MistakeRecord]] = []
+        for group in self._stem_groups():
+            by_options: dict[tuple[str, ...], list[MistakeRecord]] = {}
+            for record in group:
+                key = _option_key(list(record.get("options") or []))
+                by_options.setdefault(key, []).append(record)
+            duplicates.extend(
+                rows for rows in by_options.values() if len(rows) > 1
+            )
+        return duplicates
+
+    def similar_groups(self) -> list[list[MistakeRecord]]:
+        """
+        Return the groups of rows that share the key of the question but not
+        the options.
+
+        They are different questions that were written the same way — the same
+        stem with another set of options.  They are not duplicates, so they are
+        never merged: they are shown, so the reader can look at them.
+        """
+        similar: list[list[MistakeRecord]] = []
+        for group in self._stem_groups():
+            by_options: dict[tuple[str, ...], list[MistakeRecord]] = {}
+            for record in group:
+                key = _option_key(list(record.get("options") or []))
+                by_options.setdefault(key, []).append(record)
+            if len(by_options) > 1:
+                similar.append(group)
+        return similar
 
     def merge_duplicates(self) -> int:
         """
@@ -434,74 +479,114 @@ class MistakeStore:
         """
         removed = 0
         for group in self.duplicate_groups():
-            keep = group[0]
-            newest = group[-1]
+            self.merge_group(group)
+            removed += len(group) - 1
+        return removed
 
-            # The question: the variant that is written the most carefully
-            question = keep.get("question", "")
-            for other in group[1:]:
-                question = prefer_text(question, other.get("question", ""))
+    def merge_group(
+        self,
+        group: list[MistakeRecord],
+        correct_answer: str | None = None,
+        explanation: str | None = None,
+    ) -> None:
+        """
+        Merge the rows of one group of duplicates into a single row.
 
-            # The options: matched on their key, the punctuation decides
-            options = list(keep.get("options") or [])
-            mapping: dict[str, str] = {}
-            for other in group[1:]:
-                other_options = list(other.get("options") or [])
-                if not other_options:
-                    continue
-                options, extra = reconcile_options(options, other_options)
-                composed = dict(mapping)
-                for source, target in extra.items():
-                    composed[source] = mapping.get(target, target)
-                mapping = composed
+        The oldest row is kept — it holds the id and the first date — and the
+        attempts and the wrong answers of the other ones are folded into it.
 
-            # The answers are written the way the options they belong to are
-            correct_answer = prefer_text(
-                keep.get("correct_answer", ""), newest.get("correct_answer", "")
-            )
-            correct_answer = mapping.get(correct_answer, correct_answer)
+        When a correct answer is given, it is the answer of the row that is kept.
+        When it is not the answer that was there before, the wrong answers are
+        cleared: they were answers that were wrong for the answer of before, and
+        that answer is not the one of the row any more.
 
+        When an explanation is given, it is the explanation of the row that is
+        kept; the explanation of before is kept when there is none.
+        """
+        if len(group) < 2:
+            return
+        # The answer that the reader chose, when there is one
+        chosen = correct_answer
+        keep = group[0]
+        newest = group[-1]
+
+        # The question: the variant that is written the most carefully
+        question = keep.get("question", "")
+        for other in group[1:]:
+            question = prefer_text(question, other.get("question", ""))
+
+        # The options: matched on their key, the punctuation decides
+        options = list(keep.get("options") or [])
+        mapping: dict[str, str] = {}
+        for other in group[1:]:
+            other_options = list(other.get("options") or [])
+            if not other_options:
+                continue
+            options, extra = reconcile_options(options, other_options)
+            composed = dict(mapping)
+            for from_text, to_text in extra.items():
+                composed[from_text] = mapping.get(to_text, to_text)
+            mapping = composed
+
+        # The answers are written the way the options they belong to are
+        # The answer of the group when nothing is chosen: the variant that is
+        # written the most carefully, the newest one wins
+        current = prefer_text(
+            keep.get("correct_answer", ""), newest.get("correct_answer", "")
+        )
+        current = mapping.get(current, current)
+        answer = current if chosen is None else mapping.get(chosen, chosen)
+        correct_answer = answer
+        # The answer that is in the log now: the one of the row that is kept
+        before = mapping.get(keep.get("correct_answer", ""), keep.get("correct_answer", ""))
+        changed = stem_key(answer) != stem_key(before)
+
+        if explanation is None:
+            # The explanation of before: the variant that is written the most
+            # carefully, the newest one wins
             explanation = prefer_text(
                 keep.get("explanation", ""), newest.get("explanation", "")
             )
 
-            merged = MistakeRecord(
-                date=keep.get("date", ""),
-                level=keep.get("level", ""),
-                subject=keep.get("subject", ""),
-                module=keep.get("module", ""),
-                question=capitalize_first(question),
-                question_id=keep["question_id"],
-                options=options,
-                correct_answer=correct_answer,
-                explanation=capitalize_first(explanation),
-            )
-            table = newest.get("table") or keep.get("table")
-            if table:
-                merged["table"] = table
+        merged = MistakeRecord(
+            date=keep.get("date", ""),
+            level=keep.get("level", ""),
+            subject=keep.get("subject", ""),
+            module=keep.get("module", ""),
+            question=capitalize_first(question),
+            question_id=keep["question_id"],
+            options=options,
+            correct_answer=correct_answer,
+            explanation=capitalize_first(explanation),
+        )
+        table = newest.get("table") or keep.get("table")
+        if table:
+            merged["table"] = table
 
-            # The history of the attempts is folded into the row that is kept
-            attempts = 0
-            wrong: list[str] = []
-            for record in group:
-                attempts += int(record.get("attempts", 1))
-                answers = [
-                    mapping.get(answer, answer)
-                    for answer in (record.get("wrong_answers") or [])
-                ]
-                wrong = fold_wrong_answers(wrong, answers)
-            merged["attempts"] = attempts
-            merged["wrong_answers"] = wrong
-            merged["last_date"] = max(
-                str(record.get("last_date") or record.get("date", ""))
-                for record in group
-            )
+        # The history of the attempts is folded into the row that is kept
+        attempts = 0
+        wrong: list[str] = []
+        for record in group:
+            attempts += int(record.get("attempts", 1))
+            if changed:
+                # The wrong answers belonged to the answer of before, and that
+                # answer is not the one of the row any more
+                continue
+            answers = [
+                mapping.get(given, given)
+                for given in (record.get("wrong_answers") or [])
+            ]
+            wrong = fold_wrong_answers(wrong, answers)
+        merged["attempts"] = attempts
+        merged["wrong_answers"] = wrong
+        merged["last_date"] = max(
+            str(record.get("last_date") or record.get("date", ""))
+            for record in group
+        )
 
-            self.upsert(merged)
-            for other in group[1:]:
-                _ = self.delete(other["question_id"])
-                removed += 1
-        return removed
+        self.upsert(merged)
+        for other in group[1:]:
+            _ = self.delete(other["question_id"])
 
     # --- exporting ---------------------------------------------------------
     def export_json(self, path: Path) -> None:

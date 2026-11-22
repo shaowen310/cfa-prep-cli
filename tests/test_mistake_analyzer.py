@@ -273,6 +273,165 @@ def test_mistake_history_keeps_the_last_answer_last():
             _ = os.environ.pop("CFA_PREP_HOME", None)
 
 
+def test_mistake_merge_asks_when_the_correct_answers_differ():
+    """Test that the reader decides when the correct answers do not agree"""
+    import io
+    import tempfile
+    from contextlib import redirect_stdout
+
+    from cfa_prep.mistake_analyzer import MistakeAnalyzer
+    from cfa_prep.mistake_store import MistakeRecord
+
+    options = ["A tariff", "An import quota", "A restraint"]
+    with tempfile.TemporaryDirectory() as tmp:
+        os.environ["CFA_PREP_HOME"] = tmp
+        try:
+            analyzer = MistakeAnalyzer()
+            # Two rows of the same question: the correct answers do not agree
+            first = MistakeRecord(
+                date="20260101",
+                last_date="20260101",
+                attempts=1,
+                level="L1",
+                subject="Economics",
+                module="Module 6: International Trade",
+                question="Which trade restriction costs the importing country most?",
+                question_id="q:first",
+                options=options,
+                correct_answer=options[1],
+                explanation="The quota raises the price the most.",
+                wrong_answers=[options[0]],
+            )
+            second = MistakeRecord(
+                date="20260102",
+                last_date="20260102",
+                attempts=1,
+                level="L1",
+                subject="Economics",
+                module="Module 6: International Trade",
+                question="Which trade restriction costs the importing country most?:",
+                question_id="q:second",
+                options=options,
+                correct_answer=options[0],
+                explanation="The restraint accrues to the foreign exporters.",
+                wrong_answers=[options[2]],
+            )
+            analyzer.store.upsert(first)
+            analyzer.store.upsert(second)
+
+            groups = analyzer.check_duplicates()
+            assert len(groups) == 1, groups
+            assert len(groups[0]) == 2, groups
+
+            # The reader is asked which answer is the correct one
+            def fake_prompt(prompt: str = "") -> str:
+                del prompt  # the answer is scripted
+                return "2"
+
+            original_prompt = MistakeAnalyzer._prompt  # pyright: ignore[reportPrivateUsage]
+            MistakeAnalyzer._prompt = staticmethod(fake_prompt)  # pyright: ignore[reportPrivateUsage]
+            buffer = io.StringIO()
+            try:
+                with redirect_stdout(buffer):
+                    removed = analyzer.merge_duplicates()
+            finally:
+                MistakeAnalyzer._prompt = staticmethod(original_prompt)  # pyright: ignore[reportPrivateUsage]
+
+            assert removed == 1, removed
+            output = buffer.getvalue()
+            assert "not the same in every record" in output, output
+
+            records = analyzer.all_mistakes()
+            assert len(records) == 1, records
+            # The answer of the reader is the answer of the row
+            assert records[0].get("correct_answer") == options[0], records[0]
+            # The wrong answers belonged to the answer of before
+            assert not records[0].get("wrong_answers"), records[0]
+            # The explanation of the row that held the answer comes with it
+            assert records[0].get("explanation") == (
+                "The restraint accrues to the foreign exporters."
+            ), records[0]
+            print("  ✅ The reader decides when the correct answers do not agree")
+        finally:
+            _ = os.environ.pop("CFA_PREP_HOME", None)
+
+
+def test_mistake_merge_asks_about_the_explanation():
+    """Test that the reader decides about the explanation as well"""
+    import io
+    import tempfile
+    from contextlib import redirect_stdout
+
+    from cfa_prep.mistake_analyzer import MistakeAnalyzer
+    from cfa_prep.mistake_store import MistakeRecord
+
+    options = ["A tariff", "An import quota", "A restraint"]
+    with tempfile.TemporaryDirectory() as tmp:
+        os.environ["CFA_PREP_HOME"] = tmp
+        try:
+            analyzer = MistakeAnalyzer()
+            first = MistakeRecord(
+                date="20260101",
+                last_date="20260101",
+                attempts=1,
+                level="L1",
+                subject="Economics",
+                module="Module 6: International Trade",
+                question="Which trade restriction costs the importing country most?",
+                question_id="q:first",
+                options=options,
+                correct_answer=options[1],
+                explanation="The quota raises the price the most.",
+                wrong_answers=[options[0]],
+            )
+            second = MistakeRecord(
+                date="20260102",
+                last_date="20260102",
+                attempts=1,
+                level="L1",
+                subject="Economics",
+                module="Module 6: International Trade",
+                question="Which trade restriction costs the importing country most?:",
+                question_id="q:second",
+                options=options,
+                correct_answer=options[1],
+                explanation="The quota raises the price the most, the most.",
+                wrong_answers=[options[2]],
+            )
+            analyzer.store.upsert(first)
+            analyzer.store.upsert(second)
+
+            # The reader keeps the explanation of before: an empty answer
+            def fake_prompt(prompt: str = "") -> str:
+                del prompt  # the answer is scripted
+                return ""
+
+            original_prompt = MistakeAnalyzer._prompt  # pyright: ignore[reportPrivateUsage]
+            MistakeAnalyzer._prompt = staticmethod(fake_prompt)  # pyright: ignore[reportPrivateUsage]
+            buffer = io.StringIO()
+            try:
+                with redirect_stdout(buffer):
+                    removed = analyzer.merge_duplicates()
+            finally:
+                MistakeAnalyzer._prompt = staticmethod(original_prompt)  # pyright: ignore[reportPrivateUsage]
+
+            assert removed == 1, removed
+            output = buffer.getvalue()
+            assert "The explanation is not the same in every record" in output, output
+
+            records = analyzer.all_mistakes()
+            assert len(records) == 1, records
+            # The answer did not change: the wrong answers stay
+            assert records[0].get("wrong_answers") == [options[0], options[2]], records[0]
+            # The explanation of before is kept
+            assert records[0].get("explanation") == (
+                "The quota raises the price the most, the most."
+            ), records[0]
+            print("  ✅ The reader decides about the explanation as well")
+        finally:
+            _ = os.environ.pop("CFA_PREP_HOME", None)
+
+
 def test_mistake_question_id():
     """Test that a mistake stores its question id and that the quiz engine reuses it"""
     import tempfile
