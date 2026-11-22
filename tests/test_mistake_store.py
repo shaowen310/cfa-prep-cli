@@ -167,6 +167,33 @@ def test_mistake_store_keeps_the_wrong_answers_when_the_answer_stays():
         print("  ✅ The wrong answers stay when the answer does not change")
 
 
+def test_mistake_store_orders_the_recent_records_by_the_last_attempt():
+    """Test that the question that was answered wrong last comes first"""
+    with tempfile.TemporaryDirectory() as tmp:
+        store = MistakeStore(Path(tmp) / "mistakes.db")
+        # Logged long ago, but answered again today
+        old = _record("What is demand?")
+        old["question_id"] = "q:old"
+        old["date"] = "20260101"
+        old["last_date"] = "20260301"
+        store.upsert(old)
+        # Logged in between
+        new = _record("What is supply?")
+        new["question_id"] = "q:new"
+        new["date"] = "20260201"
+        new["last_date"] = "20260201"
+        store.upsert(new)
+
+        recent = store.load_recent(2)
+        # The last attempt decides, not the first day it was logged
+        assert [r["question_id"] for r in recent] == ["q:old", "q:new"], recent
+        # The question that was logged last is the same one
+        latest = store.latest()
+        assert latest is not None
+        assert latest["question_id"] == "q:old", latest
+        print("  ✅ The newest is the question that was answered wrong last")
+
+
 def test_mistake_store_queries():
     """Test that the log can be read by subject, module, question and date"""
     with tempfile.TemporaryDirectory() as tmp:

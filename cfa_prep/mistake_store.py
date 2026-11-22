@@ -24,6 +24,11 @@ from .utils import (
 DB_NAME = "mistakes.db"
 MAX_WRONG_ANSWERS = 5  # how many wrong answers of a question are kept
 
+# The order of the newest records: the date of the last attempt first, the date
+# of the first one when there is none.  The list of the recent mistakes and the
+# question that was logged last are written the same way.
+RECENT_ORDER = "COALESCE(NULLIF(last_date, ''), date) DESC, rowid DESC"
+
 
 def fold_wrong_answers(history: list[str], answers: list[str]) -> list[str]:
     """
@@ -105,6 +110,7 @@ CREATE TABLE IF NOT EXISTS mistakes (
 );
 CREATE INDEX IF NOT EXISTS idx_mistakes_subject_module ON mistakes(subject, "module");
 CREATE INDEX IF NOT EXISTS idx_mistakes_date ON mistakes(date);
+CREATE INDEX IF NOT EXISTS idx_mistakes_recent ON mistakes(COALESCE(NULLIF(last_date, ''), date) DESC);
 CREATE INDEX IF NOT EXISTS idx_mistakes_stem_key ON mistakes(stem_key);
 """
 
@@ -290,11 +296,18 @@ class MistakeStore:
         return [_row_to_record(row) for row in rows]
 
     def load_recent(self, limit: int = 10) -> list[MistakeRecord]:
-        """Return the newest records, the newest first."""
+        """
+        Return the newest records, the newest first.
+
+        The newest is the question that was answered wrong last: the date of
+        the last attempt, and the date of the first one when the question was
+        never answered again.  It is the same order as the question that was
+        logged last.
+        """
         with self._session() as connection:
             rows = _rows(
                 connection.execute(
-                    "SELECT * FROM mistakes ORDER BY date DESC, rowid DESC LIMIT ?",
+                    "SELECT * FROM mistakes ORDER BY " + RECENT_ORDER + " LIMIT ?",
                     (limit,),
                 )
             )
@@ -383,9 +396,7 @@ class MistakeStore:
         with self._session() as connection:
             row = _row(
                 connection.execute(
-                    "SELECT * FROM mistakes"
-                    + " ORDER BY COALESCE(NULLIF(last_date, ''), date) DESC, rowid DESC"
-                    + " LIMIT 1"
+                    "SELECT * FROM mistakes ORDER BY " + RECENT_ORDER + " LIMIT 1"
                 )
             )
         return _row_to_record(row) if row is not None else None
