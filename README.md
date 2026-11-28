@@ -30,7 +30,8 @@ pip install .
 > For development, use an editable install so code changes take effect immediately:
 > `pip install -e .`
 
-Or use the one-click setup script for your platform (installs the package, then initializes):
+Or use the one-click setup script for your platform (installs the package **plus the
+dev extras** — including pytest — then initializes):
 
 ```bash
 # Linux/macOS
@@ -39,6 +40,23 @@ Or use the one-click setup script for your platform (installs the package, then 
 # Windows (PowerShell)
 powershell -ExecutionPolicy Bypass -File setup.ps1
 ```
+
+Both scripts install into a **specific interpreter** so that the package and pytest
+always land in the same environment you run the tests with:
+
+```bash
+# Linux/macOS: pick the interpreter explicitly
+CFA_PREP_PYTHON=/path/to/venv/bin/python ./setup.sh
+
+# Windows (PowerShell): pick the interpreter explicitly
+powershell -ExecutionPolicy Bypass -File setup.ps1 -Python C:\Users\me\.venvs\cfa-prep-cli\Scripts\python.exe
+```
+
+If no interpreter is given, the scripts use the active virtualenv (`VIRTUAL_ENV`),
+then fall back to `python` / `py` on `PATH`. Installation prefers `uv pip install
+--python <interpreter>` (works even when the virtualenv has no `pip` of its own) and
+falls back to `<interpreter> -m pip install -e ".[dev]"`, bootstrapping `pip` with
+`ensurepip` when needed.
 
 ### 2. Initialize the data root
 
@@ -852,9 +870,15 @@ Every folder belongs to one command:
 Install pytest (once), then run it from the project root:
 
 ```bash
-pip install -e .[dev]   # installs pytest as a dev dependency
-pytest
+pip install -e ".[dev]"   # installs pytest as a dev dependency
+python -m pytest
 ```
+
+> Install into the **same interpreter** you run the tests with. A virtualenv that
+> has no `pip` of its own (created by `uv`/`virtualenv`) can be set up with:
+> `uv pip install --python <venv-python> -e ".[dev]"`.
+> Running `python -m pytest` from a different interpreter than the one you installed
+> into fails with `No module named pytest`.
 
 Pytest discovers tests in `tests/` (configured via `[tool.pytest.ini_options]`
 in `pyproject.toml`, including the project-root `pythonpath` so imports resolve).
