@@ -125,13 +125,30 @@ if (-not $SkipInstall) {
         if ($LASTEXITCODE -eq 0) { $installOk = $true }
     }
 
+    # Safety net: the dev extra ships pytest-cov, but environments installed
+    # before that was added would still miss it.
+    $covOk = $false
+    & $PYTHON_EXE -c "import pytest_cov" *> $null
+    if ($LASTEXITCODE -eq 0) { $covOk = $true }
+    if (-not $covOk) {
+        Write-Host "  -> installing pytest-cov"
+        if (Get-Command uv -ErrorAction SilentlyContinue) {
+            Invoke-Native { & uv pip install --python $PYTHON_EXE pytest-cov }
+            if ($LASTEXITCODE -eq 0) { $covOk = $true }
+        }
+        if (-not $covOk) {
+            Invoke-Native { & $PYTHON_EXE -m pip install pytest-cov }
+        }
+    }
+
     if ($installOk) {
-        Write-Host "  ✅ Installed cfa-prep (editable) + pytest into $PYTHON_EXE"
+        Write-Host ("  ✅ Installed cfa-prep (editable) + pytest + pytest-cov into {0}" -f $PYTHON_EXE)
     } else {
         Write-Host "  ⚠️  Install failed. Try manually:"
         Write-Host ('      uv pip install --python "{0}" -e ".[dev]"' -f $PYTHON_EXE)
         Write-Host "      # or"
         Write-Host ('      "{0}" -m pip install -e ".[dev]"' -f $PYTHON_EXE)
+        Write-Host ('      "{0}" -m pip install pytest-cov' -f $PYTHON_EXE)
     }
 } else {
     Write-Step "⏭️  Skipping install (-SkipInstall)."
@@ -141,7 +158,7 @@ if (-not $SkipInstall) {
 # 3. Verify the install landed in THIS interpreter
 # ---------------------------------------------------------------------------
 Write-Step "🔎 Verifying environment..."
-$verify = "import cfa_prep, pytest; print('  [OK] cfa-prep', getattr(cfa_prep, '__version__', '1.0.0'), '| pytest', pytest.__version__)"
+$verify = "import cfa_prep, pytest, pytest_cov; print('  [OK] cfa-prep', getattr(cfa_prep, '__version__', '1.0.0'), '| pytest', pytest.__version__, '| pytest-cov', pytest_cov.__version__)"
 Invoke-Native { & $PYTHON_EXE -c $verify }
 
 # ---------------------------------------------------------------------------
@@ -175,6 +192,7 @@ Write-Host "     cfa-prep ips personal          # Generate IPS template"
 Write-Host ""
 Write-Host "  3. Run the tests (use the SAME interpreter you installed into):"
 Write-Host ('     & "{0}" -m pytest' -f $PYTHON_EXE)
+Write-Host ('     & "{0}" -m pytest --cov=cfa_prep --cov-report=term-missing' -f $PYTHON_EXE)
 Write-Host ""
 Write-Host "  📖 See README.md for more information"
 Write-Host ""

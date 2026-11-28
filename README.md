@@ -867,10 +867,10 @@ Every folder belongs to one command:
 
 ## Running Tests
 
-Install pytest (once), then run it from the project root:
+Install the dev dependencies (once), then run it from the project root:
 
 ```bash
-pip install -e ".[dev]"   # installs pytest as a dev dependency
+pip install -e ".[dev]"   # installs pytest + pytest-cov as dev dependencies
 python -m pytest
 ```
 
@@ -879,6 +879,25 @@ python -m pytest
 > `uv pip install --python <venv-python> -e ".[dev]"`.
 > Running `python -m pytest` from a different interpreter than the one you installed
 > into fails with `No module named pytest`.
+
+### Test coverage
+
+Coverage is provided by `pytest-cov` (installed by the `dev` extra):
+
+```bash
+python -m pytest --cov=cfa_prep --cov-report=term-missing   # terminal report
+python -m pytest --cov=cfa_prep --cov-report=html            # HTML report in htmlcov/
+python -m pytest --cov=cfa_prep --cov-report=xml             # CI-friendly XML
+```
+
+If `pytest-cov` is missing, install it into the same interpreter:
+
+```bash
+uv pip install --python <venv-python> pytest-cov   # or: <venv-python> -m pip install pytest-cov
+```
+
+Coverage defaults (`source = ["cfa_prep"]`, branch coverage, missing lines shown) are
+configured in `[tool.coverage.*]` in `pyproject.toml`.
 
 Pytest discovers tests in `tests/` (configured via `[tool.pytest.ini_options]`
 in `pyproject.toml`, including the project-root `pythonpath` so imports resolve).
@@ -902,7 +921,7 @@ summary line (`Test results: N passed / M failed / T total`).
 
 - **Language**: Python 3.10+
 - **Runtime dependencies**: zero external dependencies, Python standard library only
-- **Dev dependencies**: pytest (for running/discovering the test suite)
+- **Dev dependencies**: pytest, pytest-cov (for running/discovering the test suite and coverage)
 - **Encoding**: UTF-8
 - **Compatibility**: Windows / macOS / Linux
 

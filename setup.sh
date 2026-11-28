@@ -87,11 +87,24 @@ if [ "$INSTALL_OK" -eq 0 ]; then
 fi
 
 if [ "$INSTALL_OK" -eq 1 ]; then
-    echo "  ✅ Installed cfa-prep (editable) + pytest into $PYTHON"
+    echo "  ✅ Installed cfa-prep (editable) + pytest + pytest-cov into $PYTHON"
 else
     echo "  ⚠️  Install failed. Try manually:"
     echo "      uv pip install --python \"$PYTHON\" -e \".[dev]\""
     echo "      $PYTHON -m pip install -e \".[dev]\""
+    echo "      $PYTHON -m pip install pytest-cov"
+fi
+
+# Safety net: the dev extra ships pytest-cov, but environments installed
+# before that was added would still miss it.
+if ! $PYTHON -c "import pytest_cov" &> /dev/null; then
+    echo "  → installing pytest-cov"
+    if command -v uv &> /dev/null; then
+        uv pip install --python "$PYTHON" pytest-cov || true
+    fi
+    if ! $PYTHON -c "import pytest_cov" &> /dev/null; then
+        $PYTHON -m pip install pytest-cov || true
+    fi
 fi
 
 # ---------------------------------------------------------------------------
@@ -99,7 +112,7 @@ fi
 # ---------------------------------------------------------------------------
 echo ""
 echo "🔎 Verifying environment..."
-$PYTHON -c "import cfa_prep, pytest; print('  ✅ cfa-prep', getattr(cfa_prep, '__version__', '1.0.0'), '| pytest', pytest.__version__)" || \
+$PYTHON -c "import cfa_prep, pytest, pytest_cov; print('  ✅ cfa-prep', getattr(cfa_prep, '__version__', '1.0.0'), '| pytest', pytest.__version__, '| pytest-cov', pytest_cov.__version__)" || \
     echo "  ⚠️  Verification failed - the install may not have landed in $PYTHON"
 
 # ---------------------------------------------------------------------------
@@ -132,6 +145,7 @@ echo "     cfa-prep ips personal          # Generate IPS template"
 echo ""
 echo "  3. Run the tests (use the SAME interpreter you installed into):"
 echo "     $PYTHON -m pytest"
+echo "     $PYTHON -m pytest --cov=cfa_prep --cov-report=term-missing"
 echo ""
 echo "  📖 See README.md for more information"
 echo ""
